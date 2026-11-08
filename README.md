@@ -2,16 +2,20 @@
 
 > 2026 第九届传智杯全国大学生数智创新与 AI 应用大赛 · AI 创新应用挑战赛参赛作品
 >
-> 一句话：**零依赖、单文件、双击即用的知识图谱，能直接读取你真实笔记里的双链与标签。**
+> 一句话：**一个以 AI 问答为特色的本地笔记软件 —— 读写你自己的 Markdown 笔记，随时问 AI，关系图谱作为辅助视图。**
 
-![界面·浅色](docs/screenshot.png)
-![界面·深色](docs/screenshot-dark.png)
+![笔记视图](docs/screenshot-note.png)
+![关系图谱](docs/screenshot-graph.png)
 
 ---
 
 ## 1. 是什么
 
-一个 Obsidian Graph View 的复刻 + 增强：
+一个可以直接读写你 Obsidian 库的笔记工作台：
+
+- **笔记是主体**：左侧文件树，中间整页阅读 / 编辑，反向链接一目了然。
+- **AI 问答是特色**：右侧常驻问答面板，基于当前笔记 + 全库检索作答，答案里的 `[[双链]]` 可直接点开。
+- **图谱是辅助**：随时切到关系图谱看结构，选中节点再回到笔记。
 
 - **真数据**：读取真实 Markdown 库，解析 `[[双链]]`、`![[嵌入]]`、`#标签`、frontmatter 的 `title/tags/aliases`，生成节点与连线（不是硬编码的假数据）。
 - **零依赖**：纯 HTML + CSS + 原生 JavaScript + Canvas 2D，无框架、无构建依赖、无网络请求。
@@ -59,31 +63,45 @@ npm run build          # 内联成 dist/Race-AiNote.html
 
 打开 `index.html` 也能直接开发调试（浏览器直接加载 `js/*.js`，无打包器）。
 
-### 2.5 跑 AI 整理脚本（约 5 分钟）
+### 2.5 启用 AI 问答（两种模式）
+
+**A. 本地分析模式（零配置，开箱即用）**
+
+直接双击 `dist/Race-AiNote.html`，问答面板默认就是本地分析：不联网、不要密钥，
+能回答「哪些笔记没被链接」「我的薄弱环节」「把这篇整理成知识卡」这类问题。
+
+**B. 模型模式（需要密钥，密钥只在服务端）**
 
 ```bash
-# 1) 先试运行，确认要处理哪些文件，不发请求、不写文件
-node scripts/ai-organize.mjs --vault ./vault-example --dry-run
+# 1) 启动本地服务（同时是静态服务器 + AI 代理）
+$env:COMMAND_CODE_API_KEY="你的key"      # PowerShell
+export COMMAND_CODE_API_KEY=你的key       # Git Bash / Linux / macOS
+node scripts/serve.mjs --port 4321
 
-# 2) 设置密钥（只从环境变量读取，不要写进代码或提交仓库）
-#    Windows PowerShell
-$env:COMMAND_CODE_API_KEY="你的key"
-#    Git Bash / macOS / Linux
-export COMMAND_CODE_API_KEY=你的key
-
-# 3) 正式运行（建议先小批量验证）
-node scripts/ai-organize.mjs --vault ./vault-example --limit 3
+# 2) 浏览器打开 http://localhost:4321
 ```
 
-输出落在 `<库目录>/_ai-建议稿/`，每篇一个建议稿 + 一份运行日志；**原笔记一个字节都不会被改动**。
+面板右上角出现「模型模式」即为生效；接口不通时会自动降级回本地分析，不会白屏。
 
 可选环境变量：
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `COMMAND_CODE_API_KEY` | （必填） | OpenAI 兼容接口密钥；也兼容 `AI_API_KEY` |
-| `AI_BASE_URL` | `https://api.deepseek.com/v1` | 接口地址，可换成任意兼容服务 |
-| `AI_MODEL` | `deepseek-chat` | 模型名 |
+| `COMMAND_CODE_API_KEY` | （必填） | OpenAI 兼容接口密钥；也兼容 `AI_API_KEY`
+| `AI_BASE_URL` | `https://api.deepseek.com/v1` | 接口地址，可换成任意兼容服务
+| `AI_MODEL` | `deepseek-chat` | 模型名
+
+**为什么密钥不能放前端：** 纯前端打包后密钥明文可见，任何人 F12 就能抄走。
+所以模型调用一律走 `scripts/serve.mjs` 代理，前端只认识 `/api/chat` 这个相对路径。
+
+### 2.6 批量整理脚本（可选）
+
+```bash
+node scripts/ai-organize.mjs --vault ./vault-example --dry-run   # 先看要处理哪些
+node scripts/ai-organize.mjs --vault ./vault-example --limit 3   # 正式跑
+```
+
+输出落在 `<库目录>/_ai-建议稿/`，只写建议稿，原笔记一个字节都不动。
 
 ---
 
@@ -96,12 +114,16 @@ Race-AiNote/
 ├─ js/
 │  ├─ vault.js              Markdown 库解析：frontmatter / 双链 / 标签 / 附件
 │  ├─ query.js              Obsidian 风格查询语法
+│  ├─ markdown.js           轻量 Markdown 渲染（正文/问答共用）
+│  ├─ ai.js                 AI 问答面板：本地规则分析 + 模型代理适配
 │  ├─ physics.js            自定义力导向引擎（哈希初始化、网格碰撞）
 │  ├─ render.js             Canvas 2D 渲染层
 │  ├─ demo-vault.js         内置示例库（真实 Markdown 文本）
 │  └─ app.js                界面装配与交互
 ├─ scripts/
 │  ├─ build.js              内联构建 → dist/Race-AiNote.html
+│  ├─ serve.mjs             本地服务器 + AI 代理（密钥只在服务端）
+│  ├─ gen-demo.js           vault-example → js/demo-vault.js
 │  └─ ai-organize.mjs       AI 整理脚本（建议稿模式）
 ├─ tests/                   Node 原生 test runner 单元测试
 ├─ vault-example/           可直接打开的示例 Markdown 库
@@ -116,33 +138,35 @@ Race-AiNote/
 
 ## 4. 功能清单
 
-**图谱**
+### 笔记（主视图）
+- 整页阅读：标题、路径、标签、Markdown 正文（标题/列表/任务列表/引用/代码块/双链/标签）
+- 编辑：点「编辑」直接改正文，保存后立刻重新解析双链并更新图谱；`Ctrl+S` 下载 `.md`
+- 反向链接：底部列出所有链接到这篇笔记的笔记，点击即可跳转
+- 一键「在图谱中定位」/「让 AI 分析」
+
+### AI 问答（特色）
+- 常驻右侧面板，两种模式自动切换：
+  - **模型模式**：检测到本地代理 `/api/chat` 时启用，密钥只存在服务端（`COMMAND_CODE_API_KEY`）
+  - **本地分析模式**：没有密钥也能用，基于规则做真实分析（孤立笔记、薄弱环节、知识卡草稿、全库检索）
+- 提问时自动带上当前笔记 + 关键词检索出的相关笔记作为上下文
+- 回答里的 `[[笔记标题]]` 渲染成可点击的引用，点一下直达那篇笔记
+- 四个一键提问：核心考点 / 薄弱环节 / 孤立笔记 / 整理成知识卡
+
+### 关系图谱（辅助）
 - 全局图谱 / 局部图谱（以选中节点为根，BFS 深度 1–4）
 - 自定义力导向：排斥力、连线弹簧力、中心引力、碰撞分离，四个滑杆实时生效
-- 节点拖拽（拖拽期间冻结该节点）、画布平移、滚轮以鼠标为中心缩放、双击预览、适应画布、重新布局
-- 悬停 / 选中高亮邻居，无关节点与连线自动淡化
-
-**搜索与筛选**
-- 语法：普通文本、`path:`、`file:`、`tag:`、`content:`、`-排除`、`OR`、`"带空格"`、`/正则/`
-- 筛选开关：标签节点、附件节点、仅现有文件（隐藏未创建链接）、只看孤立节点
-
-**外观**
-- 颜色分组（按搜索表达式给节点上色，可增删改）
-- 箭头开关、文字淡出阈值、节点大小、连线粗细
-- 明暗主题，设置自动保存到 localStorage
-
-**数据**
-- 三种载入方式：目录选择器 / `webkitdirectory` 兜底 / 拖放目录递归读取
-- 附件、未创建链接（幽灵节点）分别用不同样式与颜色标识
-- 左侧按目录分组的文件树，点击定位到节点
-
----
+- 节点拖拽、画布平移、滚轮以鼠标为中心缩放、双击进入笔记、适应画布、重新布局
+- 悬停 / 选中高亮邻居（带渐变过渡），无关节点自动淡化
+- 搜索语法：普通文本、`path:`、`file:`、`tag:`、`content:`、`-排除`、`OR`、`"带空格"`、`/正则/`
+- 筛选：标签节点、附件节点、仅现有文件、只看孤立节点；颜色分组可增删改
 
 ## 5. 快捷键
 
 | 键 | 作用 |
 | --- | --- |
-| `/` 或 `Ctrl/Cmd + K` | 聚焦搜索框 |
+| `A` | 开关 AI 问答面板 |
+| `Ctrl/Cmd + S` | 下载当前笔记为 .md |
+| `/` 或 `Ctrl/Cmd + K` | 聚焦图谱搜索框 |
 | `F` | 适应画布 |
 | `R` | 重新布局 |
 | `G` / `L` | 全局 / 局部图谱 |

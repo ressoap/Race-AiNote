@@ -112,7 +112,13 @@
       const ul = line.match(/^\s*[-*+]\s+(.*)$/);
       if (ul) {
         if (listType !== 'ul') { closeList(); out.push('<ul>'); listType = 'ul'; }
-        out.push('<li>' + inline(ul[1]) + '</li>');
+        const task = ul[1].match(/^\[([\ xX])\]\s*(.*)$/);
+        if (task) {
+          const checked = task[1].toLowerCase() === 'x';
+          out.push('<li class="md-task"><span class="md-check' + (checked ? ' is-done' : '') + '">' + (checked ? '✓' : '') + '</span>' + inline(task[2]) + '</li>');
+        } else {
+          out.push('<li>' + inline(ul[1]) + '</li>');
+        }
         continue;
       }
       const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);

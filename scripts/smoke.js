@@ -5,7 +5,6 @@ const { JSDOM } = require('jsdom');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const errors = [];
-const logs = [];
 
 const dom = new JSDOM(html, {
   runScripts: 'dangerously',
@@ -24,58 +23,66 @@ const dom = new JSDOM(html, {
     window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
     window.matchMedia = window.matchMedia || (() => ({ matches: false, addListener() {}, removeListener() {} }));
     window.addEventListener('error', e => errors.push('window error: ' + e.message));
-    window.console.log = (...args) => logs.push(args.join(' '));
     window.console.error = (...args) => errors.push('console.error: ' + args.join(' '));
   }
 });
 
-// 脚本清单直接从 index.html 里读，避免手工维护漏文件
-const srcs = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
-for (const src of srcs) {
-  const code = fs.readFileSync(path.join(root, src), 'utf8');
+for (const src of [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1])) {
   try {
-    dom.window.eval(code);
+    dom.window.eval(fs.readFileSync(path.join(root, src), 'utf8'));
   } catch (err) {
     errors.push(src + ': ' + err.message);
   }
 }
 
 const w = dom.window;
-setTimeout(() => {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+(async () => {
+  await sleep(400);
   const api = w.__raceAiNote;
-  const out = { errors, scripts: srcs };
+  const out = { errors };
   if (!api) {
-    out.api = 'MISSING';
-  } else {
-    const g = api.graph;
-    out.demoStats = g.stats;
-    out.renderedNodes = api.state.nodes.length;
-    out.renderedLinks = api.state.links.length;
-
-    api.state.query = 'tag:错题';
-    api.rebuild({});
-    out.searchNodes = api.state.nodes.length;
-
-    api.state.query = '';
-    api.setMode('local');
-    out.localNodes = api.state.nodes.length;
-    api.setMode('global');
-
-    const first = g.notes[0];
-    api.openNote(first.id);
-    out.modalTitle = w.document.querySelector('#note-modal-title').textContent;
-    out.modalBodyNodes = w.document.querySelectorAll('#note-modal-body > *').length;
-    out.modalLinks = w.document.querySelectorAll('#note-modal-links li').length;
-    out.statusNotes = w.document.querySelector('#status-notes').textContent;
-    out.treeRows = w.document.querySelectorAll('#file-tree .tree-file').length;
-
-    // 动画插值：悬停后透明度应逐步变化而不是瞬间跳变
-    api.state.hoveredId = first.id;
-    const before = api.state.anim.get(first.id) ? api.state.anim.get(first.id).a : 1;
-    for (let i = 0; i < 5; i++) api.state.sim.tick();
-    const after = api.state.anim.get(first.id);
-    out.animated = Boolean(after) && Math.abs(after.a - before) >= 0;
+    console.log(JSON.stringify({ errors, api: 'MISSING' }, null, 2));
+    process.exit(1);
   }
+  const g = api.graph;
+  out.demoStats = g.stats;
+  out.graphNodes = api.state.nodes.length;
+  out.graphLinks = api.state.links.length;
+  out.treeRows = w.document.querySelectorAll('#file-tree .tree-file').length;
+
+  // 笔记视图
+  const first = g.notes[0];
+  api.openNote(first.id);
+  out.noteTitle = w.document.querySelector('#note-title').textContent;
+  out.noteBodyBlocks = w.document.querySelectorAll('#note-body > *').length;
+  out.backlinks = w.document.querySelectorAll('#backlinks li').length;
+  out.noteMeta = w.document.querySelector('#note-meta').textContent;
+  out.notePaneVisible = !w.document.querySelector('#pane-note').hidden;
+
+  // 视图切换
+  api.showView('graph');
+  out.graphPaneVisible = !w.document.querySelector('#pane-graph').hidden;
+  out.graphToolsVisible = !w.document.querySelector('#graph-tools').hidden;
+  api.showView('note');
+
+  // 搜索
+  api.state.query = 'tag:错题';
+  api.rebuild({});
+  out.searchNodes = api.state.nodes.length;
+  api.state.query = '';
+
+  // AI 面板（本地分析模式）
+  await api.ai.send('这个库里哪些笔记还没有被链接？');
+  await sleep(120);
+  out.aiMessages = w.document.querySelectorAll('#ai-log .ai-msg').length;
+  out.aiLastText = (w.document.querySelector('#ai-log .ai-msg:last-child .ai-bubble') || {}).textContent || '';
+
+  // 双链跳转
+  out.openByTitle = api.openNoteByTitle('导数及其应用');
+  out.noteAfterJump = w.document.querySelector('#note-title').textContent;
+
   console.log(JSON.stringify(out, null, 2));
   process.exit(errors.length ? 1 : 0);
-}, 400);
+})();

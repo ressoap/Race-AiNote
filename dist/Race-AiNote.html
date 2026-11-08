@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>AI 笔记关系图谱 · Race-AiNote</title>
+<title>Race-AiNote · AI 笔记</title>
 <style>
 /* ============================================================
    Race-AiNote · 图谱界面样式
@@ -668,6 +668,198 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .md-empty { color: var(--text-dim); margin: 0; }
 
+/* ============================================================
+   三栏工作区：文件树 | 笔记/图谱 | AI 问答
+   ============================================================ */
+.graph-tools { display: flex; align-items: center; gap: 8px; }
+.seg.small .seg-btn { padding: 3px 8px; font-size: 11.5px; }
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-height: 0;
+  flex: 1;
+}
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── 笔记视图 ───────────────────────────────────────────── */
+.pane-note { overflow: auto; background: var(--bg-panel); }
+
+.note-view {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 26px 32px 60px;
+  width: 100%;
+}
+
+.note-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.note-head h1 { margin: 0; font-size: 24px; line-height: 1.35; }
+.note-path { margin: 4px 0 0; font-size: 11.5px; color: var(--text-dim); word-break: break-all; }
+.note-head-actions { display: flex; gap: 6px; flex: none; }
+.note-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
+.note-tags .tag-chip { border: 0; cursor: pointer; }
+.note-body { margin: 16px 0 0; padding: 0; background: none; max-height: none; font-size: 14px; line-height: 1.85; }
+.note-editor {
+  width: 100%;
+  min-height: 380px;
+  margin: 16px 0 0;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+}
+.note-editor:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.note-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
+.note-meta { font-size: 11.5px; color: var(--text-dim); }
+.note-links h3 { margin: 16px 0 8px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.note-links ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.note-links li.muted { color: var(--text-dim); font-size: 12.5px; }
+.link-pill {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.link-pill:hover { background: var(--accent-soft); }
+
+/* ── AI 问答面板 ────────────────────────────────────────── */
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.ai-panel.is-collapsed { display: none; }
+
+.ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ai-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ai-head-actions { display: flex; gap: 2px; }
+
+.ai-mode {
+  margin: 8px 12px 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  align-self: flex-start;
+}
+.ai-mode.is-remote { background: var(--accent-soft); color: var(--accent); }
+
+.ai-log {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-msg { display: flex; flex-direction: column; gap: 6px; }
+.ai-msg-user { align-items: flex-end; }
+.ai-bubble {
+  max-width: 96%;
+  padding: 9px 11px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  word-break: break-word;
+}
+.ai-msg-user .ai-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.ai-msg-assistant .ai-bubble { background: var(--bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.ai-bubble p { margin: 0 0 6px; }
+.ai-bubble p:last-child { margin-bottom: 0; }
+.ai-bubble h2, .ai-bubble h3 { margin: 8px 0 4px; font-size: 12.5px; }
+.ai-bubble ul, .ai-bubble ol { margin: 4px 0; padding-left: 18px; }
+
+.ai-refs { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip:hover { background: var(--accent-soft); }
+
+.ai-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 0;
+}
+.ai-input { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.ai-option { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-soft); margin-bottom: 6px; cursor: pointer; }
+.ai-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.ai-input textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.ai-input textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+@media (max-width: 1100px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .ai-panel { position: absolute; right: 0; top: 0; bottom: 0; width: min(340px, 92vw); z-index: 9; box-shadow: var(--shadow); }
+}
+
+/* 任务列表 */
+.md-task { list-style: none; margin-left: -18px; display: flex; align-items: flex-start; gap: 7px; }
+.md-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 4px;
+  border: 1.4px solid var(--border-strong);
+  border-radius: 3px;
+  font-size: 9px;
+  line-height: 13px;
+  text-align: center;
+  color: #fff;
+}
+.md-check.is-done { background: var(--accent); border-color: var(--accent); }
+
 </style>
 </head>
 <body>
@@ -692,36 +884,33 @@ input[type="range"]::-webkit-slider-thumb {
         </button>
       </div>
     </div>
-
     <div class="sidebar-search">
       <input id="file-search" type="search" placeholder="搜索文件…" autocomplete="off" spellcheck="false">
     </div>
-
     <div id="file-tree" class="file-tree" role="tree" aria-label="文件树"></div>
-
     <input id="folder-input" type="file" multiple webkitdirectory directory hidden>
-
     <div class="sidebar-foot">
       <span id="vault-stats">—</span>
       <span class="hint">拖入 .md 文件夹也可载入</span>
     </div>
   </aside>
 
-  <!-- ── 右侧：图谱 ───────────────────────────────────────── -->
+  <!-- ── 右侧：主工作区 ───────────────────────────────────── -->
   <main class="main">
     <div class="toolbar">
-      <div class="seg" role="group" aria-label="图谱模式">
-        <button id="mode-global" class="seg-btn is-active" data-mode="global">全局图谱</button>
-        <button id="mode-local" class="seg-btn" data-mode="local">局部图谱</button>
+      <div class="seg" role="group" aria-label="视图">
+        <button id="view-note" class="seg-btn is-active">笔记</button>
+        <button id="view-graph" class="seg-btn">关系图谱</button>
       </div>
-      <label class="depth-control" title="局部图谱深度">深度
-        <input id="depth-input" type="range" min="1" max="4" step="1" value="2">
-        <output id="depth-output">2</output>
-      </label>
-
-      <div class="toolbar-spacer"></div>
-
-      <div class="zoom-group">
+      <div id="graph-tools" class="graph-tools" hidden>
+        <div class="seg small" role="group" aria-label="图谱模式">
+          <button id="mode-global" class="seg-btn is-active" data-mode="global">全局</button>
+          <button id="mode-local" class="seg-btn" data-mode="local">局部</button>
+        </div>
+        <label class="depth-control" title="局部图谱深度">深度
+          <input id="depth-input" type="range" min="1" max="4" step="1" value="2">
+          <output id="depth-output">2</output>
+        </label>
         <button id="btn-zoom-out" class="icon-btn" title="缩小 (-)">−</button>
         <button id="btn-zoom-in" class="icon-btn" title="放大 (+)">＋</button>
         <button id="btn-fit" class="icon-btn" title="适应画布 (F)">
@@ -730,98 +919,142 @@ input[type="range"]::-webkit-slider-thumb {
         <button id="btn-relayout" class="icon-btn" title="重新布局 (R)">
           <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>
         </button>
-        <button id="btn-theme" class="icon-btn" title="切换明暗主题">
-          <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
-        </button>
         <button id="btn-settings" class="icon-btn" title="图谱设置 (S)">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
         </button>
       </div>
+      <div class="toolbar-spacer"></div>
+      <button id="btn-theme" class="icon-btn" title="切换明暗主题">
+        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+      </button>
+      <button id="btn-ai" class="icon-btn" title="AI 问答面板 (A)">
+        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M12 8v4l3 2"/></svg>
+      </button>
     </div>
 
-    <div class="search-bar">
-      <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
-      <input id="search-input" type="search" placeholder="搜索：导数   path:知识卡   tag:数学   -错题   OR   /正则/" autocomplete="off" spellcheck="false">
-      <button id="search-clear" class="icon-btn small" title="清除">×</button>
-    </div>
+    <div class="workspace">
+      <!-- 笔记视图（主视图） -->
+      <section id="pane-note" class="pane pane-note">
+        <div id="note-empty" class="empty-state">
+          <p class="empty-title">从左侧选一篇笔记开始</p>
+          <p class="empty-desc">也可以直接向右侧的 AI 提问，它会基于你整个笔记库回答。</p>
+          <button id="btn-empty-demo" class="primary-btn">载入内置示例库</button>
+        </div>
+        <article id="note-view" class="note-view" hidden>
+          <header class="note-head">
+            <div class="note-head-main">
+              <h1 id="note-title">—</h1>
+              <p id="note-path" class="note-path">—</p>
+            </div>
+            <div class="note-head-actions">
+              <button id="btn-note-edit" class="ghost-btn">编辑</button>
+              <button id="btn-note-graph" class="ghost-btn">在图谱中定位</button>
+              <button id="btn-note-ai" class="ghost-btn">让 AI 分析</button>
+            </div>
+          </header>
+          <div id="note-tags" class="note-tags"></div>
+          <div id="note-body" class="md-body note-body"></div>
+          <textarea id="note-editor" class="note-editor" hidden spellcheck="false"></textarea>
+          <div class="note-footer">
+            <div class="note-meta" id="note-meta">—</div>
+            <div class="note-links">
+              <h3>反向链接 <span id="backlink-count"></span></h3>
+              <ul id="backlinks"></ul>
+            </div>
+          </div>
+        </article>
+      </section>
 
-    <div id="graph-shell" class="graph-shell">
-      <canvas id="graph-canvas"></canvas>
-      <div id="graph-empty" class="empty-state" hidden>
-        <p class="empty-title">还没有载入任何笔记</p>
-        <p class="empty-desc">点左上角文件夹图标选择你的 Obsidian 库目录，或把 .md 文件夹直接拖进来。</p>
-        <button id="btn-empty-demo" class="primary-btn">先看看内置示例库</button>
-      </div>
-      <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
-      <div id="settings-panel" class="settings-panel" hidden>
-        <header>
-          <h2>图谱设置</h2>
-          <button id="btn-settings-close" class="icon-btn small" title="关闭">×</button>
+      <!-- 图谱视图（辅助） -->
+      <section id="pane-graph" class="pane pane-graph" hidden>
+        <div class="search-bar">
+          <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
+          <input id="search-input" type="search" placeholder="搜索：导数   path:20-数学   tag:错题   -草稿   OR   /正则/" autocomplete="off" spellcheck="false">
+          <button id="search-clear" class="icon-btn small" title="清除">×</button>
+        </div>
+        <div id="graph-shell" class="graph-shell">
+          <canvas id="graph-canvas"></canvas>
+          <div id="graph-empty" class="empty-state" hidden>
+            <p class="empty-title">还没有载入任何笔记</p>
+            <p class="empty-desc">点左上角文件夹图标选择 Obsidian 库目录，或把 .md 文件夹拖进来。</p>
+          </div>
+          <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
+          <div id="settings-panel" class="settings-panel" hidden>
+            <header>
+              <h2>图谱设置</h2>
+              <button id="btn-settings-close" class="icon-btn small" title="关闭">×</button>
+            </header>
+            <section>
+              <h3>筛选</h3>
+              <label class="switch-row"><span>标签节点</span><input type="checkbox" data-toggle="showTags"><i></i></label>
+              <label class="switch-row"><span>附件节点</span><input type="checkbox" data-toggle="showAttachments"><i></i></label>
+              <label class="switch-row"><span>仅现有文件</span><input type="checkbox" data-toggle="existingOnly"><i></i></label>
+              <label class="switch-row"><span>只显示孤立节点</span><input type="checkbox" data-toggle="orphansOnly"><i></i></label>
+            </section>
+            <section>
+              <h3>显示</h3>
+              <label class="switch-row"><span>箭头</span><input type="checkbox" data-toggle="arrows"><i></i></label>
+              <label class="slider-row"><span>文字淡出阈值</span><input type="range" data-setting="textFade" min="0" max="120" step="1"><output id="out-textFade"></output></label>
+              <label class="slider-row"><span>节点大小</span><input type="range" data-setting="nodeSize" min="0.5" max="2.4" step="0.1"><output id="out-nodeSize"></output></label>
+              <label class="slider-row"><span>连线粗细</span><input type="range" data-setting="linkWidth" min="0.4" max="3" step="0.1"><output id="out-linkWidth"></output></label>
+            </section>
+            <section>
+              <h3>力学</h3>
+              <label class="slider-row"><span>中心力</span><input type="range" data-setting="center" min="0" max="10" step="0.5"><output id="out-center"></output></label>
+              <label class="slider-row"><span>排斥力</span><input type="range" data-setting="repel" min="0" max="10" step="0.5"><output id="out-repel"></output></label>
+              <label class="slider-row"><span>连线力</span><input type="range" data-setting="linkStrength" min="1" max="20" step="0.5"><output id="out-linkStrength"></output></label>
+              <label class="slider-row"><span>连线距离</span><input type="range" data-setting="linkDistance" min="30" max="280" step="5"><output id="out-linkDistance"></output></label>
+            </section>
+            <section>
+              <h3>颜色分组</h3>
+              <div id="group-list"></div>
+              <button id="add-group" class="ghost-btn">＋ 添加分组</button>
+            </section>
+            <footer><button id="reset-settings" class="ghost-btn">恢复默认</button></footer>
+          </div>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="statusbar">
+          <span class="status-item"><i id="engine-dot" class="dot is-idle"></i><span id="status-engine">引擎空闲</span></span>
+          <span class="status-item">笔记 <b id="status-notes">0</b></span>
+          <span class="status-item">连线 <b id="status-links">0</b></span>
+          <span class="status-item">节点 <b id="status-nodes">0</b></span>
+          <span class="status-item">孤立 <b id="status-orphans">0</b></span>
+          <span class="status-spacer"></span>
+          <span class="status-item kbd-hint">F 适应 · R 重排 · S 设置 · / 搜索</span>
+        </div>
+      </section>
+
+      <!-- AI 问答面板（特色功能） -->
+      <aside id="ai-panel" class="ai-panel">
+        <header class="ai-head">
+          <div class="ai-title">
+            <span class="ai-dot"></span>
+            <span>AI 笔记助手</span>
+          </div>
+          <div class="ai-head-actions">
+            <button id="btn-ai-clear" class="icon-btn small" title="清空对话">×</button>
+            <button id="btn-ai-close" class="icon-btn small" title="收起面板">⟩</button>
+          </div>
         </header>
-        <section>
-          <h3>筛选</h3>
-          <label class="switch-row"><span>标签节点</span><input type="checkbox" data-toggle="showTags"><i></i></label>
-          <label class="switch-row"><span>附件节点</span><input type="checkbox" data-toggle="showAttachments"><i></i></label>
-          <label class="switch-row"><span>仅现有文件</span><input type="checkbox" data-toggle="existingOnly"><i></i></label>
-          <label class="switch-row"><span>只显示孤立节点</span><input type="checkbox" data-toggle="orphansOnly"><i></i></label>
-        </section>
-        <section>
-          <h3>显示</h3>
-          <label class="switch-row"><span>箭头</span><input type="checkbox" data-toggle="arrows"><i></i></label>
-          <label class="slider-row"><span>文字淡出阈值</span><input type="range" data-setting="textFade" min="0" max="120" step="1"><output id="out-textFade"></output></label>
-          <label class="slider-row"><span>节点大小</span><input type="range" data-setting="nodeSize" min="0.5" max="2.4" step="0.1"><output id="out-nodeSize"></output></label>
-          <label class="slider-row"><span>连线粗细</span><input type="range" data-setting="linkWidth" min="0.4" max="3" step="0.1"><output id="out-linkWidth"></output></label>
-        </section>
-        <section>
-          <h3>力学</h3>
-          <label class="slider-row"><span>中心力</span><input type="range" data-setting="center" min="0" max="10" step="0.5"><output id="out-center"></output></label>
-          <label class="slider-row"><span>排斥力</span><input type="range" data-setting="repel" min="0" max="10" step="0.5"><output id="out-repel"></output></label>
-          <label class="slider-row"><span>连线力</span><input type="range" data-setting="linkStrength" min="1" max="20" step="0.5"><output id="out-linkStrength"></output></label>
-          <label class="slider-row"><span>连线距离</span><input type="range" data-setting="linkDistance" min="30" max="280" step="5"><output id="out-linkDistance"></output></label>
-        </section>
-        <section>
-          <h3>颜色分组</h3>
-          <div id="group-list"></div>
-          <button id="add-group" class="ghost-btn">＋ 添加分组</button>
-        </section>
-        <footer>
-          <button id="reset-settings" class="ghost-btn">恢复默认</button>
-        </footer>
-      </div>
-    </div>
-
-    <div class="legend" id="legend"></div>
-
-    <div class="statusbar">
-      <span class="status-item"><i id="engine-dot" class="dot is-idle"></i><span id="status-engine">引擎空闲</span></span>
-      <span class="status-item">笔记 <b id="status-notes">0</b></span>
-      <span class="status-item">连线 <b id="status-links">0</b></span>
-      <span class="status-item">节点 <b id="status-nodes">0</b></span>
-      <span class="status-item">孤立 <b id="status-orphans">0</b></span>
-      <span class="status-spacer"></span>
-      <span class="status-item kbd-hint">F 适应 · R 重排 · G/L 模式 · S 设置 · / 搜索</span>
+        <div id="ai-mode" class="ai-mode" title="当前分析模式">本地分析模式</div>
+        <div id="ai-log" class="ai-log"></div>
+        <div class="ai-suggest" id="ai-suggest">
+          <button class="chip" data-q="这篇笔记的核心考点是什么？">核心考点</button>
+          <button class="chip" data-q="帮我找出薄弱环节并给出复习计划">薄弱环节</button>
+          <button class="chip" data-q="这个库里哪些笔记还没有被链接？">孤立笔记</button>
+          <button class="chip" data-q="把当前笔记整理成一张知识卡">整理成知识卡</button>
+        </div>
+        <div class="ai-input">
+          <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
+          <div class="ai-input-row">
+            <textarea id="ai-text" rows="2" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+            <button id="ai-send" class="primary-btn">发送</button>
+          </div>
+        </div>
+      </aside>
     </div>
   </main>
-</div>
-
-<div id="note-modal" class="modal" hidden>
-  <div class="modal-card">
-    <header>
-      <div>
-        <h2 id="note-modal-title">—</h2>
-        <p id="note-modal-path" class="modal-path">—</p>
-      </div>
-      <button id="note-modal-close" class="icon-btn small" title="关闭">×</button>
-    </header>
-    <div class="modal-tags" id="note-modal-tags"></div>
-    <div class="md-body" id="note-modal-body"></div>
-    <h3 class="modal-sub">连接 <span id="note-modal-count"></span></h3>
-    <ul class="modal-links" id="note-modal-links"></ul>
-    <footer>
-      <button id="note-modal-focus" class="ghost-btn">聚焦此节点</button>
-      <button id="note-modal-local" class="primary-btn">以此为中心查看</button>
-    </footer>
-  </div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -1912,7 +2145,13 @@ input[type="range"]::-webkit-slider-thumb {
       const ul = line.match(/^\s*[-*+]\s+(.*)$/);
       if (ul) {
         if (listType !== 'ul') { closeList(); out.push('<ul>'); listType = 'ul'; }
-        out.push('<li>' + inline(ul[1]) + '</li>');
+        const task = ul[1].match(/^\[([\ xX])\]\s*(.*)$/);
+        if (task) {
+          const checked = task[1].toLowerCase() === 'x';
+          out.push('<li class="md-task"><span class="md-check' + (checked ? ' is-done' : '') + '">' + (checked ? '✓' : '') + '</span>' + inline(task[2]) + '</li>');
+        } else {
+          out.push('<li>' + inline(ul[1]) + '</li>');
+        }
         continue;
       }
       const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
@@ -1952,9 +2191,290 @@ input[type="range"]::-webkit-slider-thumb {
 </script>
 <script>
 /* ============================================================
+   ai.js — AI 问答面板
+   两种模式：
+   1) 本地分析模式（默认，纯前端规则，离线可用）
+   2) 模型模式：检测到本地代理 /api/chat 时启用，密钥只存在服务端
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  const STORE_KEY = 'race-ainote:ai';
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** 极简 BM25 风格检索：按关键词命中数排序 */
+  function retrieve(question, noteList, limit) {
+    const terms = String(question).toLowerCase().split(/[\s,，。、?？!！]+/).filter(t => t.length >= 1);
+    if (!terms.length) return [];
+    const scored = [];
+    for (const note of noteList) {
+      const hay = (note.title + ' ' + note.path + ' ' + (note.content || '') + ' ' + (note.tags || []).join(' ')).toLowerCase();
+      let score = 0;
+      for (const t of terms) {
+        if (!t) continue;
+        const hits = hay.split(t).length - 1;
+        if (hits) score += hits * (note.title.toLowerCase().includes(t) ? 3 : 1);
+      }
+      if (score > 0) scored.push({ note, score });
+    }
+    return scored.sort((a, b) => b.score - a.score).slice(0, limit || 5).map(s => s.note);
+  }
+
+  function headingsOf(content) {
+    return (String(content || '').match(/^#{1,6}\s+(.+)$/gm) || []).map(h => h.replace(/^#+\s+/, '').trim());
+  }
+
+  /* ── 本地规则分析 ─────────────────────────────────────────── */
+
+  function answerLocal(question, ctx) {
+    const q = String(question || '');
+    const graph = ctx.graph;
+    const note = ctx.currentNote;
+    const notes = graph ? graph.notes : [];
+
+    if (/孤立|没有被链接|没人链/.test(q)) {
+      const orphans = graph.nodes.filter(n => n.type === 'note' && n.degree === 0);
+      if (!orphans.length) return { text: '当前库里没有孤立笔记，所有笔记都至少有一条双链。', refs: [] };
+      return {
+        text: '当前库有 ' + orphans.length + ' 篇孤立笔记（没有任何双链指向它，也没有向外链接）：',
+        refs: orphans.map(n => n.title)
+      };
+    }
+
+    if (/薄弱|弱点|短板|复习计划|怎么补/.test(q)) {
+      const weak = notes.filter(n => (n.tags || []).some(t => /薄弱|错题/.test(t)));
+      const plan = notes.filter(n => /复习计划|复盘/.test(n.title));
+      const lines = [];
+      lines.push('根据标签与错题记录，当前有 ' + weak.length + ' 篇与薄弱环节相关的笔记。');
+      if (weak.length) lines.push('建议优先处理：' + weak.slice(0, 5).map(n => n.title).join('、') + '。');
+      if (plan.length) lines.push('排期可以套用现成模板：' + plan.map(n => n.title).join('、') + '。');
+      lines.push('执行节奏建议：当天记错因 → 三天后重做 → 一周后清零。');
+      return { text: lines.join('\n'), refs: [...weak.slice(0, 5), ...plan].map(n => n.title) };
+    }
+
+    if (/知识卡|整理|归纳|总结这张|提炼/.test(q)) {
+      if (!note) return { text: '先在左侧选一篇笔记，我再来帮你整理成知识卡。', refs: [] };
+      const hs = headingsOf(note.content);
+      const lines = [
+        '按知识卡模板整理「' + note.title + '」：',
+        '## 定义\n' + (note.summary || '（原文没有摘要，建议补一句一句话定义）'),
+        '## 结构\n' + (hs.length ? hs.map(h => '- ' + h).join('\n') : '- （原文没有小标题，建议先分 3 段）'),
+        '## 已有双链\n' + ((note.links || []).length ? note.links.map(l => '- [[' + l.target + ']]').join('\n') : '- 暂无，建议至少挂 2 条'),
+        '## 建议标签\n' + ((note.tags || []).length ? note.tags.map(t => '#' + t).join(' ') : '暂无')
+      ];
+      return { text: lines.join('\n\n'), refs: [note.title] };
+    }
+
+    if (note && /核心|考点|讲了什么|重点|一句话/.test(q)) {
+      const hs = headingsOf(note.content).slice(0, 6);
+      const links = (note.links || []).slice(0, 5).map(l => l.target);
+      const lines = ['「' + note.title + '」的要点：', note.summary || '（无摘要）'];
+      if (hs.length) lines.push('结构：' + hs.join(' / '));
+      if (note.tags.length) lines.push('标签：' + note.tags.map(t => '#' + t).join(' '));
+      if (links.length) lines.push('关联：' + links.map(t => '[[' + t + ']]').join(' '));
+      return { text: lines.join('\n'), refs: [note.title, ...links] };
+    }
+
+    // 兜底：全文检索
+    const hits = retrieve(q, notes, 5);
+    if (!hits.length) {
+      return { text: '没在库里找到直接相关的内容。换个关键词，或者问我「哪些笔记还没被链接」「我的薄弱环节」。', refs: [] };
+    }
+    const lines = ['在库里找到 ' + hits.length + ' 篇相关笔记：'];
+    for (const n of hits) {
+      lines.push('· ' + n.title + '：' + (n.summary || n.path));
+    }
+    return { text: lines.join('\n'), refs: hits.map(n => n.title) };
+  }
+
+  /* ── 面板控制器 ───────────────────────────────────────────── */
+
+  function create(options) {
+    const opts = options || {};
+    const logEl = document.getElementById('ai-log');
+    const inputEl = document.getElementById('ai-text');
+    const modeEl = document.getElementById('ai-mode');
+    const suggestEl = document.getElementById('ai-suggest');
+    const useNoteEl = document.getElementById('ai-use-note');
+
+    const state = { messages: [], mode: 'local', busy: false, endpoint: null };
+
+    function addMessage(role, text, refs) {
+      const msg = { role, text, refs: refs || [] };
+      state.messages.push(msg);
+      render();
+      return msg;
+    }
+
+    function renderMarkdownSafe(text) {
+      if (root.RG && root.RG.markdown) {
+        // 让 [[双链]] 在回答里也能点击
+        return root.RG.markdown.render(text);
+      }
+      return '<p>' + esc(text).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    function render() {
+      if (!logEl) return;
+      logEl.innerHTML = '';
+      for (const msg of state.messages) {
+        const wrap = document.createElement('div');
+        wrap.className = 'ai-msg ai-msg-' + msg.role;
+        const bubble = document.createElement('div');
+        bubble.className = 'ai-bubble';
+        if (msg.role === 'assistant') bubble.innerHTML = renderMarkdownSafe(msg.text);
+        else bubble.textContent = msg.text;
+        wrap.appendChild(bubble);
+
+        if (msg.refs && msg.refs.length) {
+          const refs = document.createElement('div');
+          refs.className = 'ai-refs';
+          for (const title of msg.refs.slice(0, 8)) {
+            const chip = document.createElement('button');
+            chip.className = 'chip';
+            chip.textContent = title;
+            chip.addEventListener('click', () => {
+              const el = bubble.querySelector('[data-wikilink="' + title.replace(/"/g, '') + '"]');
+              if (opts.onOpenNote) opts.onOpenNote(title);
+              else if (el) el.click();
+            });
+            refs.appendChild(chip);
+          }
+          wrap.appendChild(refs);
+        }
+        logEl.appendChild(wrap);
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setMode(mode, label) {
+      state.mode = mode;
+      if (modeEl) modeEl.textContent = label || (mode === 'remote' ? '模型模式' : '本地分析模式');
+      if (modeEl) modeEl.classList.toggle('is-remote', mode === 'remote');
+    }
+
+    async function detectBackend() {
+      if (location.protocol === 'file:') return setMode('local');
+      try {
+        const res = await fetch('/api/health', { cache: 'no-store' });
+        if (!res.ok) throw new Error('no backend');
+        const info = await res.json();
+        state.endpoint = '/api/chat';
+        setMode('remote', '模型模式 · ' + (info.model || 'AI'));
+      } catch (_) {
+        setMode('local');
+      }
+    }
+
+    function contextPayload(question) {
+      const graph = opts.getGraph();
+      const note = opts.getCurrentNote();
+      const notes = graph ? graph.notes : [];
+      const related = retrieve(question, notes, 6);
+      const parts = [];
+      if (useNoteEl && useNoteEl.checked && note) {
+        parts.push('【当前笔记】' + note.title + '\n' + String(note.content || '').slice(0, 2500));
+      }
+      for (const n of related) {
+        if (note && n.id === note.id) continue;
+        parts.push('【相关笔记】' + n.title + '\n' + String(n.content || '').slice(0, 800));
+      }
+      return parts.join('\n\n---\n\n');
+    }
+
+    async function send(text) {
+      const question = String(text || '').trim();
+      if (!question || state.busy) return;
+      addMessage('user', question);
+      state.busy = true;
+      const loading = addMessage('assistant', '思考中…');
+
+      try {
+        if (state.mode === 'remote' && state.endpoint) {
+          const res = await fetch(state.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, context: contextPayload(question) })
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          loading.text = data.answer || '（模型没有返回内容）';
+          loading.refs = data.refs || [];
+        } else {
+          const result = answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
+          loading.text = result.text;
+          loading.refs = result.refs;
+        }
+      } catch (err) {
+        loading.text = '模型调用失败（' + (err && err.message ? err.message : err) + '），已切回本地分析。';
+        const result = answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
+        loading.text += '\n\n' + result.text;
+        loading.refs = result.refs;
+        setMode('local');
+      } finally {
+        state.busy = false;
+        render();
+      }
+    }
+
+    function clear() {
+      state.messages = [];
+      render();
+      greet();
+    }
+
+    function greet() {
+      const graph = opts.getGraph();
+      const count = graph ? graph.notes.length : 0;
+      addMessage('assistant',
+        count
+          ? '已载入 ' + count + ' 篇笔记。可以这样问我：\n· 这篇笔记的核心考点是什么\n· 帮我找出薄弱环节并给出复习计划\n· 这个库里哪些笔记还没有被链接'
+          : '还没有载入笔记。点左上角文件夹图标选一个 Markdown 目录，或先用内置示例库试试。');
+    }
+
+    // 事件绑定
+    const sendBtn = document.getElementById('ai-send');
+    if (sendBtn) sendBtn.addEventListener('click', () => { const v = inputEl.value; inputEl.value = ''; send(v); });
+    if (inputEl) {
+      inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const v = inputEl.value; inputEl.value = ''; send(v); }
+      });
+    }
+    const clearBtn = document.getElementById('btn-ai-clear');
+    if (clearBtn) clearBtn.addEventListener('click', clear);
+    if (suggestEl) {
+      suggestEl.addEventListener('click', e => {
+        const chip = e.target.closest('.chip');
+        if (chip && chip.dataset.q) send(chip.dataset.q);
+      });
+    }
+
+    detectBackend();
+    greet();
+
+    function reset() {
+      state.messages = [];
+      render();
+      greet();
+    }
+
+    return { send, clear, reset, setMode, state, render };
+  }
+
+  root.RG = root.RG || {};
+  root.RG.ai = { create, answerLocal, retrieve, headingsOf };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-08T13:18:41.623Z
+   生成时间：2026-11-08T13:30:46.290Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -2071,7 +2591,6 @@ input[type="range"]::-webkit-slider-thumb {
   const searchInput = $('#search-input');
   const fileTree = $('#file-tree');
   const settingsPanel = $('#settings-panel');
-  const noteModal = $('#note-modal');
 
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -2115,6 +2634,9 @@ input[type="range"]::-webkit-slider-thumb {
     $('#graph-empty').hidden = state.graph.nodes.length > 0;
     renderTree();
     rebuild({ fresh: true, fit: true });
+    if (typeof ai !== "undefined" && ai && ai.reset) ai.reset();
+    currentNoteId = null;
+    if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
   }
 
@@ -2596,7 +3118,7 @@ input[type="range"]::-webkit-slider-thumb {
     state.pointerDown = null;
     state.dirty = true;
     // 单击（没有拖动）= 直接打开笔记内容，和 Obsidian 一致
-    if (!moved && hit) openNote(hit.id);
+    if (!moved && hit) { openNote(hit.id); showView('note'); }
     // 单击空白处 = 取消选中
     else if (!moved && !hit) { state.selectedId = null; state.dirty = true; }
   }
@@ -2632,99 +3154,179 @@ input[type="range"]::-webkit-slider-thumb {
   canvas.addEventListener('dblclick', e => {
     const p = localPoint(e);
     const hit = hitTest(p.x, p.y);
-    if (hit) openNote(hit.id);
+    if (hit) { openNote(hit.id); showView('note'); }
     else fitView(true);
   });
 
-  /* ── 笔记预览 ───────────────────────────────────────────── */
-  let modalNodeId = null;
+/* ── 笔记视图（主视图） ─────────────────────────────────── */
+  let currentNoteId = null;
+  let editing = false;
 
-  function openNote(id) {
-    const node = (state.graph && state.graph.nodes.find(n => n.id === id)) || state.index.get(id);
-    if (!node) return;
-    modalNodeId = id;
-    state.selectedId = id;
-    $('#note-modal-title').textContent = node.title;
-    $('#note-modal-path').textContent = node.path || '(无路径)';
-    const tags = $('#note-modal-tags');
-    tags.innerHTML = '';
-    for (const tag of node.tags || []) {
-      const chip = document.createElement('span');
+  function currentNote() {
+    if (!state.graph || !currentNoteId) return null;
+    return state.graph.nodes.find(n => n.id === currentNoteId) || null;
+  }
+
+  function showView(view) {
+    const isGraph = view === 'graph';
+    $('#pane-note').hidden = isGraph;
+    $('#pane-graph').hidden = !isGraph;
+    $('#graph-tools').hidden = !isGraph;
+    $('#view-note').classList.toggle('is-active', !isGraph);
+    $('#view-graph').classList.toggle('is-active', isGraph);
+    state.viewName = view;
+    if (isGraph) {
+      resize();
+      state.dirty = true;
+      if (currentNoteId) focusNode(currentNoteId);
+    }
+  }
+
+  function tagChips(container, tags, onClick) {
+    container.innerHTML = '';
+    for (const tag of tags || []) {
+      const chip = document.createElement('button');
       chip.className = 'tag-chip';
       chip.textContent = '#' + tag;
-      tags.appendChild(chip);
+      chip.addEventListener('click', () => onClick(tag));
+      container.appendChild(chip);
     }
-    const body = $('#note-modal-body');
-    body.innerHTML = node.content && node.content.trim()
-      ? markdown.render(node.content)
-      : '<p class="md-empty">（这篇笔记还没有正文）</p>';
-
-    const links = $('#note-modal-links');
-    links.innerHTML = '';
-    const neighbours = [];
-    for (const link of state.graph.links) {
-      if (link.source === id) neighbours.push(link.target);
-      else if (link.target === id) neighbours.push(link.source);
-    }
-    const uniq = [...new Set(neighbours)];
-    $('#note-modal-count').textContent = uniq.length ? '(' + uniq.length + ')' : '(无)';
-    for (const nid of uniq.slice(0, 40)) {
-      const target = state.graph.nodes.find(n => n.id === nid);
-      if (!target) continue;
-      const li = document.createElement('li');
-      const arrow = document.createElement('span');
-      arrow.className = 'link-arrow';
-      arrow.textContent = '→';
-      const label = document.createElement('span');
-      label.textContent = target.title;
-      li.append(arrow, label);
-      li.addEventListener('click', () => { closeNote(); openNote(nid); });
-      links.appendChild(li);
-    }
-    noteModal.hidden = false;
-    state.dirty = true;
   }
 
-  function closeNote() {
-    noteModal.hidden = true;
-    modalNodeId = null;
-  }
-
-  $('#note-modal-body').addEventListener('click', e => {
-    const linkEl = e.target.closest('[data-wikilink]');
-    if (linkEl) {
-      const title = linkEl.dataset.wikilink;
-      const target = findNodeByTitle(title);
-      if (target) openNote(target.id);
-      else toast('尚未创建：' + title);
+  function renderNote() {
+    const node = currentNote();
+    if (!node) {
+      $('#note-empty').hidden = false;
+      $('#note-view').hidden = true;
       return;
     }
-    const tagEl = e.target.closest('.md-tag');
-    if (tagEl) {
-      closeNote();
-      setSearch('tag:' + tagEl.textContent.replace(/^#/, ''));
+    $('#note-empty').hidden = true;
+    $('#note-view').hidden = false;
+    $('#note-title').textContent = node.title;
+    $('#note-path').textContent = node.path || '(无路径)';
+
+    const body = $('#note-body');
+    // 正文开头如果就是标题，去掉它，避免与页面标题重复
+    let content = String(node.content || '');
+    const headMatch = content.match(/^\s*#{1,3}\s+(.+)\n/);
+    if (headMatch && headMatch[1].trim() === node.title.trim()) content = content.slice(headMatch[0].length);
+    body.innerHTML = content.trim()
+      ? markdown.render(content)
+      : '<p class="md-empty">（这篇笔记还没有正文）</p>';
+
+    tagChips($('#note-tags'), node.tags, tag => { showView('graph'); setSearch('tag:' + tag); });
+
+    const words = String(node.content || '').replace(/\s+/g, '').length;
+    const outlinks = (node.links || []).length;
+    $('#note-meta').textContent = words + ' 字 · ' + outlinks + ' 条出链 · ' + (node.tags || []).length + ' 个标签';
+
+    // 反向链接
+    const backlinks = [];
+    for (const link of state.graph.links) {
+      if (link.target === node.id && link.kind !== 'tag') {
+        const src = state.graph.nodes.find(n => n.id === link.source);
+        if (src && src.type === 'note') backlinks.push(src);
+      }
     }
-  });
+    const ul = $('#backlinks');
+    ul.innerHTML = '';
+    $('#backlink-count').textContent = backlinks.length ? '(' + backlinks.length + ')' : '(0)';
+    if (!backlinks.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = '还没有笔记链接到这里';
+      ul.appendChild(li);
+    }
+    for (const src of backlinks.slice(0, 30)) {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.className = 'link-pill';
+      btn.textContent = src.title;
+      btn.addEventListener('click', () => openNote(src.id));
+      li.appendChild(btn);
+      ul.appendChild(li);
+    }
+    updateTreeSelection();
+  }
+
+  function openNote(id) {
+    const node = state.graph && state.graph.nodes.find(n => n.id === id);
+    if (!node) return;
+    currentNoteId = id;
+    state.selectedId = id;
+    editing = false;
+    $('#note-editor').hidden = true;
+    $('#note-body').hidden = false;
+    $('#btn-note-edit').textContent = '编辑';
+    renderNote();
+  }
+
+  function openNoteByTitle(title) {
+    const node = findNodeByTitle(title);
+    if (node && node.type === 'note') { openNote(node.id); return true; }
+    return false;
+  }
 
   function findNodeByTitle(title) {
     if (!state.graph) return null;
     const want = String(title).trim().toLowerCase();
     return state.graph.nodes.find(n => n.title.toLowerCase() === want)
-      || state.graph.nodes.find(n => n.path.toLowerCase().replace(/.md$/, '').endsWith(want));
+      || state.graph.nodes.find(n => n.path.toLowerCase().replace(/\.md$/, '').endsWith(want));
   }
 
-  $('#note-modal-close').addEventListener('click', closeNote);
-  noteModal.addEventListener('pointerdown', e => { if (e.target === noteModal) closeNote(); });
-  $('#note-modal-focus').addEventListener('click', () => {
-    if (modalNodeId) focusNode(modalNodeId);
-    closeNote();
+  /* 正文里的双链 / 标签 / 反链点击 */
+  $('#note-body').addEventListener('click', e => {
+    const linkEl = e.target.closest('[data-wikilink]');
+    if (linkEl) {
+      const title = linkEl.dataset.wikilink;
+      if (!openNoteByTitle(title)) toast('尚未创建：' + title);
+      return;
+    }
+    const tagEl = e.target.closest('.md-tag');
+    if (tagEl) {
+      showView('graph');
+      setSearch('tag:' + tagEl.textContent.replace(/^#/, ''));
+    }
   });
-  $('#note-modal-local').addEventListener('click', () => {
-    if (!modalNodeId) return;
-    state.localRoot = modalNodeId;
-    setMode('local');
-    closeNote();
-  });
+
+  /* 编辑：内存内修改 + 可下载，不直接写盘 */
+  function toggleEdit() {
+    const node = currentNote();
+    if (!node) return;
+    editing = !editing;
+    const editor = $('#note-editor');
+    if (editing) {
+      editor.value = node.content || '';
+      editor.hidden = false;
+      $('#note-body').hidden = true;
+      $('#btn-note-edit').textContent = '保存';
+      editor.focus();
+    } else {
+      node.content = editor.value;
+      node.summary = vault.summarize(node.content);
+      node.links = vault.extractLinks(node.content);
+      node.tags = [...new Set([...vault.extractTags(node.content), ...(node.frontmatter && node.frontmatter.tags ? [] : [])])];
+      editor.hidden = true;
+      $('#note-body').hidden = false;
+      $('#btn-note-edit').textContent = '编辑';
+      state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: node.content }) : f)));
+      rebuild({});
+      renderNote();
+      toast('已保存到当前会话（Ctrl+S 可下载 .md）');
+    }
+  }
+
+  function downloadNote() {
+    const node = currentNote();
+    if (!node) return;
+    const blob = new Blob([node.content || ''], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (node.path || node.title + '.md').split('/').pop();
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('已下载 ' + a.download);
+  }
 
   /* ── 文件树 ─────────────────────────────────────────────── */
   function renderTree() {
@@ -2773,7 +3375,7 @@ input[type="range"]::-webkit-slider-thumb {
         label.className = 'file-name';
         label.textContent = note.title;
         row.append(icon, label);
-        row.addEventListener('click', () => { focusNode(note.id); openNote(note.id); });
+        row.addEventListener('click', () => { openNote(note.id); showView('note'); });
         group.appendChild(row);
       }
     }
@@ -3024,7 +3626,6 @@ input[type="range"]::-webkit-slider-thumb {
       return;
     }
     if (e.key === 'Escape') {
-      if (!noteModal.hidden) { closeNote(); return; }
       if (!settingsPanel.hidden) { setPanel(false); return; }
       if (document.activeElement === searchInput) { setSearch(''); searchInput.blur(); return; }
       state.selectedId = null;
@@ -3034,6 +3635,8 @@ input[type="range"]::-webkit-slider-thumb {
     if (inField) return;
     if (e.key === '/') { e.preventDefault(); searchInput.focus(); return; }
     const k = e.key.toLowerCase();
+    if (k === 'a') { setAiPanel($('#ai-panel').classList.contains('is-collapsed')); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); downloadNote(); return; }
     if (k === 'f') fitView(true);
     else if (k === 'r') $('#btn-relayout').click();
     else if (k === 'g') setMode('global');
@@ -3070,6 +3673,36 @@ input[type="range"]::-webkit-slider-thumb {
     }
   }
 
+  /* ── 视图 / AI 面板 / 笔记按钮 ──────────────────────────── */
+  $('#view-note').addEventListener('click', () => showView('note'));
+  $('#view-graph').addEventListener('click', () => showView('graph'));
+  $('#btn-note-edit').addEventListener('click', toggleEdit);
+  $('#btn-note-graph').addEventListener('click', () => {
+    if (!currentNoteId) return;
+    showView('graph');
+    focusNode(currentNoteId);
+  });
+  $('#btn-note-ai').addEventListener('click', () => {
+    setAiPanel(true);
+    const node = currentNote();
+    ai.send(node ? '分析「' + node.title + '」的核心考点和易错点' : '这个笔记库的整体结构怎么样');
+  });
+  $('#btn-ai').addEventListener('click', () => setAiPanel($('#ai-panel').classList.contains('is-collapsed')));
+  $('#btn-ai-close').addEventListener('click', () => setAiPanel(false));
+
+  function setAiPanel(open) {
+    $('#ai-panel').classList.toggle('is-collapsed', !open);
+    $('#btn-ai').classList.toggle('is-active', open);
+    resize();
+    state.dirty = true;
+  }
+
+  const ai = RG.ai.create({
+    getGraph: () => state.graph,
+    getCurrentNote: () => currentNote(),
+    onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); }
+  });
+
   /* ── 启动 ───────────────────────────────────────────────── */
   const ro = new ResizeObserver(() => resize());
   ro.observe(shell);
@@ -3078,10 +3711,19 @@ input[type="range"]::-webkit-slider-thumb {
   syncSettingsUI();
   renderLegend();
   loadDemo();
+  showView('note');
+  if (state.graph && state.graph.notes[0]) openNote(state.graph.notes[0].id);
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'graph') showView('graph');
+    if (params.get('ai') === '0') setAiPanel(false);
+    const openTitle = params.get('note');
+    if (openTitle) openNoteByTitle(openTitle);
+  } catch (_) {}
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, loadFiles, loadDemo,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

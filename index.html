@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>AI 笔记关系图谱 · Race-AiNote</title>
+<title>Race-AiNote · AI 笔记</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -29,36 +29,33 @@
         </button>
       </div>
     </div>
-
     <div class="sidebar-search">
       <input id="file-search" type="search" placeholder="搜索文件…" autocomplete="off" spellcheck="false">
     </div>
-
     <div id="file-tree" class="file-tree" role="tree" aria-label="文件树"></div>
-
     <input id="folder-input" type="file" multiple webkitdirectory directory hidden>
-
     <div class="sidebar-foot">
       <span id="vault-stats">—</span>
       <span class="hint">拖入 .md 文件夹也可载入</span>
     </div>
   </aside>
 
-  <!-- ── 右侧：图谱 ───────────────────────────────────────── -->
+  <!-- ── 右侧：主工作区 ───────────────────────────────────── -->
   <main class="main">
     <div class="toolbar">
-      <div class="seg" role="group" aria-label="图谱模式">
-        <button id="mode-global" class="seg-btn is-active" data-mode="global">全局图谱</button>
-        <button id="mode-local" class="seg-btn" data-mode="local">局部图谱</button>
+      <div class="seg" role="group" aria-label="视图">
+        <button id="view-note" class="seg-btn is-active">笔记</button>
+        <button id="view-graph" class="seg-btn">关系图谱</button>
       </div>
-      <label class="depth-control" title="局部图谱深度">深度
-        <input id="depth-input" type="range" min="1" max="4" step="1" value="2">
-        <output id="depth-output">2</output>
-      </label>
-
-      <div class="toolbar-spacer"></div>
-
-      <div class="zoom-group">
+      <div id="graph-tools" class="graph-tools" hidden>
+        <div class="seg small" role="group" aria-label="图谱模式">
+          <button id="mode-global" class="seg-btn is-active" data-mode="global">全局</button>
+          <button id="mode-local" class="seg-btn" data-mode="local">局部</button>
+        </div>
+        <label class="depth-control" title="局部图谱深度">深度
+          <input id="depth-input" type="range" min="1" max="4" step="1" value="2">
+          <output id="depth-output">2</output>
+        </label>
         <button id="btn-zoom-out" class="icon-btn" title="缩小 (-)">−</button>
         <button id="btn-zoom-in" class="icon-btn" title="放大 (+)">＋</button>
         <button id="btn-fit" class="icon-btn" title="适应画布 (F)">
@@ -67,98 +64,142 @@
         <button id="btn-relayout" class="icon-btn" title="重新布局 (R)">
           <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>
         </button>
-        <button id="btn-theme" class="icon-btn" title="切换明暗主题">
-          <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
-        </button>
         <button id="btn-settings" class="icon-btn" title="图谱设置 (S)">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
         </button>
       </div>
+      <div class="toolbar-spacer"></div>
+      <button id="btn-theme" class="icon-btn" title="切换明暗主题">
+        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+      </button>
+      <button id="btn-ai" class="icon-btn" title="AI 问答面板 (A)">
+        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M12 8v4l3 2"/></svg>
+      </button>
     </div>
 
-    <div class="search-bar">
-      <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
-      <input id="search-input" type="search" placeholder="搜索：导数   path:知识卡   tag:数学   -错题   OR   /正则/" autocomplete="off" spellcheck="false">
-      <button id="search-clear" class="icon-btn small" title="清除">×</button>
-    </div>
+    <div class="workspace">
+      <!-- 笔记视图（主视图） -->
+      <section id="pane-note" class="pane pane-note">
+        <div id="note-empty" class="empty-state">
+          <p class="empty-title">从左侧选一篇笔记开始</p>
+          <p class="empty-desc">也可以直接向右侧的 AI 提问，它会基于你整个笔记库回答。</p>
+          <button id="btn-empty-demo" class="primary-btn">载入内置示例库</button>
+        </div>
+        <article id="note-view" class="note-view" hidden>
+          <header class="note-head">
+            <div class="note-head-main">
+              <h1 id="note-title">—</h1>
+              <p id="note-path" class="note-path">—</p>
+            </div>
+            <div class="note-head-actions">
+              <button id="btn-note-edit" class="ghost-btn">编辑</button>
+              <button id="btn-note-graph" class="ghost-btn">在图谱中定位</button>
+              <button id="btn-note-ai" class="ghost-btn">让 AI 分析</button>
+            </div>
+          </header>
+          <div id="note-tags" class="note-tags"></div>
+          <div id="note-body" class="md-body note-body"></div>
+          <textarea id="note-editor" class="note-editor" hidden spellcheck="false"></textarea>
+          <div class="note-footer">
+            <div class="note-meta" id="note-meta">—</div>
+            <div class="note-links">
+              <h3>反向链接 <span id="backlink-count"></span></h3>
+              <ul id="backlinks"></ul>
+            </div>
+          </div>
+        </article>
+      </section>
 
-    <div id="graph-shell" class="graph-shell">
-      <canvas id="graph-canvas"></canvas>
-      <div id="graph-empty" class="empty-state" hidden>
-        <p class="empty-title">还没有载入任何笔记</p>
-        <p class="empty-desc">点左上角文件夹图标选择你的 Obsidian 库目录，或把 .md 文件夹直接拖进来。</p>
-        <button id="btn-empty-demo" class="primary-btn">先看看内置示例库</button>
-      </div>
-      <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
-      <div id="settings-panel" class="settings-panel" hidden>
-        <header>
-          <h2>图谱设置</h2>
-          <button id="btn-settings-close" class="icon-btn small" title="关闭">×</button>
+      <!-- 图谱视图（辅助） -->
+      <section id="pane-graph" class="pane pane-graph" hidden>
+        <div class="search-bar">
+          <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
+          <input id="search-input" type="search" placeholder="搜索：导数   path:20-数学   tag:错题   -草稿   OR   /正则/" autocomplete="off" spellcheck="false">
+          <button id="search-clear" class="icon-btn small" title="清除">×</button>
+        </div>
+        <div id="graph-shell" class="graph-shell">
+          <canvas id="graph-canvas"></canvas>
+          <div id="graph-empty" class="empty-state" hidden>
+            <p class="empty-title">还没有载入任何笔记</p>
+            <p class="empty-desc">点左上角文件夹图标选择 Obsidian 库目录，或把 .md 文件夹拖进来。</p>
+          </div>
+          <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
+          <div id="settings-panel" class="settings-panel" hidden>
+            <header>
+              <h2>图谱设置</h2>
+              <button id="btn-settings-close" class="icon-btn small" title="关闭">×</button>
+            </header>
+            <section>
+              <h3>筛选</h3>
+              <label class="switch-row"><span>标签节点</span><input type="checkbox" data-toggle="showTags"><i></i></label>
+              <label class="switch-row"><span>附件节点</span><input type="checkbox" data-toggle="showAttachments"><i></i></label>
+              <label class="switch-row"><span>仅现有文件</span><input type="checkbox" data-toggle="existingOnly"><i></i></label>
+              <label class="switch-row"><span>只显示孤立节点</span><input type="checkbox" data-toggle="orphansOnly"><i></i></label>
+            </section>
+            <section>
+              <h3>显示</h3>
+              <label class="switch-row"><span>箭头</span><input type="checkbox" data-toggle="arrows"><i></i></label>
+              <label class="slider-row"><span>文字淡出阈值</span><input type="range" data-setting="textFade" min="0" max="120" step="1"><output id="out-textFade"></output></label>
+              <label class="slider-row"><span>节点大小</span><input type="range" data-setting="nodeSize" min="0.5" max="2.4" step="0.1"><output id="out-nodeSize"></output></label>
+              <label class="slider-row"><span>连线粗细</span><input type="range" data-setting="linkWidth" min="0.4" max="3" step="0.1"><output id="out-linkWidth"></output></label>
+            </section>
+            <section>
+              <h3>力学</h3>
+              <label class="slider-row"><span>中心力</span><input type="range" data-setting="center" min="0" max="10" step="0.5"><output id="out-center"></output></label>
+              <label class="slider-row"><span>排斥力</span><input type="range" data-setting="repel" min="0" max="10" step="0.5"><output id="out-repel"></output></label>
+              <label class="slider-row"><span>连线力</span><input type="range" data-setting="linkStrength" min="1" max="20" step="0.5"><output id="out-linkStrength"></output></label>
+              <label class="slider-row"><span>连线距离</span><input type="range" data-setting="linkDistance" min="30" max="280" step="5"><output id="out-linkDistance"></output></label>
+            </section>
+            <section>
+              <h3>颜色分组</h3>
+              <div id="group-list"></div>
+              <button id="add-group" class="ghost-btn">＋ 添加分组</button>
+            </section>
+            <footer><button id="reset-settings" class="ghost-btn">恢复默认</button></footer>
+          </div>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="statusbar">
+          <span class="status-item"><i id="engine-dot" class="dot is-idle"></i><span id="status-engine">引擎空闲</span></span>
+          <span class="status-item">笔记 <b id="status-notes">0</b></span>
+          <span class="status-item">连线 <b id="status-links">0</b></span>
+          <span class="status-item">节点 <b id="status-nodes">0</b></span>
+          <span class="status-item">孤立 <b id="status-orphans">0</b></span>
+          <span class="status-spacer"></span>
+          <span class="status-item kbd-hint">F 适应 · R 重排 · S 设置 · / 搜索</span>
+        </div>
+      </section>
+
+      <!-- AI 问答面板（特色功能） -->
+      <aside id="ai-panel" class="ai-panel">
+        <header class="ai-head">
+          <div class="ai-title">
+            <span class="ai-dot"></span>
+            <span>AI 笔记助手</span>
+          </div>
+          <div class="ai-head-actions">
+            <button id="btn-ai-clear" class="icon-btn small" title="清空对话">×</button>
+            <button id="btn-ai-close" class="icon-btn small" title="收起面板">⟩</button>
+          </div>
         </header>
-        <section>
-          <h3>筛选</h3>
-          <label class="switch-row"><span>标签节点</span><input type="checkbox" data-toggle="showTags"><i></i></label>
-          <label class="switch-row"><span>附件节点</span><input type="checkbox" data-toggle="showAttachments"><i></i></label>
-          <label class="switch-row"><span>仅现有文件</span><input type="checkbox" data-toggle="existingOnly"><i></i></label>
-          <label class="switch-row"><span>只显示孤立节点</span><input type="checkbox" data-toggle="orphansOnly"><i></i></label>
-        </section>
-        <section>
-          <h3>显示</h3>
-          <label class="switch-row"><span>箭头</span><input type="checkbox" data-toggle="arrows"><i></i></label>
-          <label class="slider-row"><span>文字淡出阈值</span><input type="range" data-setting="textFade" min="0" max="120" step="1"><output id="out-textFade"></output></label>
-          <label class="slider-row"><span>节点大小</span><input type="range" data-setting="nodeSize" min="0.5" max="2.4" step="0.1"><output id="out-nodeSize"></output></label>
-          <label class="slider-row"><span>连线粗细</span><input type="range" data-setting="linkWidth" min="0.4" max="3" step="0.1"><output id="out-linkWidth"></output></label>
-        </section>
-        <section>
-          <h3>力学</h3>
-          <label class="slider-row"><span>中心力</span><input type="range" data-setting="center" min="0" max="10" step="0.5"><output id="out-center"></output></label>
-          <label class="slider-row"><span>排斥力</span><input type="range" data-setting="repel" min="0" max="10" step="0.5"><output id="out-repel"></output></label>
-          <label class="slider-row"><span>连线力</span><input type="range" data-setting="linkStrength" min="1" max="20" step="0.5"><output id="out-linkStrength"></output></label>
-          <label class="slider-row"><span>连线距离</span><input type="range" data-setting="linkDistance" min="30" max="280" step="5"><output id="out-linkDistance"></output></label>
-        </section>
-        <section>
-          <h3>颜色分组</h3>
-          <div id="group-list"></div>
-          <button id="add-group" class="ghost-btn">＋ 添加分组</button>
-        </section>
-        <footer>
-          <button id="reset-settings" class="ghost-btn">恢复默认</button>
-        </footer>
-      </div>
-    </div>
-
-    <div class="legend" id="legend"></div>
-
-    <div class="statusbar">
-      <span class="status-item"><i id="engine-dot" class="dot is-idle"></i><span id="status-engine">引擎空闲</span></span>
-      <span class="status-item">笔记 <b id="status-notes">0</b></span>
-      <span class="status-item">连线 <b id="status-links">0</b></span>
-      <span class="status-item">节点 <b id="status-nodes">0</b></span>
-      <span class="status-item">孤立 <b id="status-orphans">0</b></span>
-      <span class="status-spacer"></span>
-      <span class="status-item kbd-hint">F 适应 · R 重排 · G/L 模式 · S 设置 · / 搜索</span>
+        <div id="ai-mode" class="ai-mode" title="当前分析模式">本地分析模式</div>
+        <div id="ai-log" class="ai-log"></div>
+        <div class="ai-suggest" id="ai-suggest">
+          <button class="chip" data-q="这篇笔记的核心考点是什么？">核心考点</button>
+          <button class="chip" data-q="帮我找出薄弱环节并给出复习计划">薄弱环节</button>
+          <button class="chip" data-q="这个库里哪些笔记还没有被链接？">孤立笔记</button>
+          <button class="chip" data-q="把当前笔记整理成一张知识卡">整理成知识卡</button>
+        </div>
+        <div class="ai-input">
+          <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
+          <div class="ai-input-row">
+            <textarea id="ai-text" rows="2" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+            <button id="ai-send" class="primary-btn">发送</button>
+          </div>
+        </div>
+      </aside>
     </div>
   </main>
-</div>
-
-<div id="note-modal" class="modal" hidden>
-  <div class="modal-card">
-    <header>
-      <div>
-        <h2 id="note-modal-title">—</h2>
-        <p id="note-modal-path" class="modal-path">—</p>
-      </div>
-      <button id="note-modal-close" class="icon-btn small" title="关闭">×</button>
-    </header>
-    <div class="modal-tags" id="note-modal-tags"></div>
-    <div class="md-body" id="note-modal-body"></div>
-    <h3 class="modal-sub">连接 <span id="note-modal-count"></span></h3>
-    <ul class="modal-links" id="note-modal-links"></ul>
-    <footer>
-      <button id="note-modal-focus" class="ghost-btn">聚焦此节点</button>
-      <button id="note-modal-local" class="primary-btn">以此为中心查看</button>
-    </footer>
-  </div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -168,6 +209,7 @@
 <script src="js/physics.js"></script>
 <script src="js/render.js"></script>
 <script src="js/markdown.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/demo-vault.js"></script>
 <script src="js/app.js"></script>
 </body>

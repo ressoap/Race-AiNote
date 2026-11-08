@@ -103,7 +103,6 @@
   const searchInput = $('#search-input');
   const fileTree = $('#file-tree');
   const settingsPanel = $('#settings-panel');
-  const noteModal = $('#note-modal');
 
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -147,6 +146,9 @@
     $('#graph-empty').hidden = state.graph.nodes.length > 0;
     renderTree();
     rebuild({ fresh: true, fit: true });
+    if (typeof ai !== "undefined" && ai && ai.reset) ai.reset();
+    currentNoteId = null;
+    if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
   }
 
@@ -628,7 +630,7 @@
     state.pointerDown = null;
     state.dirty = true;
     // 单击（没有拖动）= 直接打开笔记内容，和 Obsidian 一致
-    if (!moved && hit) openNote(hit.id);
+    if (!moved && hit) { openNote(hit.id); showView('note'); }
     // 单击空白处 = 取消选中
     else if (!moved && !hit) { state.selectedId = null; state.dirty = true; }
   }
@@ -664,99 +666,179 @@
   canvas.addEventListener('dblclick', e => {
     const p = localPoint(e);
     const hit = hitTest(p.x, p.y);
-    if (hit) openNote(hit.id);
+    if (hit) { openNote(hit.id); showView('note'); }
     else fitView(true);
   });
 
-  /* ── 笔记预览 ───────────────────────────────────────────── */
-  let modalNodeId = null;
+/* ── 笔记视图（主视图） ─────────────────────────────────── */
+  let currentNoteId = null;
+  let editing = false;
 
-  function openNote(id) {
-    const node = (state.graph && state.graph.nodes.find(n => n.id === id)) || state.index.get(id);
-    if (!node) return;
-    modalNodeId = id;
-    state.selectedId = id;
-    $('#note-modal-title').textContent = node.title;
-    $('#note-modal-path').textContent = node.path || '(无路径)';
-    const tags = $('#note-modal-tags');
-    tags.innerHTML = '';
-    for (const tag of node.tags || []) {
-      const chip = document.createElement('span');
+  function currentNote() {
+    if (!state.graph || !currentNoteId) return null;
+    return state.graph.nodes.find(n => n.id === currentNoteId) || null;
+  }
+
+  function showView(view) {
+    const isGraph = view === 'graph';
+    $('#pane-note').hidden = isGraph;
+    $('#pane-graph').hidden = !isGraph;
+    $('#graph-tools').hidden = !isGraph;
+    $('#view-note').classList.toggle('is-active', !isGraph);
+    $('#view-graph').classList.toggle('is-active', isGraph);
+    state.viewName = view;
+    if (isGraph) {
+      resize();
+      state.dirty = true;
+      if (currentNoteId) focusNode(currentNoteId);
+    }
+  }
+
+  function tagChips(container, tags, onClick) {
+    container.innerHTML = '';
+    for (const tag of tags || []) {
+      const chip = document.createElement('button');
       chip.className = 'tag-chip';
       chip.textContent = '#' + tag;
-      tags.appendChild(chip);
+      chip.addEventListener('click', () => onClick(tag));
+      container.appendChild(chip);
     }
-    const body = $('#note-modal-body');
-    body.innerHTML = node.content && node.content.trim()
-      ? markdown.render(node.content)
-      : '<p class="md-empty">（这篇笔记还没有正文）</p>';
-
-    const links = $('#note-modal-links');
-    links.innerHTML = '';
-    const neighbours = [];
-    for (const link of state.graph.links) {
-      if (link.source === id) neighbours.push(link.target);
-      else if (link.target === id) neighbours.push(link.source);
-    }
-    const uniq = [...new Set(neighbours)];
-    $('#note-modal-count').textContent = uniq.length ? '(' + uniq.length + ')' : '(无)';
-    for (const nid of uniq.slice(0, 40)) {
-      const target = state.graph.nodes.find(n => n.id === nid);
-      if (!target) continue;
-      const li = document.createElement('li');
-      const arrow = document.createElement('span');
-      arrow.className = 'link-arrow';
-      arrow.textContent = '→';
-      const label = document.createElement('span');
-      label.textContent = target.title;
-      li.append(arrow, label);
-      li.addEventListener('click', () => { closeNote(); openNote(nid); });
-      links.appendChild(li);
-    }
-    noteModal.hidden = false;
-    state.dirty = true;
   }
 
-  function closeNote() {
-    noteModal.hidden = true;
-    modalNodeId = null;
-  }
-
-  $('#note-modal-body').addEventListener('click', e => {
-    const linkEl = e.target.closest('[data-wikilink]');
-    if (linkEl) {
-      const title = linkEl.dataset.wikilink;
-      const target = findNodeByTitle(title);
-      if (target) openNote(target.id);
-      else toast('尚未创建：' + title);
+  function renderNote() {
+    const node = currentNote();
+    if (!node) {
+      $('#note-empty').hidden = false;
+      $('#note-view').hidden = true;
       return;
     }
-    const tagEl = e.target.closest('.md-tag');
-    if (tagEl) {
-      closeNote();
-      setSearch('tag:' + tagEl.textContent.replace(/^#/, ''));
+    $('#note-empty').hidden = true;
+    $('#note-view').hidden = false;
+    $('#note-title').textContent = node.title;
+    $('#note-path').textContent = node.path || '(无路径)';
+
+    const body = $('#note-body');
+    // 正文开头如果就是标题，去掉它，避免与页面标题重复
+    let content = String(node.content || '');
+    const headMatch = content.match(/^\s*#{1,3}\s+(.+)\n/);
+    if (headMatch && headMatch[1].trim() === node.title.trim()) content = content.slice(headMatch[0].length);
+    body.innerHTML = content.trim()
+      ? markdown.render(content)
+      : '<p class="md-empty">（这篇笔记还没有正文）</p>';
+
+    tagChips($('#note-tags'), node.tags, tag => { showView('graph'); setSearch('tag:' + tag); });
+
+    const words = String(node.content || '').replace(/\s+/g, '').length;
+    const outlinks = (node.links || []).length;
+    $('#note-meta').textContent = words + ' 字 · ' + outlinks + ' 条出链 · ' + (node.tags || []).length + ' 个标签';
+
+    // 反向链接
+    const backlinks = [];
+    for (const link of state.graph.links) {
+      if (link.target === node.id && link.kind !== 'tag') {
+        const src = state.graph.nodes.find(n => n.id === link.source);
+        if (src && src.type === 'note') backlinks.push(src);
+      }
     }
-  });
+    const ul = $('#backlinks');
+    ul.innerHTML = '';
+    $('#backlink-count').textContent = backlinks.length ? '(' + backlinks.length + ')' : '(0)';
+    if (!backlinks.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = '还没有笔记链接到这里';
+      ul.appendChild(li);
+    }
+    for (const src of backlinks.slice(0, 30)) {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.className = 'link-pill';
+      btn.textContent = src.title;
+      btn.addEventListener('click', () => openNote(src.id));
+      li.appendChild(btn);
+      ul.appendChild(li);
+    }
+    updateTreeSelection();
+  }
+
+  function openNote(id) {
+    const node = state.graph && state.graph.nodes.find(n => n.id === id);
+    if (!node) return;
+    currentNoteId = id;
+    state.selectedId = id;
+    editing = false;
+    $('#note-editor').hidden = true;
+    $('#note-body').hidden = false;
+    $('#btn-note-edit').textContent = '编辑';
+    renderNote();
+  }
+
+  function openNoteByTitle(title) {
+    const node = findNodeByTitle(title);
+    if (node && node.type === 'note') { openNote(node.id); return true; }
+    return false;
+  }
 
   function findNodeByTitle(title) {
     if (!state.graph) return null;
     const want = String(title).trim().toLowerCase();
     return state.graph.nodes.find(n => n.title.toLowerCase() === want)
-      || state.graph.nodes.find(n => n.path.toLowerCase().replace(/.md$/, '').endsWith(want));
+      || state.graph.nodes.find(n => n.path.toLowerCase().replace(/\.md$/, '').endsWith(want));
   }
 
-  $('#note-modal-close').addEventListener('click', closeNote);
-  noteModal.addEventListener('pointerdown', e => { if (e.target === noteModal) closeNote(); });
-  $('#note-modal-focus').addEventListener('click', () => {
-    if (modalNodeId) focusNode(modalNodeId);
-    closeNote();
+  /* 正文里的双链 / 标签 / 反链点击 */
+  $('#note-body').addEventListener('click', e => {
+    const linkEl = e.target.closest('[data-wikilink]');
+    if (linkEl) {
+      const title = linkEl.dataset.wikilink;
+      if (!openNoteByTitle(title)) toast('尚未创建：' + title);
+      return;
+    }
+    const tagEl = e.target.closest('.md-tag');
+    if (tagEl) {
+      showView('graph');
+      setSearch('tag:' + tagEl.textContent.replace(/^#/, ''));
+    }
   });
-  $('#note-modal-local').addEventListener('click', () => {
-    if (!modalNodeId) return;
-    state.localRoot = modalNodeId;
-    setMode('local');
-    closeNote();
-  });
+
+  /* 编辑：内存内修改 + 可下载，不直接写盘 */
+  function toggleEdit() {
+    const node = currentNote();
+    if (!node) return;
+    editing = !editing;
+    const editor = $('#note-editor');
+    if (editing) {
+      editor.value = node.content || '';
+      editor.hidden = false;
+      $('#note-body').hidden = true;
+      $('#btn-note-edit').textContent = '保存';
+      editor.focus();
+    } else {
+      node.content = editor.value;
+      node.summary = vault.summarize(node.content);
+      node.links = vault.extractLinks(node.content);
+      node.tags = [...new Set([...vault.extractTags(node.content), ...(node.frontmatter && node.frontmatter.tags ? [] : [])])];
+      editor.hidden = true;
+      $('#note-body').hidden = false;
+      $('#btn-note-edit').textContent = '编辑';
+      state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: node.content }) : f)));
+      rebuild({});
+      renderNote();
+      toast('已保存到当前会话（Ctrl+S 可下载 .md）');
+    }
+  }
+
+  function downloadNote() {
+    const node = currentNote();
+    if (!node) return;
+    const blob = new Blob([node.content || ''], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (node.path || node.title + '.md').split('/').pop();
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('已下载 ' + a.download);
+  }
 
   /* ── 文件树 ─────────────────────────────────────────────── */
   function renderTree() {
@@ -805,7 +887,7 @@
         label.className = 'file-name';
         label.textContent = note.title;
         row.append(icon, label);
-        row.addEventListener('click', () => { focusNode(note.id); openNote(note.id); });
+        row.addEventListener('click', () => { openNote(note.id); showView('note'); });
         group.appendChild(row);
       }
     }
@@ -1056,7 +1138,6 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (!noteModal.hidden) { closeNote(); return; }
       if (!settingsPanel.hidden) { setPanel(false); return; }
       if (document.activeElement === searchInput) { setSearch(''); searchInput.blur(); return; }
       state.selectedId = null;
@@ -1066,6 +1147,8 @@
     if (inField) return;
     if (e.key === '/') { e.preventDefault(); searchInput.focus(); return; }
     const k = e.key.toLowerCase();
+    if (k === 'a') { setAiPanel($('#ai-panel').classList.contains('is-collapsed')); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); downloadNote(); return; }
     if (k === 'f') fitView(true);
     else if (k === 'r') $('#btn-relayout').click();
     else if (k === 'g') setMode('global');
@@ -1102,6 +1185,36 @@
     }
   }
 
+  /* ── 视图 / AI 面板 / 笔记按钮 ──────────────────────────── */
+  $('#view-note').addEventListener('click', () => showView('note'));
+  $('#view-graph').addEventListener('click', () => showView('graph'));
+  $('#btn-note-edit').addEventListener('click', toggleEdit);
+  $('#btn-note-graph').addEventListener('click', () => {
+    if (!currentNoteId) return;
+    showView('graph');
+    focusNode(currentNoteId);
+  });
+  $('#btn-note-ai').addEventListener('click', () => {
+    setAiPanel(true);
+    const node = currentNote();
+    ai.send(node ? '分析「' + node.title + '」的核心考点和易错点' : '这个笔记库的整体结构怎么样');
+  });
+  $('#btn-ai').addEventListener('click', () => setAiPanel($('#ai-panel').classList.contains('is-collapsed')));
+  $('#btn-ai-close').addEventListener('click', () => setAiPanel(false));
+
+  function setAiPanel(open) {
+    $('#ai-panel').classList.toggle('is-collapsed', !open);
+    $('#btn-ai').classList.toggle('is-active', open);
+    resize();
+    state.dirty = true;
+  }
+
+  const ai = RG.ai.create({
+    getGraph: () => state.graph,
+    getCurrentNote: () => currentNote(),
+    onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); }
+  });
+
   /* ── 启动 ───────────────────────────────────────────────── */
   const ro = new ResizeObserver(() => resize());
   ro.observe(shell);
@@ -1110,10 +1223,19 @@
   syncSettingsUI();
   renderLegend();
   loadDemo();
+  showView('note');
+  if (state.graph && state.graph.notes[0]) openNote(state.graph.notes[0].id);
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'graph') showView('graph');
+    if (params.get('ai') === '0') setAiPanel(false);
+    const openTitle = params.get('note');
+    if (openTitle) openNoteByTitle(openTitle);
+  } catch (_) {}
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, loadFiles, loadDemo,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

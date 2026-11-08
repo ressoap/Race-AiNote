@@ -8,7 +8,8 @@
     "build": "node scripts/gen-demo.js && node scripts/build.js",
     "ai:organize": "node scripts/ai-organize.mjs",
     "smoke": "node scripts/smoke.js && node scripts/smoke-dist.js",
-    "demo": "node scripts/gen-demo.js"
+    "demo": "node scripts/gen-demo.js",
+    "serve": "node scripts/serve.mjs"
   },
   "engines": {
     "node": ">=20"
