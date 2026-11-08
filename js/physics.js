@@ -14,7 +14,7 @@
   const DEFAULTS = {
     repel: 850,        // 排斥强度
     center: 0.00004,   // 中心引力
-    linkStrength: 0.035,
+    linkStrength: 0.02,
     linkDistance: 110,
     damping: 0.82,
     collisionPadding: 14,
@@ -115,7 +115,7 @@
 
       const repel = cfg('repel');
       const center = cfg('center');
-      const linkStrength = (cfg('linkStrength') || 0) / 1000;
+      const linkStrength = cfg('linkStrength') || 0;
       const linkDistance = cfg('linkDistance');
       const damping = cfg('damping');
       const padding = cfg('collisionPadding');

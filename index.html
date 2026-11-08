@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AI 笔记关系图谱 · Race-AiNote</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ── 左侧：文件库 ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="vault-title">
+        <span class="vault-dot"></span>
+        <span id="vault-name" title="当前库">示例库</span>
+      </div>
+      <div class="sidebar-actions">
+        <button id="btn-open-folder" class="icon-btn" title="打开本地文件夹（读取真实 Markdown）">
+          <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M12 11v5M9.5 13.5h5"/></svg>
+        </button>
+        <button id="btn-demo" class="icon-btn" title="载入内置示例库">
+          <svg viewBox="0 0 24 24"><path d="M4 5.5h6l2 2h8v11H4z"/><path d="M8 12h8M8 15h5"/></svg>
+        </button>
+        <button id="btn-clear" class="icon-btn" title="清空当前库">
+          <svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M7 7l1 12h8l1-12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-search">
+      <input id="file-search" type="search" placeholder="搜索文件…" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div id="file-tree" class="file-tree" role="tree" aria-label="文件树"></div>
+
+    <input id="folder-input" type="file" multiple webkitdirectory directory hidden>
+
+    <div class="sidebar-foot">
+      <span id="vault-stats">—</span>
+      <span class="hint">拖入 .md 文件夹也可载入</span>
+    </div>
+  </aside>
+
+  <!-- ── 右侧：图谱 ───────────────────────────────────────── -->
+  <main class="main">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="图谱模式">
+        <button id="mode-global" class="seg-btn is-active" data-mode="global">全局图谱</button>
+        <button id="mode-local" class="seg-btn" data-mode="local">局部图谱</button>
+      </div>
+      <label class="depth-control" title="局部图谱深度">深度
+        <input id="depth-input" type="range" min="1" max="4" step="1" value="2">
+        <output id="depth-output">2</output>
+      </label>
+
+      <div class="toolbar-spacer"></div>
+
+      <div class="zoom-group">
+        <button id="btn-zoom-out" class="icon-btn" title="缩小 (-)">−</button>
+        <button id="btn-zoom-in" class="icon-btn" title="放大 (+)">＋</button>
+        <button id="btn-fit" class="icon-btn" title="适应画布 (F)">
+          <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+        <button id="btn-relayout" class="icon-btn" title="重新布局 (R)">
+          <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>
+        </button>
+        <button id="btn-theme" class="icon-btn" title="切换明暗主题">
+          <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+        </button>
+        <button id="btn-settings" class="icon-btn" title="图谱设置 (S)">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
+      <input id="search-input" type="search" placeholder="搜索：导数   path:知识卡   tag:数学   -错题   OR   /正则/" autocomplete="off" spellcheck="false">
+      <button id="search-clear" class="icon-btn small" title="清除">×</button>
+    </div>
+
+    <div id="graph-shell" class="graph-shell">
+      <canvas id="graph-canvas"></canvas>
+      <div id="graph-empty" class="empty-state" hidden>
+        <p class="empty-title">还没有载入任何笔记</p>
+        <p class="empty-desc">点左上角文件夹图标选择你的 Obsidian 库目录，或把 .md 文件夹直接拖进来。</p>
+        <button id="btn-empty-demo" class="primary-btn">先看看内置示例库</button>
+      </div>
+      <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
+      <div id="settings-panel" class="settings-panel" hidden>
+        <header>
+          <h2>图谱设置</h2>
+          <button id="btn-settings-close" class="icon-btn small" title="关闭">×</button>
+        </header>
+        <section>
+          <h3>筛选</h3>
+          <label class="switch-row"><span>标签节点</span><input type="checkbox" data-toggle="showTags"><i></i></label>
+          <label class="switch-row"><span>附件节点</span><input type="checkbox" data-toggle="showAttachments"><i></i></label>
+          <label class="switch-row"><span>仅现有文件</span><input type="checkbox" data-toggle="existingOnly"><i></i></label>
+          <label class="switch-row"><span>只显示孤立节点</span><input type="checkbox" data-toggle="orphansOnly"><i></i></label>
+        </section>
+        <section>
+          <h3>显示</h3>
+          <label class="switch-row"><span>箭头</span><input type="checkbox" data-toggle="arrows"><i></i></label>
+          <label class="slider-row"><span>文字淡出阈值</span><input type="range" data-setting="textFade" min="0" max="120" step="1"><output id="out-textFade"></output></label>
+          <label class="slider-row"><span>节点大小</span><input type="range" data-setting="nodeSize" min="0.5" max="2.4" step="0.1"><output id="out-nodeSize"></output></label>
+          <label class="slider-row"><span>连线粗细</span><input type="range" data-setting="linkWidth" min="0.4" max="3" step="0.1"><output id="out-linkWidth"></output></label>
+        </section>
+        <section>
+          <h3>力学</h3>
+          <label class="slider-row"><span>中心力</span><input type="range" data-setting="center" min="0" max="10" step="0.5"><output id="out-center"></output></label>
+          <label class="slider-row"><span>排斥力</span><input type="range" data-setting="repel" min="0" max="10" step="0.5"><output id="out-repel"></output></label>
+          <label class="slider-row"><span>连线力</span><input type="range" data-setting="linkStrength" min="1" max="20" step="0.5"><output id="out-linkStrength"></output></label>
+          <label class="slider-row"><span>连线距离</span><input type="range" data-setting="linkDistance" min="30" max="280" step="5"><output id="out-linkDistance"></output></label>
+        </section>
+        <section>
+          <h3>颜色分组</h3>
+          <div id="group-list"></div>
+          <button id="add-group" class="ghost-btn">＋ 添加分组</button>
+        </section>
+        <footer>
+          <button id="reset-settings" class="ghost-btn">恢复默认</button>
+        </footer>
+      </div>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <div class="statusbar">
+      <span class="status-item"><i id="engine-dot" class="dot is-idle"></i><span id="status-engine">引擎空闲</span></span>
+      <span class="status-item">笔记 <b id="status-notes">0</b></span>
+      <span class="status-item">连线 <b id="status-links">0</b></span>
+      <span class="status-item">节点 <b id="status-nodes">0</b></span>
+      <span class="status-item">孤立 <b id="status-orphans">0</b></span>
+      <span class="status-spacer"></span>
+      <span class="status-item kbd-hint">F 适应 · R 重排 · G/L 模式 · S 设置 · / 搜索</span>
+    </div>
+  </main>
+</div>
+
+<div id="note-modal" class="modal" hidden>
+  <div class="modal-card">
+    <header>
+      <div>
+        <h2 id="note-modal-title">—</h2>
+        <p id="note-modal-path" class="modal-path">—</p>
+      </div>
+      <button id="note-modal-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <div class="modal-tags" id="note-modal-tags"></div>
+    <p class="modal-summary" id="note-modal-summary"></p>
+    <h3 class="modal-sub">连接 <span id="note-modal-count"></span></h3>
+    <ul class="modal-links" id="note-modal-links"></ul>
+    <footer>
+      <button id="note-modal-focus" class="ghost-btn">聚焦此节点</button>
+      <button id="note-modal-local" class="primary-btn">以此为中心查看</button>
+    </footer>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="js/vault.js"></script>
+<script src="js/query.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/render.js"></script>
+<script src="js/demo-vault.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

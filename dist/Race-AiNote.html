@@ -1,0 +1,3047 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AI 笔记关系图谱 · Race-AiNote</title>
+<style>
+/* ============================================================
+   Race-AiNote · 图谱界面样式
+   明暗双主题用 CSS 变量切换，无第三方依赖
+   ============================================================ */
+:root {
+  --bg: #f6f7f9;
+  --bg-panel: #ffffff;
+  --bg-elevated: rgba(255, 255, 255, 0.86);
+  --bg-hover: rgba(16, 20, 34, 0.05);
+  --bg-active: rgba(74, 110, 245, 0.12);
+  --text: #22262f;
+  --text-soft: #5c6273;
+  --text-dim: #8b91a1;
+  --border: rgba(16, 20, 34, 0.09);
+  --border-strong: rgba(16, 20, 34, 0.16);
+  --accent: #4a6ef5;
+  --accent-soft: rgba(74, 110, 245, 0.14);
+  --danger: #d9534f;
+  --shadow: 0 12px 32px rgba(16, 20, 34, 0.12);
+  --radius: 10px;
+  --radius-sm: 7px;
+  --sidebar-w: 268px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #101114;
+  --bg-panel: #17181c;
+  --bg-elevated: rgba(28, 30, 36, 0.88);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(122, 158, 255, 0.18);
+  --text: #e8ecf6;
+  --text-soft: #a8aec0;
+  --text-dim: #767d90;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #7a9eff;
+  --accent-soft: rgba(122, 158, 255, 0.18);
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button { font: inherit; color: inherit; }
+
+svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+.icon-btn.small { width: 22px; height: 22px; font-size: 15px; line-height: 1; }
+.icon-btn.is-active { background: var(--bg-active); color: var(--accent); }
+
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100%;
+}
+
+/* ── 侧边栏 ─────────────────────────────────────────────── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 8px;
+}
+
+.vault-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.vault-title span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.sidebar-actions { display: flex; gap: 2px; }
+
+.sidebar-search { padding: 0 10px 8px; }
+
+.sidebar-search input,
+.search-bar input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+}
+.sidebar-search input:focus,
+.search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.file-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 8px 8px;
+  font-size: 12.5px;
+}
+
+.tree-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.tree-folder:hover { background: var(--bg-hover); }
+.tree-folder .chevron { transition: transform 0.16s; font-size: 9px; color: var(--text-dim); }
+.tree-folder.is-collapsed .chevron { transform: rotate(-90deg); }
+
+.tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 20px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-file:hover { background: var(--bg-hover); }
+.tree-file.is-active { background: var(--bg-active); color: var(--accent); }
+.tree-file.is-muted { color: var(--text-dim); }
+.tree-file .file-icon { font-size: 10px; color: var(--text-dim); flex: none; }
+.tree-file .file-name { overflow: hidden; text-overflow: ellipsis; }
+
+.sidebar-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.sidebar-foot .hint { opacity: 0.75; }
+
+/* ── 主区 ───────────────────────────────────────────────── */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.toolbar-spacer { flex: 1; }
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.seg-btn.is-active { background: var(--bg-panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+.depth-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.depth-control input { width: 76px; }
+.depth-control output { font-variant-numeric: tabular-nums; color: var(--text); min-width: 12px; }
+
+.zoom-group { display: flex; gap: 2px; }
+
+/* ── 搜索条 ─────────────────────────────────────────────── */
+.search-bar {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(560px, calc(100% - 40px));
+  padding: 5px 8px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+.search-bar .search-ico { color: var(--text-dim); flex: none; }
+.search-bar input {
+  border: 0;
+  background: transparent;
+  padding: 3px 2px;
+  font-size: 12.5px;
+}
+.search-bar input:focus { border: 0; box-shadow: none; }
+
+/* ── 画布 ───────────────────────────────────────────────── */
+.graph-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#graph-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+#graph-canvas.is-dragging { cursor: grabbing; }
+#graph-canvas.is-hovering { cursor: pointer; }
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 24px;
+  pointer-events: none;
+}
+.empty-state > * { pointer-events: auto; }
+.empty-title { margin: 0; font-size: 15px; font-weight: 600; }
+.empty-desc { margin: 0 0 10px; font-size: 12.5px; color: var(--text-soft); max-width: 380px; }
+
+.primary-btn {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.primary-btn:hover { filter: brightness(1.06); }
+
+.ghost-btn {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ghost-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+.drop-hint {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-content: center;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 8;
+}
+
+/* ── 设置面板 ───────────────────────────────────────────── */
+.settings-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 7;
+  width: 268px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+.settings-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.settings-panel h2 { margin: 0; font-size: 13px; }
+.settings-panel h3 {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.settings-panel footer { margin-top: 12px; }
+
+.switch-row,
+.slider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 2px;
+  font-size: 12px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.slider-row input[type="range"] { flex: 1; min-width: 0; }
+.slider-row output { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+.switch-row input[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  width: 30px;
+  height: 17px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.switch-row input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.16s;
+}
+.switch-row input[type="checkbox"]:checked { background: var(--accent); }
+.switch-row input[type="checkbox"]:checked::after { transform: translateX(13px); }
+
+input[type="range"] {
+  appearance: none;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.group-row input[type="color"] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+.group-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 3px 6px;
+  font-size: 11.5px;
+  outline: none;
+}
+.group-row input[type="text"]:focus { border-color: var(--accent); }
+
+/* ── 图例与状态栏 ───────────────────────────────────────── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+.legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend-swatch { width: 9px; height: 9px; border-radius: 50%; }
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 5px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.status-item { display: inline-flex; align-items: center; gap: 5px; }
+.status-item b { color: var(--text); font-variant-numeric: tabular-nums; }
+.status-spacer { flex: 1; }
+.kbd-hint { opacity: 0.7; }
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #43b581;
+}
+.dot.is-idle { background: var(--text-dim); }
+
+/* ── 笔记预览弹窗 ───────────────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 12, 18, 0.42);
+  backdrop-filter: blur(3px);
+}
+.modal-card {
+  width: min(520px, 100%);
+  max-height: min(78vh, 640px);
+  overflow: auto;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.modal-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-card h2 { margin: 0; font-size: 16px; }
+.modal-path { margin: 3px 0 0; font-size: 11.5px; color: var(--text-dim); word-break: break-all; }
+.modal-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 2px; }
+.tag-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
+.modal-summary {
+  margin: 10px 0 4px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.65;
+}
+.modal-sub { margin: 14px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+.modal-links { margin: 0; padding: 0; list-style: none; max-height: 220px; overflow: auto; }
+.modal-links li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.modal-links li:hover { background: var(--bg-hover); }
+.modal-links .link-arrow { color: var(--text-dim); font-size: 11px; }
+.modal-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 12px);
+  z-index: 30;
+  padding: 8px 15px;
+  border-radius: 999px;
+  background: rgba(24, 26, 32, 0.92);
+  color: #fff;
+  font-size: 12.5px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* ── 响应式 ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 210px; }
+  .search-bar { top: 48px; }
+}
+
+@media (max-width: 700px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar { display: none; }
+  .settings-panel { width: min(300px, calc(100% - 24px)); }
+  .kbd-hint { display: none; }
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── 左侧：文件库 ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="vault-title">
+        <span class="vault-dot"></span>
+        <span id="vault-name" title="当前库">示例库</span>
+      </div>
+      <div class="sidebar-actions">
+        <button id="btn-open-folder" class="icon-btn" title="打开本地文件夹（读取真实 Markdown）">
+          <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M12 11v5M9.5 13.5h5"/></svg>
+        </button>
+        <button id="btn-demo" class="icon-btn" title="载入内置示例库">
+          <svg viewBox="0 0 24 24"><path d="M4 5.5h6l2 2h8v11H4z"/><path d="M8 12h8M8 15h5"/></svg>
+        </button>
+        <button id="btn-clear" class="icon-btn" title="清空当前库">
+          <svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M7 7l1 12h8l1-12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-search">
+      <input id="file-search" type="search" placeholder="搜索文件…" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div id="file-tree" class="file-tree" role="tree" aria-label="文件树"></div>
+
+    <input id="folder-input" type="file" multiple webkitdirectory directory hidden>
+
+    <div class="sidebar-foot">
+      <span id="vault-stats">—</span>
+      <span class="hint">拖入 .md 文件夹也可载入</span>
+    </div>
+  </aside>
+
+  <!-- ── 右侧：图谱 ───────────────────────────────────────── -->
+  <main class="main">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="图谱模式">
+        <button id="mode-global" class="seg-btn is-active" data-mode="global">全局图谱</button>
+        <button id="mode-local" class="seg-btn" data-mode="local">局部图谱</button>
+      </div>
+      <label class="depth-control" title="局部图谱深度">深度
+        <input id="depth-input" type="range" min="1" max="4" step="1" value="2">
+        <output id="depth-output">2</output>
+      </label>
+
+      <div class="toolbar-spacer"></div>
+
+      <div class="zoom-group">
+        <button id="btn-zoom-out" class="icon-btn" title="缩小 (-)">−</button>
+        <button id="btn-zoom-in" class="icon-btn" title="放大 (+)">＋</button>
+        <button id="btn-fit" class="icon-btn" title="适应画布 (F)">
+          <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+        <button id="btn-relayout" class="icon-btn" title="重新布局 (R)">
+          <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></svg>
+        </button>
+        <button id="btn-theme" class="icon-btn" title="切换明暗主题">
+          <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+        </button>
+        <button id="btn-settings" class="icon-btn" title="图谱设置 (S)">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
+      <input id="search-input" type="search" placeholder="搜索：导数   path:知识卡   tag:数学   -错题   OR   /正则/" autocomplete="off" spellcheck="false">
+      <button id="search-clear" class="icon-btn small" title="清除">×</button>
+    </div>
+
+    <div id="graph-shell" class="graph-shell">
+      <canvas id="graph-canvas"></canvas>
+      <div id="graph-empty" class="empty-state" hidden>
+        <p class="empty-title">还没有载入任何笔记</p>
+        <p class="empty-desc">点左上角文件夹图标选择你的 Obsidian 库目录，或把 .md 文件夹直接拖进来。</p>
+        <button id="btn-empty-demo" class="primary-btn">先看看内置示例库</button>
+      </div>
+      <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
+      <div id="settings-panel" class="settings-panel" hidden>
+        <header>
+          <h2>图谱设置</h2>
+          <button id="btn-settings-close" class="icon-btn small" title="关闭">×</button>
+        </header>
+        <section>
+          <h3>筛选</h3>
+          <label class="switch-row"><span>标签节点</span><input type="checkbox" data-toggle="showTags"><i></i></label>
+          <label class="switch-row"><span>附件节点</span><input type="checkbox" data-toggle="showAttachments"><i></i></label>
+          <label class="switch-row"><span>仅现有文件</span><input type="checkbox" data-toggle="existingOnly"><i></i></label>
+          <label class="switch-row"><span>只显示孤立节点</span><input type="checkbox" data-toggle="orphansOnly"><i></i></label>
+        </section>
+        <section>
+          <h3>显示</h3>
+          <label class="switch-row"><span>箭头</span><input type="checkbox" data-toggle="arrows"><i></i></label>
+          <label class="slider-row"><span>文字淡出阈值</span><input type="range" data-setting="textFade" min="0" max="120" step="1"><output id="out-textFade"></output></label>
+          <label class="slider-row"><span>节点大小</span><input type="range" data-setting="nodeSize" min="0.5" max="2.4" step="0.1"><output id="out-nodeSize"></output></label>
+          <label class="slider-row"><span>连线粗细</span><input type="range" data-setting="linkWidth" min="0.4" max="3" step="0.1"><output id="out-linkWidth"></output></label>
+        </section>
+        <section>
+          <h3>力学</h3>
+          <label class="slider-row"><span>中心力</span><input type="range" data-setting="center" min="0" max="10" step="0.5"><output id="out-center"></output></label>
+          <label class="slider-row"><span>排斥力</span><input type="range" data-setting="repel" min="0" max="10" step="0.5"><output id="out-repel"></output></label>
+          <label class="slider-row"><span>连线力</span><input type="range" data-setting="linkStrength" min="1" max="20" step="0.5"><output id="out-linkStrength"></output></label>
+          <label class="slider-row"><span>连线距离</span><input type="range" data-setting="linkDistance" min="30" max="280" step="5"><output id="out-linkDistance"></output></label>
+        </section>
+        <section>
+          <h3>颜色分组</h3>
+          <div id="group-list"></div>
+          <button id="add-group" class="ghost-btn">＋ 添加分组</button>
+        </section>
+        <footer>
+          <button id="reset-settings" class="ghost-btn">恢复默认</button>
+        </footer>
+      </div>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <div class="statusbar">
+      <span class="status-item"><i id="engine-dot" class="dot is-idle"></i><span id="status-engine">引擎空闲</span></span>
+      <span class="status-item">笔记 <b id="status-notes">0</b></span>
+      <span class="status-item">连线 <b id="status-links">0</b></span>
+      <span class="status-item">节点 <b id="status-nodes">0</b></span>
+      <span class="status-item">孤立 <b id="status-orphans">0</b></span>
+      <span class="status-spacer"></span>
+      <span class="status-item kbd-hint">F 适应 · R 重排 · G/L 模式 · S 设置 · / 搜索</span>
+    </div>
+  </main>
+</div>
+
+<div id="note-modal" class="modal" hidden>
+  <div class="modal-card">
+    <header>
+      <div>
+        <h2 id="note-modal-title">—</h2>
+        <p id="note-modal-path" class="modal-path">—</p>
+      </div>
+      <button id="note-modal-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <div class="modal-tags" id="note-modal-tags"></div>
+    <p class="modal-summary" id="note-modal-summary"></p>
+    <h3 class="modal-sub">连接 <span id="note-modal-count"></span></h3>
+    <ul class="modal-links" id="note-modal-links"></ul>
+    <footer>
+      <button id="note-modal-focus" class="ghost-btn">聚焦此节点</button>
+      <button id="note-modal-local" class="primary-btn">以此为中心查看</button>
+    </footer>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ============================================================
+   vault.js — Markdown 库解析：frontmatter / [[双链]] / #标签 / 附件
+   纯函数，无 DOM 依赖，Node 与浏览器通用。
+   ============================================================ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.RG = root.RG || {};
+  root.RG.vault = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const MD_EXT = /\.(md|markdown)$/i;
+  const ATTACH_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|mp3|mp4|wav|canvas|excalidraw)$/i;
+
+  function baseName(path) {
+    const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return i >= 0 ? path.slice(i + 1) : path;
+  }
+
+  function dirName(path) {
+    const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return i >= 0 ? path.slice(0, i) : '';
+  }
+
+  function stripMdExt(name) { return name.replace(MD_EXT, ''); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase(); }
+
+  /** 稳定 ID：由路径推导 */
+  function idFromPath(path) {
+    return lower(path).replace(/\\/g, '/').replace(MD_EXT, '');
+  }
+
+  function unquote(s) { return s.replace(/^["']|["']$/g, ''); }
+
+  function parseScalar(value) {
+    if (/^\[.*\]$/.test(value)) {
+      return value.slice(1, -1).split(',').map(v => unquote(v.trim())).filter(Boolean);
+    }
+    return unquote(value);
+  }
+
+  function asTagList(value) {
+    if (Array.isArray(value)) return value.map(v => unquote(String(v).replace(/^#/, ''))).filter(Boolean);
+    if (typeof value === 'string' && value.trim()) {
+      return value.split(/[,\s]+/).map(v => unquote(v.replace(/^#/, ''))).filter(Boolean);
+    }
+    return [];
+  }
+
+  /* ── frontmatter（精简 YAML：标量 / 行内数组 / 块数组） ────── */
+  function parseFrontmatter(text) {
+    const src = String(text || '');
+    if (!/^---\r?\n/.test(src)) return { data: {}, body: src };
+    const end = src.indexOf('\n---', 3);
+    if (end < 0) return { data: {}, body: src };
+    const raw = src.slice(4, end);
+    const body = src.slice(src.indexOf('\n', end + 1) + 1);
+    const data = {};
+    let currentKey = null;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim() || /^\s*#/.test(line)) continue;
+      const listItem = line.match(/^\s*-\s+(.*)$/);
+      if (listItem && currentKey) {
+        if (!Array.isArray(data[currentKey])) data[currentKey] = [];
+        data[currentKey].push(unquote(listItem[1].trim()));
+        continue;
+      }
+      const kv = line.match(/^([A-Za-z0-9_\u4e00-\u9fa5-]+)\s*:\s*(.*)$/);
+      if (!kv) continue;
+      currentKey = kv[1];
+      const value = kv[2].trim();
+      if (!value) { data[currentKey] = []; continue; }
+      data[currentKey] = parseScalar(value);
+    }
+    return { data, body };
+  }
+
+  /* ── 正文抽取 ─────────────────────────────────────────────── */
+  function stripFencedCode(body) {
+    return body.replace(/```[\s\S]*?```/g, m => m.replace(/[^\n]/g, ' '))
+               .replace(/~~~[\s\S]*?~~~/g, m => m.replace(/[^\n]/g, ' '));
+  }
+
+  function stripInlineCode(text) {
+    return text.replace(/`[^`\n]*`/g, m => ' '.repeat(m.length));
+  }
+
+  /** [[目标|别名]] → { target, alias, heading, embed } */
+  function extractLinks(body) {
+    const text = stripInlineCode(stripFencedCode(body));
+    const out = [];
+    const re = /(!?)\[\[([^\[\]\n]{1,400})\]\]/g;
+    let m;
+    while ((m = re.exec(text))) {
+      let inner = m[2].trim();
+      if (!inner) continue;
+      let alias = null;
+      const pipe = inner.indexOf('|');
+      if (pipe >= 0) { alias = inner.slice(pipe + 1).trim() || null; inner = inner.slice(0, pipe).trim(); }
+      let heading = null;
+      const hash = inner.indexOf('#');
+      if (hash >= 0) { heading = inner.slice(hash + 1).trim() || null; inner = inner.slice(0, hash).trim(); }
+      if (!inner) continue;
+      if (/^https?:/i.test(inner)) continue;
+      out.push({ target: inner, alias, heading, embed: m[1] === '!' });
+    }
+    return out;
+  }
+
+  /** 正文 #标签（排除 Markdown 标题、URL 锚点、代码块） */
+  function extractTags(body) {
+    const text = stripInlineCode(stripFencedCode(body));
+    const tags = new Set();
+    const re = /(^|[\s(（【\[>])#([\p{L}\p{N}_][\p{L}\p{N}_\/-]{0,63})/gu;
+    let m;
+    while ((m = re.exec(text))) {
+      const tag = m[2].replace(/[-/]+$/, '');
+      if (tag) tags.add(tag);
+    }
+    return [...tags];
+  }
+
+  /** 摘要：去掉标题、链接语法后截断 */
+  function summarize(body, limit) {
+    const max = limit || 120;
+    const text = stripInlineCode(stripFencedCode(body))
+      .replace(/^#+\s+.*$/gm, '')
+      .replace(/!?\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g, '$1')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[>*_`~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text.length > max ? text.slice(0, max) + '…' : text;
+  }
+
+  /* ── 单篇笔记 ─────────────────────────────────────────────── */
+  function parseNote(path, content, mtime) {
+    const { data, body } = parseFrontmatter(String(content || ''));
+    const fmTags = asTagList(data.tags != null ? data.tags : data.tag);
+    const inlineTags = extractTags(body);
+    const tags = [...new Set([...fmTags, ...inlineTags])];
+    const title = (typeof data.title === 'string' && data.title.trim())
+      ? data.title.trim()
+      : stripMdExt(baseName(path));
+    return {
+      id: idFromPath(path),
+      title,
+      path,
+      dir: dirName(path),
+      type: 'note',
+      tags,
+      aliases: asTagList(data.aliases != null ? data.aliases : data.alias),
+      links: extractLinks(body),
+      content: body,
+      summary: summarize(body),
+      frontmatter: data,
+      mtime: mtime || 0,
+      degree: 0
+    };
+  }
+
+  /** Obsidian 风格最短路径解析：先路径/别名，再文件名（唯一时后缀匹配） */
+  function resolveTarget(target, byPath, byName) {
+    const raw = String(target).trim().replace(/\\/g, '/');
+    if (!raw) return null;
+    for (const key of [lower(raw), lower(stripMdExt(raw))]) {
+      const hit = byPath.get(key);
+      if (hit) return hit;
+    }
+    const list = byName.get(lower(stripMdExt(baseName(raw))));
+    if (list && list.length) {
+      if (raw.includes('/')) {
+        const suffix = lower(stripMdExt(raw));
+        const matched = list.find(n => lower(stripMdExt(n.path)).endsWith(suffix));
+        if (matched) return matched;
+      }
+      return list[0];
+    }
+    return null;
+  }
+
+  /* ── 库 → 图模型 ──────────────────────────────────────────── */
+  function buildVault(files, options) {
+    const opts = Object.assign(
+      { includeTags: true, includeAttachments: true, includeUnresolved: true },
+      options || {}
+    );
+
+    const notes = [];
+    const attachments = [];
+    const skipped = [];
+
+    for (const file of files || []) {
+      const path = String(file.path || '').replace(/\\/g, '/');
+      if (!path) continue;
+      if (MD_EXT.test(path)) {
+        notes.push(parseNote(path, file.content, file.mtime));
+      } else if (ATTACH_EXT.test(path)) {
+        attachments.push({
+          id: idFromPath(path),
+          title: baseName(path),
+          path,
+          dir: dirName(path),
+          type: 'attachment',
+          tags: [],
+          content: '',
+          summary: '',
+          mtime: file.mtime || 0,
+          ext: (path.match(/\.[^.]+$/) || [''])[0].toLowerCase()
+        });
+      } else {
+        skipped.push(path);
+      }
+    }
+
+    // 解析索引：完整路径 / 去扩展名路径 / 文件名 / 别名
+    const byPath = new Map();
+    const byName = new Map();
+    for (const node of [...notes, ...attachments]) {
+      byPath.set(lower(node.path), node);
+      byPath.set(lower(stripMdExt(node.path)), node);
+      const nameKey = lower(stripMdExt(baseName(node.path)));
+      if (!byName.has(nameKey)) byName.set(nameKey, []);
+      byName.get(nameKey).push(node);
+      for (const alias of node.aliases || []) {
+        const key = lower(alias);
+        if (!byPath.has(key)) byPath.set(key, node);
+      }
+    }
+
+    const unresolved = new Map();
+    const linkMap = new Map();
+    const addLink = (source, target, kind) => {
+      if (!source || !target || source === target) return;
+      const key = source + '\u0000' + target + '\u0000' + kind;
+      if (linkMap.has(key)) return;
+      linkMap.set(key, { source, target, kind });
+    };
+
+    for (const note of notes) {
+      for (const link of note.links) {
+        const hit = resolveTarget(link.target, byPath, byName);
+        if (hit) {
+          addLink(note.id, hit.id, link.embed ? 'embed' : 'link');
+          if (!hit.backlinks) hit.backlinks = [];
+          hit.backlinks.push(note.id);
+        } else if (opts.includeUnresolved) {
+          const key = lower(link.target);
+          if (!unresolved.has(key)) {
+            unresolved.set(key, {
+              id: 'unresolved:' + key,
+              title: link.target,
+              path: link.target,
+              dir: '',
+              type: 'unresolved',
+              tags: [],
+              content: '',
+              summary: '',
+              mtime: 0
+            });
+          }
+          addLink(note.id, unresolved.get(key).id, 'unresolved');
+        }
+      }
+    }
+
+    const nodes = [...notes];
+    if (opts.includeAttachments) nodes.push(...attachments);
+    if (opts.includeUnresolved) nodes.push(...unresolved.values());
+
+    if (opts.includeTags) {
+      const tagMap = new Map();
+      for (const node of nodes) {
+        for (const tag of node.tags || []) {
+          const key = lower(tag);
+          if (!tagMap.has(key)) {
+            tagMap.set(key, {
+              id: 'tag:' + key,
+              title: '#' + tag,
+              path: '#' + tag,
+              dir: 'tags',
+              type: 'tag',
+              tags: [],
+              content: '',
+              summary: '',
+              mtime: 0
+            });
+          }
+          addLink(node.id, tagMap.get(key).id, 'tag');
+        }
+      }
+      nodes.push(...tagMap.values());
+    }
+
+    const links = [...linkMap.values()];
+    const degree = new Map(nodes.map(n => [n.id, 0]));
+    for (const link of links) {
+      if (degree.has(link.source)) degree.set(link.source, degree.get(link.source) + 1);
+      if (degree.has(link.target)) degree.set(link.target, degree.get(link.target) + 1);
+    }
+    for (const node of nodes) node.degree = degree.get(node.id) || 0;
+
+    return {
+      nodes,
+      links,
+      notes,
+      attachments,
+      unresolved: [...unresolved.values()],
+      skipped,
+      stats: {
+        notes: notes.length,
+        attachments: attachments.length,
+        unresolved: unresolved.size,
+        tags: nodes.filter(n => n.type === 'tag').length,
+        links: links.length,
+        orphans: nodes.filter(n => n.degree === 0).length
+      }
+    };
+  }
+
+  return {
+    buildVault, parseNote, parseFrontmatter, extractLinks, extractTags,
+    summarize, idFromPath, baseName, dirName, stripMdExt, MD_EXT, ATTACH_EXT
+  };
+});
+
+</script>
+<script>
+/* ============================================================
+   query.js — Obsidian 风格查询语法解析与匹配
+   支持：普通文本、path: file: tag: content: 、-排除、OR、
+        "带空格的引号"、/正则/、#tag 简写
+   ============================================================ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.RG = root.RG || {};
+  root.RG.query = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const OPERATORS = ['path', 'file', 'tag', 'content'];
+  const OP_RE = /^(path|file|tag|content):/i;
+
+  function lower(v) { return String(v == null ? '' : v).toLowerCase(); }
+
+  /** 按顶层 OR 切分（引号、正则内部不切） */
+  function splitTopLevelOr(raw) {
+    const parts = [];
+    let current = '';
+    let quoted = false;
+    let inRegex = false;
+    for (let i = 0; i < raw.length; i++) {
+      const c = raw[i];
+      if (c === '"' && !inRegex) { quoted = !quoted; current += c; continue; }
+      if (c === '/' && !quoted && raw[i - 1] !== '/') { inRegex = !inRegex; current += c; continue; }
+      if (!quoted && !inRegex && raw.slice(i, i + 4).toUpperCase() === ' OR ') {
+        parts.push(current);
+        current = '';
+        i += 3;
+        continue;
+      }
+      current += c;
+    }
+    parts.push(current);
+    return parts.map(s => s.trim()).filter(Boolean);
+  }
+
+  /** 单个 OR 分组 → token 数组（token 之间是 AND 关系） */
+  function tokenizeGroup(group) {
+    const tokens = [];
+    let i = 0;
+    while (i < group.length) {
+      while (i < group.length && /\s/.test(group[i])) i++;
+      if (i >= group.length) break;
+
+      let negated = false;
+      if (group[i] === '-' && i + 1 < group.length && !/\s/.test(group[i + 1])) { negated = true; i++; }
+
+      let operator = null;
+      const opMatch = group.slice(i).match(OP_RE);
+      if (opMatch) { operator = opMatch[1].toLowerCase(); i += opMatch[0].length; }
+
+      let value = '';
+      let isRegex = false;
+
+      if (group[i] === '"') {
+        i++;
+        while (i < group.length && group[i] !== '"') value += group[i++];
+        if (group[i] === '"') i++;
+      } else if (group[i] === '/') {
+        i++;
+        while (i < group.length && group[i] !== '/') value += group[i++];
+        if (group[i] === '/') i++;
+        isRegex = true;
+      } else {
+        while (i < group.length && !/\s/.test(group[i])) value += group[i++];
+      }
+
+      if (!value) continue;
+      tokens.push({ negated, operator, value, isRegex, needle: lower(value) });
+    }
+    return tokens;
+  }
+
+  function parseQuery(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    if (!text) return null;
+    const groups = splitTopLevelOr(text).map(tokenizeGroup).filter(g => g.length);
+    return groups.length ? groups : null;
+  }
+
+  function regexOf(token) {
+    if (!token.isRegex) return null;
+    if (token._re !== undefined) return token._re;
+    try {
+      token._re = new RegExp(token.value, 'i');
+    } catch (_) {
+      token._re = null;
+    }
+    return token._re;
+  }
+
+  function textOf(node) {
+    if (node._haystack) return node._haystack;
+    const parts = [node.title, node.path, node.content || ''];
+    for (const tag of node.tags || []) parts.push('#' + tag);
+    node._haystack = lower(parts.join(' '));
+    return node._haystack;
+  }
+
+  function hit(haystack, token) {
+    const re = regexOf(token);
+    if (re) return re.test(haystack);
+    return haystack.includes(token.needle);
+  }
+
+  function matchToken(node, token) {
+    const title = lower(node.title);
+    const path = lower(node.path);
+    const content = lower(node.content || '');
+    const tags = (node.tags || []).map(lower);
+    let matched;
+
+    if (token.isRegex) {
+      const re = regexOf(token);
+      if (!re) return token.negated ? true : false;
+      if (token.operator === 'path') matched = re.test(path);
+      else if (token.operator === 'file') matched = re.test(title) || re.test(path);
+      else if (token.operator === 'tag') matched = tags.some(t => re.test(t));
+      else if (token.operator === 'content') matched = re.test(content);
+      else matched = re.test(textOf(node));
+    } else if (token.operator === 'path') {
+      matched = path.includes(token.needle);
+    } else if (token.operator === 'file') {
+      matched = title.includes(token.needle) || path.includes(token.needle);
+    } else if (token.operator === 'tag') {
+      const want = token.needle.replace(/^#/, '');
+      matched = tags.some(t => t === want || t.includes(want));
+    } else if (token.operator === 'content') {
+      matched = content.includes(token.needle);
+    } else {
+      matched = hit(textOf(node), token);
+    }
+    return token.negated ? !matched : matched;
+  }
+
+  /** 真正的匹配入口：空查询视为全部命中 */
+  function matches(node, rawQuery) {
+    const groups = parseQuery(rawQuery);
+    if (!groups) return true;
+    return groups.some(tokens => tokens.every(token => matchToken(node, token)));
+  }
+
+  function describe(rawQuery) {
+    const groups = parseQuery(rawQuery);
+    if (!groups) return [];
+    return groups.map(tokens => tokens.map(t => ({
+      negated: t.negated,
+      operator: t.operator,
+      value: t.value,
+      isRegex: t.isRegex
+    })));
+  }
+
+  return { parseQuery, matches, describe, splitTopLevelOr, tokenizeGroup, OPERATORS };
+});
+
+</script>
+<script>
+/* ============================================================
+   physics.js — 自定义力导向模拟（无第三方依赖，确定性可复现）
+   力：节点排斥 / 连线弹簧 / 中心引力 / 碰撞分离
+   碰撞用均匀网格降低复杂度；初始位置由路径哈希决定，不用随机数。
+   ============================================================ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.RG = root.RG || {};
+  root.RG.physics = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const DEFAULTS = {
+    repel: 850,        // 排斥强度
+    center: 0.00004,   // 中心引力
+    linkStrength: 0.02,
+    linkDistance: 110,
+    damping: 0.82,
+    collisionPadding: 14,
+    nodeSize: 1,
+    alphaDecay: 0.986,
+    alphaMin: 0.004,
+    bounds: 2600
+  };
+
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+  /** FNV-1a：同一路径永远得到同一初始位置，保证「重新布局」可复现 */
+  function hash01(text) {
+    let h = 2166136261;
+    const s = String(text);
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) / 4294967295;
+  }
+
+  function radiusOf(node, nodeSize) {
+    const degree = node.degree || 0;
+    return (6.1 + Math.min(degree, 16) * 0.34) * (nodeSize == null ? 1 : nodeSize);
+  }
+
+  /** 环形 + 哈希抖动：同层节点分散，且不使用 Math.random */
+  function seedPositions(nodes, nodeSize) {
+    const total = Math.max(nodes.length, 1);
+    nodes.forEach((n, i) => {
+      if (typeof n.x === 'number' && typeof n.y === 'number') return;
+      const angle = (i / total) * Math.PI * 2 + hash01(n.id) * 0.9;
+      const radius = 40 + Math.sqrt(i + 1) * (18 + total * 1.6) * (0.7 + hash01(n.id + ':r') * 0.6);
+      n.x = Math.cos(angle) * radius;
+      n.y = Math.sin(angle) * radius;
+      n.vx = 0;
+      n.vy = 0;
+    });
+  }
+
+  /** 均匀网格：只与相邻格子内的节点做碰撞检测 */
+  function buildGrid(nodes, cellSize) {
+    const grid = new Map();
+    for (const n of nodes) {
+      const cx = Math.floor(n.x / cellSize);
+      const cy = Math.floor(n.y / cellSize);
+      const key = cx + ',' + cy;
+      let cell = grid.get(key);
+      if (!cell) { cell = []; grid.set(key, cell); }
+      cell.push(n);
+    }
+    return { grid, cellSize };
+  }
+
+  function createSimulation(options) {
+    const opts = Object.assign({}, DEFAULTS, options || {});
+    const nodes = opts.nodes || [];
+    const links = (opts.links || []).map(l => ({ source: l.source, target: l.target, kind: l.kind }));
+    const index = new Map(nodes.map(n => [n.id, n]));
+    const settings = Object.assign({}, opts.settings || {});
+
+    const sim = {
+      nodes,
+      links,
+      index,
+      settings,
+      alpha: 1,
+      paused: false,
+      ticks: 0,
+      fixedId: null,
+      config: opts,
+
+      setSettings(patch) {
+        if (!patch) return;
+        Object.assign(settings, patch);
+        if (patch.nodeSize != null) opts.nodeSize = patch.nodeSize;
+      },
+
+      reheat(amount) {
+        sim.alpha = Math.max(sim.alpha, amount == null ? 0.6 : amount);
+        sim.paused = false;
+      }
+    };
+
+    function cfg(key) {
+      const v = settings[key];
+      return v == null ? opts[key] : v;
+    }
+
+    sim.tick = function tick() {
+      if (sim.paused || nodes.length === 0) return false;
+      const alpha = sim.alpha;
+      if (alpha < cfg('alphaMin')) {
+        sim.paused = true;
+        return false;
+      }
+
+      const repel = cfg('repel');
+      const center = cfg('center');
+      const linkStrength = cfg('linkStrength') || 0;
+      const linkDistance = cfg('linkDistance');
+      const damping = cfg('damping');
+      const padding = cfg('collisionPadding');
+      const nodeSize = cfg('nodeSize');
+      const bounds = cfg('bounds');
+
+      // 1) 两两排斥（带软化项，避免近距离爆炸）
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j];
+          let dx = a.x - b.x;
+          let dy = a.y - b.y;
+          let d2 = dx * dx + dy * dy;
+          if (d2 < 0.01) {
+            dx = hash01(a.id + b.id) - 0.5;
+            dy = hash01(b.id + a.id) - 0.5;
+            d2 = dx * dx + dy * dy + 0.01;
+          }
+          const d = Math.sqrt(d2);
+          const f = (repel * alpha) / (d2 + 240);
+          const ux = dx / d;
+          const uy = dy / d;
+          a.vx += ux * f; a.vy += uy * f;
+          b.vx -= ux * f; b.vy -= uy * f;
+        }
+      }
+
+      // 2) 连线弹簧
+      for (const link of links) {
+        const a = index.get(link.source);
+        const b = index.get(link.target);
+        if (!a || !b) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f = (d - linkDistance) * linkStrength * alpha;
+        const ux = dx / d;
+        const uy = dy / d;
+        a.vx += ux * f; a.vy += uy * f;
+        b.vx -= ux * f; b.vy -= uy * f;
+      }
+
+      // 3) 中心引力
+      for (const n of nodes) {
+        n.vx -= n.x * center * alpha;
+        n.vy -= n.y * center * alpha;
+      }
+
+      // 4) 碰撞分离（网格加速）
+      const cellSize = Math.max(24, 2 * radiusOf({ degree: 16 }, nodeSize) + padding);
+      const { grid } = buildGrid(nodes, cellSize);
+      for (const cell of grid.values()) {
+        for (let i = 0; i < cell.length; i++) {
+          const a = cell[i];
+          for (let j = i + 1; j < cell.length; j++) {
+            const b = cell[j];
+            separate(a, b, alpha, padding, nodeSize);
+          }
+        }
+      }
+
+      // 5) 积分
+      for (const n of nodes) {
+        if (sim.fixedId && sim.fixedId === n.id) { n.vx = 0; n.vy = 0; continue; }
+        n.vx *= damping;
+        n.vy *= damping;
+        n.x = clamp(n.x + n.vx, -bounds, bounds);
+        n.y = clamp(n.y + n.vy, -bounds, bounds);
+        if (!isFinite(n.x) || !isFinite(n.y)) { n.x = 0; n.y = 0; n.vx = 0; n.vy = 0; }
+      }
+
+      sim.alpha *= cfg('alphaDecay');
+      sim.ticks += 1;
+      if (sim.alpha < cfg('alphaMin')) sim.paused = true;
+      return true;
+    };
+
+    function separate(a, b, alpha, padding, nodeSize) {
+      const min = radiusOf(a, nodeSize) + radiusOf(b, nodeSize) + padding;
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      let d = Math.sqrt(dx * dx + dy * dy);
+      if (d >= min) return;
+      if (d < 0.0001) {
+        // 完全重合：用 id 哈希给出确定性分离方向，避免 NaN 与随机抖动
+        const ang = hash01(a.id + "|" + b.id) * Math.PI * 2;
+        dx = Math.cos(ang);
+        dy = Math.sin(ang);
+        d = 1;
+      }
+      const overlap = (min - d) * 0.5 * (0.35 + alpha * 0.65);
+      const ux = (dx / d) * overlap;
+      const uy = (dy / d) * overlap;
+      const fixedA = sim.fixedId === a.id;
+      const fixedB = sim.fixedId === b.id;
+      if (fixedA && fixedB) return;
+      if (fixedA) { b.x += ux * 2; b.y += uy * 2; return; }
+      if (fixedB) { a.x -= ux * 2; a.y -= uy * 2; return; }
+      a.x -= ux; a.y -= uy;
+      b.x += ux; b.y += uy;
+    }
+
+    Object.assign(sim, {
+      cfg,
+      radiusOf: n => radiusOf(n, cfg('nodeSize')),
+      reheat(amount) {
+        sim.alpha = Math.max(sim.alpha, amount == null ? 0.6 : amount);
+        sim.paused = false;
+      }
+    });
+
+    seedPositions(nodes, cfg('nodeSize'));
+    sim.alpha = opts.alpha == null ? 1 : opts.alpha;
+    sim.paused = false;
+    return sim;
+  }
+
+  return { createSimulation, seedPositions, hash01, radiusOf, buildGrid, DEFAULTS };
+});
+
+</script>
+<script>
+/* ============================================================
+   render.js — Canvas 2D 渲染层（只负责画，不改数据）
+   ============================================================ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.RG = root.RG || {};
+  root.RG.render = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const THEMES = {
+    light: {
+      bg: '#fbfbfd',
+      link: 'rgba(120,124,140,0.34)',
+      linkHi: 'rgba(74,110,245,0.85)',
+      linkDim: 'rgba(150,154,170,0.10)',
+      node: '#8a90a6',
+      nodeStroke: '#ffffff',
+      text: 'rgba(46,50,64,0.92)',
+      textDim: 'rgba(46,50,64,0.20)',
+      ring: 'rgba(74,110,245,0.9)',
+      tag: '#8b7cf6',
+      attachment: '#9aa3b2',
+      unresolved: '#e2725b'
+    },
+    dark: {
+      bg: '#17181c',
+      link: 'rgba(190,196,214,0.22)',
+      linkHi: 'rgba(122,158,255,0.95)',
+      linkDim: 'rgba(190,196,214,0.06)',
+      node: '#9aa2b8',
+      nodeStroke: '#1f2126',
+      text: 'rgba(232,236,246,0.92)',
+      textDim: 'rgba(232,236,246,0.18)',
+      ring: 'rgba(122,158,255,0.95)',
+      tag: '#a898ff',
+      attachment: '#7b8494',
+      unresolved: '#ef8a72'
+    }
+  };
+
+  function palette(theme) { return THEMES[theme] || THEMES.light; }
+
+  function screenToWorld(view, x, y) {
+    return { x: (x - view.x) / view.scale, y: (y - view.y) / view.scale };
+  }
+
+  function worldToScreen(view, x, y) {
+    return { x: x * view.scale + view.x, y: y * view.scale + view.y };
+  }
+
+  /** 节点颜色优先级：颜色分组 > 类型默认色 */
+  function nodeColor(node, groupColor, colors) {
+    if (groupColor) return groupColor;
+    if (node.type === 'tag') return colors.tag;
+    if (node.type === 'attachment') return colors.attachment;
+    if (node.type === 'unresolved') return colors.unresolved;
+    return colors.node;
+  }
+
+  function drawArrow(ctx, from, to, radius, color, width) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const d = Math.hypot(dx, dy);
+    if (d < radius + 6) return;
+    const ux = dx / d;
+    const uy = dy / d;
+    const tipX = to.x - ux * (radius + 3);
+    const tipY = to.y - uy * (radius + 3);
+    const size = 4 + width * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX - ux * size - uy * size * 0.5, tipY - uy * size + ux * size * 0.5);
+    ctx.lineTo(tipX - ux * size + uy * size * 0.5, tipY - uy * size - ux * size * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  /**
+   * 主绘制入口
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{
+   *   width:number, height:number, dpr:number,
+   *   view:{x:number,y:number,scale:number},
+   *   nodes:Array, links:Array, index:Map,
+   *   theme:string, settings:Object,
+   *   hoveredId?:string|null, selectedId?:string|null,
+   *   highlight?:Set<string>|null, colorOf?:function
+   * }} opts
+   */
+  function draw(ctx, opts) {
+    const colors = palette(opts.theme);
+    const view = opts.view;
+    const settings = opts.settings || {};
+    const scale = view.scale;
+    const highlight = opts.highlight;
+    const hasHighlight = highlight && highlight.size > 0;
+    const radiusOf = opts.radiusOf || (n => 8);
+
+    ctx.save();
+    ctx.setTransform(opts.dpr || 1, 0, 0, opts.dpr || 1, 0, 0);
+    ctx.clearRect(0, 0, opts.width, opts.height);
+    ctx.fillStyle = colors.bg;
+    ctx.fillRect(0, 0, opts.width, opts.height);
+    ctx.translate(view.x, view.y);
+    ctx.scale(scale, scale);
+
+    const index = opts.index;
+    const linkWidth = (settings.linkWidth == null ? 1 : settings.linkWidth);
+
+    // ── 连线 ────────────────────────────────────────────────
+    for (const link of opts.links) {
+      const a = index.get(link.source);
+      const b = index.get(link.target);
+      if (!a || !b) continue;
+      const active = !hasHighlight ||
+        (highlight.has(a.id) && highlight.has(b.id));
+      ctx.strokeStyle = active
+        ? (hasHighlight ? colors.linkHi : colors.link)
+        : colors.linkDim;
+      ctx.lineWidth = (active ? 1 : 0.7) * linkWidth;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    // ── 箭头（画在节点之前，避免压住节点） ───────────────────
+    if (settings.arrows) {
+      for (const link of opts.links) {
+        const a = index.get(link.source);
+        const b = index.get(link.target);
+        if (!a || !b) continue;
+        const active = !hasHighlight || (highlight.has(a.id) && highlight.has(b.id));
+        if (!active) continue;
+        drawArrow(ctx, a, b, radiusOf(b), hasHighlight ? colors.linkHi : colors.link, linkWidth);
+      }
+    }
+
+    // ── 节点 ────────────────────────────────────────────────
+    const ordered = opts.nodes.slice().sort((p, q) => {
+      const ap = (p.id === opts.selectedId) || (p.id === opts.hoveredId);
+      const aq = (q.id === opts.selectedId) || (q.id === opts.hoveredId);
+      return (ap ? 1 : 0) - (aq ? 1 : 0);
+    });
+
+    for (const node of ordered) {
+      const r = radiusOf(node) * Math.max(0.55, Math.min(1.6, scale));
+      const active = !hasHighlight || highlight.has(node.id);
+      const color = opts.colorOf
+        ? opts.colorOf(node)
+        : nodeColor(node, null, colors);
+
+      ctx.globalAlpha = active ? 1 : 0.22;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      if (node.type === 'unresolved') {
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = colors.unresolved;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (node.type === 'attachment') {
+        ctx.strokeStyle = colors.nodeStroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      if (node.id === opts.selectedId) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = colors.ring;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else if (node.id === opts.hoveredId) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = colors.ring;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── 标签（按屏幕半径阈值淡入淡出） ───────────────────────
+    const fadeAt = settings.textFade == null ? 35 : settings.textFade;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (const node of ordered) {
+      const screenR = radiusOf(node) * scale;
+      const emphasis = node.id === opts.hoveredId || node.id === opts.selectedId;
+      let alpha = emphasis ? 1 : Math.max(0, Math.min(1, (screenR - fadeAt) / 26));
+      if (node.type === 'tag') alpha = Math.max(alpha, emphasis ? 1 : 0);
+      if (alpha <= 0.02) continue;
+      const active = !hasHighlight || highlight.has(node.id);
+      if (!active) alpha *= 0.25;
+      const fontSize = Math.max(9, Math.min(15, 11.5 / Math.max(0.8, scale * 0.9)));
+      ctx.globalAlpha = alpha;
+      ctx.font = fontSize + 'px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+      ctx.fillStyle = emphasis ? colors.text : colors.text;
+      const label = node.title.length > 16 ? node.title.slice(0, 15) + '…' : node.title;
+      ctx.fillText(label, node.x, node.y + radiusOf(node) + 4);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+  }
+
+  return { draw, palette, nodeColor, screenToWorld, worldToScreen, THEMES };
+});
+
+</script>
+<script>
+/* ============================================================
+   demo-vault.js — 内置示例库（真实 Markdown 文本，走同一套解析流程）
+   双击单文件打开时默认加载，保证「开箱即用」；
+   点击「打开文件夹」后即被真实库替换。
+   ============================================================ */
+(function (root) {
+  'use strict';
+  const files = [
+    {
+      path: '00-导航/学习驾驶舱.md',
+      content: [
+        '---',
+        'title: 学习驾驶舱',
+        'tags: [导航, 驾驶舱]',
+        '---',
+        '# 学习驾驶舱',
+        '',
+        '每日入口：目标 → 计划 → 错题 → 复盘。',
+        '',
+        '- 本周目标见 [[本月学习目标]]',
+        '- 错题统一走 [[错题本使用指南]]',
+        '- 复习节奏见 [[周复习计划]]',
+        '- 薄弱点长期跟踪 [[薄弱环节清单]]',
+        '',
+        '方法参考 [[错题复盘方法]]，考试节奏参考 [[考试策略]]。'
+      ].join('\n')
+    },
+    {
+      path: '00-导航/错题本使用指南.md',
+      content: [
+        '---',
+        'title: 错题本使用指南',
+        'tags: [方法, 导航]',
+        '---',
+        '# 错题本使用指南',
+        '',
+        '每条错题只记五个字段，模板见 [[错题笔记模板]]。',
+        '',
+        '## 分区',
+        '- 数学：[[数学-错题索引]]',
+        '- 物理：[[物理-错题索引]]',
+        '- 化学：[[化学-错题索引]]',
+        '- 英语：[[英语-错题索引]]',
+        '',
+        '复盘节奏参考 [[错题复盘方法]]。#方法'
+      ].join('\n')
+    },
+    {
+      path: '00-导航/考试策略.md',
+      content: [
+        '---',
+        'tags: [考试, 方法]',
+        '---',
+        '# 考试策略',
+        '',
+        '时间分配、答题顺序、检查清单。',
+        '',
+        '配合 [[时间管理]] 使用，平时用 [[周复习计划]] 演练节奏。#考试'
+      ].join('\n')
+    },
+    {
+      path: '00-导航/时间管理.md',
+      content: [
+        '# 时间管理',
+        '',
+        '番茄钟 + 周计划 + 优先级矩阵。',
+        '',
+        '周计划落地见 [[周复习计划]]，目标拆解见 [[本月学习目标]]。#方法'
+      ].join('\n')
+    },
+    {
+      path: '00-导航/本月学习目标.md',
+      content: [
+        '---',
+        'title: 本月学习目标',
+        'tags: [目标]',
+        '---',
+        '# 本月学习目标',
+        '',
+        '1. 导数与极限专题清零：[[导数及其应用]]、[[极限与连续]]',
+        '2. 错题重做两轮：[[数学-错题索引]]',
+        '3. 每周一次模拟：[[考试策略]]'
+      ].join('\n')
+    },
+    {
+      path: '10-错题本/数学-错题索引.md',
+      content: [
+        '---',
+        'title: 数学-错题索引',
+        'tags: [错题, 数学]',
+        '---',
+        '# 数学错题索引',
+        '',
+        '按模块归档：',
+        '- [[导数及其应用]]：[[20261104-01-导数及其应用]]',
+        '- [[极限与连续]]：[[20261105-01-极限错题复盘]]',
+        '- 切线专项：[[切线方程]]',
+        '',
+        '复盘记录见 [[数学错题复盘]]。#错题'
+      ].join('\n')
+    },
+    {
+      path: '10-错题本/物理-错题索引.md',
+      content: [
+        '---',
+        'tags: [错题, 物理]',
+        '---',
+        '# 物理错题索引',
+        '',
+        '力学连接体专题：[[20261103-02-牛顿定律错题]]。',
+        '',
+        '受力分析还没整理：[[待整理：受力分析]]。#错题'
+      ].join('\n')
+    },
+    {
+      path: '10-错题本/化学-错题索引.md',
+      content: '# 化学错题索引\n\n反应原理与实验题，等本周复盘后补全。\n\n并入 [[薄弱环节清单]]。#错题'
+    },
+    {
+      path: '10-错题本/英语-错题索引.md',
+      content: '# 英语错题索引\n\n语法与非谓语动词为主，暂无详细记录。\n\n并入 [[薄弱环节清单]]。#错题'
+    },
+    {
+      path: '20-知识卡/导数及其应用.md',
+      content: [
+        '---',
+        'title: 导数及其应用',
+        'aliases: [求导, 导数]',
+        'tags: [导数, 数学, 知识卡]',
+        '---',
+        '# 导数及其应用',
+        '',
+        '导数定义、几何意义、单调性与极值。压轴题常与切线、不等式综合。',
+        '',
+        '- 几何意义 → [[切线方程]]',
+        '- 判定单调 → [[函数单调性]]',
+        '- 极限基础 → [[极限与连续]]',
+        '',
+        '配图：![[导数几何意义.png]]'
+      ].join('\n')
+    },
+    {
+      path: '20-知识卡/极限与连续.md',
+      content: [
+        '---',
+        'tags: [极限, 数学, 知识卡]',
+        '---',
+        '# 极限与连续',
+        '',
+        '数列极限、函数极限、连续性与等价无穷小。',
+        '',
+        '与 [[导数及其应用]] 衔接，常见错误见 [[20261105-01-极限错题复盘]]。#极限'
+      ].join('\n')
+    },
+    {
+      path: '20-知识卡/函数单调性.md',
+      content: [
+        '---',
+        'tags: [导数, 数学, 知识卡]',
+        '---',
+        '# 函数单调性',
+        '',
+        '用导数符号判断单调区间，注意定义域与临界点。',
+        '',
+        '上级概念：[[导数及其应用]]；相关题型：[[切线方程]]。#导数'
+      ].join('\n')
+    },
+    {
+      path: '20-知识卡/切线方程.md',
+      content: [
+        '---',
+        'tags: [导数, 数学, 知识卡]',
+        '---',
+        '# 切线方程',
+        '',
+        '在某点 / 过某点的切线，先判断切点是否已知。',
+        '',
+        '概念来源 [[导数及其应用]]，易错点记在 [[薄弱环节清单]]。#导数'
+      ].join('\n')
+    },
+    {
+      path: '30-课堂笔记/20261104-01-导数及其应用.md',
+      content: [
+        '---',
+        'tags: [导数, 课堂笔记]',
+        '---',
+        '# 20261104-01 导数及其应用',
+        '',
+        '课堂重点：切线 + 单调性综合题，先求导再定号。',
+        '',
+        '知识卡：[[导数及其应用]]、[[函数单调性]]',
+        '错题归档：[[数学-错题索引]]'
+      ].join('\n')
+    },
+    {
+      path: '30-课堂笔记/20261105-01-极限错题复盘.md',
+      content: [
+        '---',
+        'tags: [极限, 错题, 课堂笔记]',
+        '---',
+        '# 20261105-01 极限错题复盘',
+        '',
+        '洛必达的使用条件没记牢，等价无穷小替换用错了场合。',
+        '',
+        '对应知识卡 [[极限与连续]]，待整理链接：[[待整理：极限计算]]。#错题'
+      ].join('\n')
+    },
+    {
+      path: '30-课堂笔记/20261103-02-牛顿定律错题.md',
+      content: [
+        '---',
+        'tags: [物理, 错题, 课堂笔记]',
+        '---',
+        '# 20261103-02 牛顿定律错题',
+        '',
+        '连接体问题用整体法先求加速度，再隔离求内力。',
+        '',
+        '归档到 [[物理-错题索引]]，同时影响 [[薄弱环节清单]]。#错题'
+      ].join('\n')
+    },
+    {
+      path: '40-复习/薄弱环节清单.md',
+      content: [
+        '---',
+        'title: 薄弱环节清单',
+        'tags: [复习, 薄弱环节]',
+        '---',
+        '# 薄弱环节清单',
+        '',
+        '- 导数压轴第二问：切线 + 不等式恒成立',
+        '- 极限等价替换的适用条件',
+        '- 物理连接体整体法',
+        '',
+        '更新后同步 [[周复习计划]]。'
+      ].join('\n')
+    },
+    {
+      path: '40-复习/周复习计划.md',
+      content: [
+        '---',
+        'tags: [复习, 计划]',
+        '---',
+        '# 周复习计划',
+        '',
+        '周一三五：错题重做；周二四：知识卡回顾；周末：模拟测试。',
+        '',
+        '目标来源 [[本月学习目标]]，清单来源 [[薄弱环节清单]]。',
+        '复盘方法 [[错题复盘方法]]。#复习'
+      ].join('\n')
+    },
+    {
+      path: '40-复习/数学错题复盘.md',
+      content: [
+        '---',
+        'tags: [数学, 错题, 复习]',
+        '---',
+        '# 数学错题复盘',
+        '',
+        '按错因分类：概念不清 / 计算失误 / 审题偏差。',
+        '',
+        '索引 [[数学-错题索引]]，模板 [[错题笔记模板]]。#错题'
+      ].join('\n')
+    },
+    {
+      path: '90-模板/错题笔记模板.md',
+      content: [
+        '---',
+        'tags: [模板]',
+        '---',
+        '# 错题笔记模板',
+        '',
+        '```md',
+        '## 题目',
+        '## 错因',
+        '## 正解',
+        '## 同类题 [[ ]]',
+        '## 复习日期',
+        '```',
+        '',
+        '用法见 [[错题本使用指南]]。'
+      ].join('\n')
+    },
+    {
+      path: '90-模板/错题复盘方法.md',
+      content: [
+        '---',
+        'tags: [模板, 方法]',
+        '---',
+        '# 错题复盘方法',
+        '',
+        '三遍复盘：当天、三天后、一周后，每次只重做错因。',
+        '',
+        '配合 [[错题笔记模板]] 与 [[周复习计划]]。#方法'
+      ].join('\n')
+    },
+    {
+      path: '99-收件箱/随手记.md',
+      content: '# 随手记：待整理\n\n- 导数题里那个恒成立放缩技巧，回头补进 [[导数及其应用]]\n- 想做一个自动生成知识图谱的学习看板\n'
+    },
+    {
+      path: '99-收件箱/阅读清单.md',
+      content: '# 阅读清单\n\n待读：《怎样解题》《学习之道》。暂时和主学习区没有链接。\n'
+    },
+    { path: 'attachments/导数几何意义.png' },
+    { path: 'attachments/错题模板示意.png' }
+  ];
+
+  root.RG = root.RG || {};
+  root.RG.demoVault = { files, label: '示例库（内置 23 篇 + 2 附件）' };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* ============================================================
+   app.js — 界面装配：载入真实 Markdown 库、筛选、交互、持久化
+   ============================================================ */
+(function () {
+  'use strict';
+
+  const vault = RG.vault;
+  const query = RG.query;
+  const physics = RG.physics;
+  const render = RG.render;
+
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => [...document.querySelectorAll(sel)];
+  const STORAGE_KEY = 'race-ainote:v1';
+
+  const DEFAULT_SETTINGS = {
+    mode: 'global',
+    depth: 2,
+    showTags: true,
+    showAttachments: true,
+    existingOnly: true,
+    orphansOnly: false,
+    arrows: false,
+    textFade: 35,
+    nodeSize: 1,
+    linkWidth: 1,
+    center: 3,
+    repel: 5,
+    linkStrength: 6,
+    linkDistance: 110,
+    groups: [
+      { query: 'tag:数学', color: '#4a90e2' },
+      { query: 'tag:错题', color: '#e2725b' },
+      { query: 'path:20-知识卡', color: '#43b581' }
+    ]
+  };
+
+  function loadSettings() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const merged = Object.assign({}, DEFAULT_SETTINGS, raw);
+      if (!Array.isArray(merged.groups)) merged.groups = DEFAULT_SETTINGS.groups.map(g => Object.assign({}, g));
+      merged.groups = merged.groups
+        .filter(g => g && typeof g.query === 'string' && typeof g.color === 'string')
+        .slice(0, 16);
+      return merged;
+    } catch (_) {
+      return Object.assign({}, DEFAULT_SETTINGS, { groups: DEFAULT_SETTINGS.groups.map(g => Object.assign({}, g)) });
+    }
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (_) {}
+  }
+
+  function loadTheme() {
+    try {
+      const t = localStorage.getItem(STORAGE_KEY + ':theme');
+      if (t === 'dark' || t === 'light') return t;
+    } catch (_) {}
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  const settings = loadSettings();
+  const state = {
+    theme: loadTheme(),
+    files: [],
+    graph: null,
+    nodes: [],
+    links: [],
+    index: new Map(),
+    sim: null,
+    positions: new Map(),
+    view: { x: 0, y: 0, scale: 1 },
+    width: 0,
+    height: 0,
+    dpr: Math.min(window.devicePixelRatio || 1, 2),
+    query: '',
+    hoveredId: null,
+    selectedId: null,
+    localRoot: null,
+    drag: null,
+    pan: null,
+    pointerDown: null,
+    dirty: true,
+    vaultLabel: '示例库'
+  };
+
+  document.documentElement.dataset.theme = state.theme;
+
+  const canvas = $('#graph-canvas');
+  const shell = $('#graph-shell');
+  const ctx = canvas.getContext('2d');
+  const searchInput = $('#search-input');
+  const fileTree = $('#file-tree');
+  const settingsPanel = $('#settings-panel');
+  const noteModal = $('#note-modal');
+
+  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+  /* ── 通知 ───────────────────────────────────────────────── */
+  let toastTimer = 0;
+  function toast(message) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('is-visible'), 2200);
+  }
+
+  /* ── 设置 → 物理参数映射 ─────────────────────────────────── */
+  function physicsSettings() {
+    return {
+      repel: 120 + settings.repel * 130,
+      center: 0.000004 + settings.center * 0.000011,
+      linkStrength: settings.linkStrength / 1000,
+      linkDistance: settings.linkDistance,
+      nodeSize: settings.nodeSize
+    };
+  }
+
+  /* ── 载入数据 ───────────────────────────────────────────── */
+  function loadFiles(files, label) {
+    state.files = files;
+    state.vaultLabel = label || '本地库';
+    state.graph = vault.buildVault(files);
+    state.positions.clear();
+    state.selectedId = null;
+    state.localRoot = null;
+    const firstNote = state.graph.notes[0];
+    if (firstNote) state.localRoot = firstNote.id;
+    $('#vault-name').textContent = state.vaultLabel;
+    $('#vault-name').title = state.vaultLabel;
+    const s = state.graph.stats;
+    $('#vault-stats').textContent = s.notes + ' 篇笔记 · ' + s.links + ' 条连线 · ' + s.orphans + ' 个孤立';
+    $('#graph-empty').hidden = state.graph.nodes.length > 0;
+    renderTree();
+    rebuild({ fresh: true, fit: true });
+    setSearch('');
+  }
+
+  function loadDemo() {
+    loadFiles(RG.demoVault.files.map(f => Object.assign({}, f)), '示例库');
+    toast('已载入内置示例库');
+  }
+
+  /** <input webkitdirectory> 或拖放得到的 FileList */
+  async function readFileList(fileList) {
+    const list = [...fileList];
+    if (!list.length) return [];
+    const out = [];
+    for (const file of list) {
+      const path = (file.webkitRelativePath || file.name).replace(/^[^/]*\//, '');
+      if (vault.MD_EXT.test(path)) {
+        out.push({ path, content: await file.text(), mtime: file.lastModified || 0 });
+      } else if (vault.ATTACH_EXT.test(path)) {
+        out.push({ path, mtime: file.lastModified || 0 });
+      }
+    }
+    return out;
+  }
+
+  async function openViaInput() { $('#folder-input').click(); }
+
+  async function openViaPicker() {
+    if (!window.showDirectoryPicker) return openViaInput();
+    try {
+      const dir = await window.showDirectoryPicker({ mode: 'read' });
+      const files = [];
+      await walkDirectory(dir, '', files);
+      if (!files.length) return toast('这个文件夹里没有 Markdown 笔记');
+      loadFiles(files, dir.name);
+      toast('已读取 ' + dir.name + '：' + files.length + ' 个文件');
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      toast('读取失败：' + (err && err.message ? err.message : err));
+    }
+  }
+
+  async function walkDirectory(dir, prefix, out) {
+    for await (const entry of dir.values()) {
+      if (entry.name.startsWith('.')) continue;
+      const path = prefix ? prefix + '/' + entry.name : entry.name;
+      if (entry.kind === 'directory') {
+        await walkDirectory(entry, path, out);
+      } else if (vault.MD_EXT.test(path)) {
+        const file = await entry.getFile();
+        out.push({ path, content: await file.text(), mtime: file.lastModified || 0 });
+      } else if (vault.ATTACH_EXT.test(path)) {
+        out.push({ path, mtime: entry.lastModified || 0 });
+      }
+    }
+  }
+
+  /** 拖放：优先用 entry API 递归读目录 */
+  async function readDataTransfer(dt) {
+    const items = dt.items ? [...dt.items] : [];
+    const entries = items
+      .map(item => (item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
+      .filter(Boolean);
+    if (!entries.length) return readFileList(dt.files);
+
+    const out = [];
+    const walkEntry = async (entry, prefix) => {
+      if (entry.isFile) {
+        const file = await new Promise((res, rej) => entry.file(res, rej));
+        const path = prefix ? prefix + '/' + entry.name : entry.name;
+        if (vault.MD_EXT.test(path)) out.push({ path, content: await file.text(), mtime: file.lastModified || 0 });
+        else if (vault.ATTACH_EXT.test(path)) out.push({ path, mtime: file.lastModified || 0 });
+        return;
+      }
+      if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const children = await new Promise(res => reader.readEntries(res, () => res([])));
+        for (const child of children) {
+          await walkEntry(child, prefix ? prefix + '/' + entry.name : entry.name);
+        }
+      }
+    };
+    for (const entry of entries) await walkEntry(entry, '');
+    return out;
+  }
+
+  /* ── 筛选与重建 ─────────────────────────────────────────── */
+  function allowedTypes() {
+    const types = new Set(['note']);
+    if (settings.showTags) types.add('tag');
+    if (settings.showAttachments) types.add('attachment');
+    if (!settings.existingOnly) types.add('unresolved');
+    return types;
+  }
+
+  function filterGraph() {
+    if (!state.graph) return { nodes: [], links: [] };
+    const types = allowedTypes();
+    let nodes = state.graph.nodes.filter(n => types.has(n.type));
+    const keep = new Set(nodes.map(n => n.id));
+    let links = state.graph.links.filter(l => keep.has(l.source) && keep.has(l.target));
+
+    // 局部图谱：BFS 取 depth 层邻域
+    if (settings.mode === 'local') {
+      let root = state.localRoot;
+      if (!root || !keep.has(root)) {
+        root = state.selectedId && keep.has(state.selectedId)
+          ? state.selectedId
+          : (nodes.find(n => n.type === 'note') || {}).id;
+      }
+      state.localRoot = root || null;
+      if (root) {
+        const adjacency = new Map();
+        for (const link of links) {
+          if (!adjacency.has(link.source)) adjacency.set(link.source, new Set());
+          if (!adjacency.has(link.target)) adjacency.set(link.target, new Set());
+          adjacency.get(link.source).add(link.target);
+          adjacency.get(link.target).add(link.source);
+        }
+        const depth = new Map([[root, 0]]);
+        const queue = [root];
+        while (queue.length) {
+          const id = queue.shift();
+          const d = depth.get(id);
+          if (d >= settings.depth) continue;
+          for (const next of adjacency.get(id) || []) {
+            if (!depth.has(next)) { depth.set(next, d + 1); queue.push(next); }
+          }
+        }
+        nodes = nodes.filter(n => depth.has(n.id));
+        links = links.filter(l => depth.has(l.source) && depth.has(l.target));
+      }
+    }
+
+    // 孤立节点统计（用当前候选连线）
+    let degree = new Map(nodes.map(n => [n.id, 0]));
+    for (const link of links) {
+      if (degree.has(link.source)) degree.set(link.source, degree.get(link.source) + 1);
+      if (degree.has(link.target)) degree.set(link.target, degree.get(link.target) + 1);
+    }
+    if (settings.orphansOnly) {
+      nodes = nodes.filter(n => (degree.get(n.id) || 0) === 0);
+      const only = new Set(nodes.map(n => n.id));
+      links = links.filter(l => only.has(l.source) && only.has(l.target));
+    }
+
+    // 查询过滤
+    if (state.query.trim()) {
+      nodes = nodes.filter(n => query.matches(n, state.query));
+      const hit = new Set(nodes.map(n => n.id));
+      links = links.filter(l => hit.has(l.source) && hit.has(l.target));
+      degree = new Map(nodes.map(n => [n.id, 0]));
+      for (const link of links) {
+        if (degree.has(link.source)) degree.set(link.source, degree.get(link.source) + 1);
+        if (degree.has(link.target)) degree.set(link.target, degree.get(link.target) + 1);
+      }
+    }
+
+    return { nodes, links, degree };
+  }
+
+  function rebuild(opts) {
+    const options = opts || {};
+    const filtered = filterGraph();
+    if (options.fresh) state.positions.clear();
+
+    // 复用已有位置，避免筛选时节点乱跳
+    for (const node of filtered.nodes) {
+      const p = state.positions.get(node.id);
+      if (p) { node.x = p.x; node.y = p.y; node.vx = p.vx || 0; node.vy = p.vy || 0; }
+      node.degree = filtered.degree.get(node.id) || 0;
+    }
+
+    state.nodes = filtered.nodes;
+    state.links = filtered.links;
+    state.index = new Map(state.nodes.map(n => [n.id, n]));
+    state.sim = physics.createSimulation({
+      nodes: state.nodes,
+      links: state.links,
+      settings: physicsSettings()
+    });
+    state.dirty = true;
+    updateStats(filtered.degree);
+    updateTreeSelection();
+    if (options.fit) fitView(false);
+  }
+
+  function updateStats(degree) {
+    const total = state.graph ? state.graph.stats : { notes: 0 };
+    let orphans = 0;
+    if (degree) {
+      for (const [, d] of degree) if (d === 0) orphans += 1;
+    }
+    $('#status-notes').textContent = String(total.notes || 0);
+    $('#status-links').textContent = String(state.links.length);
+    $('#status-nodes').textContent = String(state.nodes.length);
+    $('#status-orphans').textContent = String(orphans);
+  }
+
+  /* ── 颜色分组 ───────────────────────────────────────────── */
+  function colorOf(node) {
+    for (const group of settings.groups) {
+      if (group.query && group.query.trim() && query.matches(node, group.query)) return group.color;
+    }
+    return null;
+  }
+
+  /* ── 渲染循环 ───────────────────────────────────────────── */
+  function radiusOf(node) {
+    return physics.radiusOf(node, settings.nodeSize);
+  }
+
+  function highlightSet() {
+    const focus = state.hoveredId || state.selectedId;
+    if (!focus || !state.index.has(focus)) return null;
+    const set = new Set([focus]);
+    for (const link of state.links) {
+      if (link.source === focus) set.add(link.target);
+      else if (link.target === focus) set.add(link.source);
+    }
+    return set;
+  }
+
+  function draw() {
+    const highlight = highlightSet();
+    render.draw(ctx, {
+      width: state.width,
+      height: state.height,
+      dpr: state.dpr,
+      view: state.view,
+      nodes: state.nodes,
+      links: state.links,
+      index: state.index,
+      theme: state.theme,
+      settings: {
+        arrows: settings.arrows,
+        textFade: settings.textFade,
+        nodeSize: settings.nodeSize,
+        linkWidth: settings.linkWidth
+      },
+      hoveredId: state.hoveredId,
+      selectedId: state.selectedId,
+      highlight,
+      radiusOf,
+      colorOf
+    });
+  }
+
+  function resize() {
+    const rect = shell.getBoundingClientRect();
+    state.width = Math.max(1, rect.width);
+    state.height = Math.max(1, rect.height);
+    state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(state.width * state.dpr);
+    canvas.height = Math.round(state.height * state.dpr);
+    canvas.style.width = state.width + 'px';
+    canvas.style.height = state.height + 'px';
+    state.dirty = true;
+  }
+
+  function frame() {
+    if (state.sim && !state.sim.paused) {
+      state.sim.tick();
+      for (const node of state.nodes) {
+        state.positions.set(node.id, { x: node.x, y: node.y, vx: node.vx, vy: node.vy });
+      }
+      state.dirty = true;
+    }
+    const dot = $('#engine-dot');
+    const running = state.sim && !state.sim.paused;
+    dot.classList.toggle('is-idle', !running);
+    $('#status-engine').textContent = running ? '引擎运行中' : '引擎空闲';
+    if (state.dirty) {
+      draw();
+      state.dirty = false;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ── 视图控制 ───────────────────────────────────────────── */
+  function zoomAt(factor, sx, sy) {
+    const px = sx == null ? state.width / 2 : sx;
+    const py = sy == null ? state.height / 2 : sy;
+    const next = clamp(state.view.scale * factor, 0.15, 4.5);
+    const k = next / state.view.scale;
+    state.view.x = px - (px - state.view.x) * k;
+    state.view.y = py - (py - state.view.y) * k;
+    state.view.scale = next;
+    state.dirty = true;
+  }
+
+  function fitView(animate) {
+    if (!state.nodes.length) { state.view = { x: state.width / 2, y: state.height / 2, scale: 1 }; state.dirty = true; return; }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of state.nodes) {
+      minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+      minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+    }
+    const pad = 70;
+    const w = Math.max(maxX - minX, 40);
+    const h = Math.max(maxY - minY, 40);
+    const scale = clamp(Math.min((state.width - pad * 2) / w, (state.height - pad * 2) / h), 0.2, 2.2);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const target = {
+      scale,
+      x: state.width / 2 - cx * scale,
+      y: state.height / 2 - cy * scale
+    };
+    if (animate) animateView(target);
+    else { state.view = target; state.dirty = true; }
+  }
+
+  function animateView(target) {
+    const from = Object.assign({}, state.view);
+    const start = performance.now();
+    const duration = 340;
+    const step = now => {
+      const t = Math.min(1, (now - start) / duration);
+      const e = 1 - Math.pow(1 - t, 3);
+      state.view.scale = from.scale + (target.scale - from.scale) * e;
+      state.view.x = from.x + (target.x - from.x) * e;
+      state.view.y = from.y + (target.y - from.y) * e;
+      state.dirty = true;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function focusNode(id) {
+    const node = state.index.get(id);
+    if (!node) return;
+    state.selectedId = id;
+    animateView({
+      scale: clamp(Math.max(state.view.scale, 1.2), 0.4, 2.4),
+      x: state.width / 2 - node.x * clamp(Math.max(state.view.scale, 1.2), 0.4, 2.4),
+      y: state.height / 2 - node.y * clamp(Math.max(state.view.scale, 1.2), 0.4, 2.4)
+    });
+    updateTreeSelection();
+  }
+
+  /* ── 指针交互 ───────────────────────────────────────────── */
+  function localPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function worldPoint(x, y) {
+    return render.screenToWorld(state.view, x, y);
+  }
+
+  function hitTest(sx, sy) {
+    const w = worldPoint(sx, sy);
+    let best = null;
+    let bestDist = Infinity;
+    for (const node of state.nodes) {
+      const r = radiusOf(node) + 6;
+      const d = Math.hypot(node.x - w.x, node.y - w.y);
+      if (d <= r && d < bestDist) { best = node; bestDist = d; }
+    }
+    return best;
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    const p = localPoint(e);
+    const hit = hitTest(p.x, p.y);
+    canvas.setPointerCapture(e.pointerId);
+    state.pointerDown = { x: p.x, y: p.y, moved: false };
+
+    if (hit) {
+      const w = worldPoint(p.x, p.y);
+      state.drag = { id: hit.id, dx: hit.x - w.x, dy: hit.y - w.y };
+      state.selectedId = hit.id;
+      state.sim.fixedId = hit.id;
+      state.sim.reheat(0.35);
+      updateTreeSelection();
+      state.dirty = true;
+    } else {
+      state.pan = { x: p.x, y: p.y, viewX: state.view.x, viewY: state.view.y };
+      canvas.classList.add('is-dragging');
+    }
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    const p = localPoint(e);
+    if (state.drag) {
+      const w = worldPoint(p.x, p.y);
+      const node = state.index.get(state.drag.id);
+      if (node) {
+        node.x = w.x + state.drag.dx;
+        node.y = w.y + state.drag.dy;
+        node.vx = 0;
+        node.vy = 0;
+        state.positions.set(node.id, { x: node.x, y: node.y, vx: 0, vy: 0 });
+        state.sim.reheat(0.32);
+        state.dirty = true;
+      }
+      if (state.pointerDown && Math.hypot(p.x - state.pointerDown.x, p.y - state.pointerDown.y) > 3) state.pointerDown.moved = true;
+      return;
+    }
+    if (state.pan) {
+      state.view.x = state.pan.viewX + (p.x - state.pan.x);
+      state.view.y = state.pan.viewY + (p.y - state.pan.y);
+      if (state.pointerDown && Math.hypot(p.x - state.pointerDown.x, p.y - state.pointerDown.y) > 3) state.pointerDown.moved = true;
+      state.dirty = true;
+      return;
+    }
+    const hit = hitTest(p.x, p.y);
+    const nextHover = hit ? hit.id : null;
+    if (nextHover !== state.hoveredId) { state.hoveredId = nextHover; state.dirty = true; }
+    canvas.classList.toggle('is-hovering', Boolean(hit));
+  });
+
+  function endPointer(e) {
+    endDrag();
+    if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    state.pointerDown = null;
+    state.dirty = true;
+  }
+
+  function endDrag() {
+    if (state.drag) {
+      state.drag = null;
+      if (state.sim) state.sim.fixedId = null;
+      if (state.sim) state.sim.reheat(0.2);
+    }
+    if (state.pan) {
+      state.pan = null;
+      canvas.classList.remove('is-dragging');
+    }
+  }
+
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', e => {
+    endDrag();
+    state.pointerDown = null;
+    if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointerleave', () => {
+    if (!state.drag && !state.pan && state.hoveredId) { state.hoveredId = null; state.dirty = true; }
+  });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = localPoint(e);
+    const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.033 : 0.0018));
+    zoomAt(factor, p.x, p.y);
+  }, { passive: false });
+  canvas.addEventListener('dblclick', e => {
+    const p = localPoint(e);
+    const hit = hitTest(p.x, p.y);
+    if (hit) openNote(hit.id);
+    else fitView(true);
+  });
+
+  /* ── 笔记预览 ───────────────────────────────────────────── */
+  let modalNodeId = null;
+
+  function openNote(id) {
+    const node = (state.graph && state.graph.nodes.find(n => n.id === id)) || state.index.get(id);
+    if (!node) return;
+    modalNodeId = id;
+    state.selectedId = id;
+    $('#note-modal-title').textContent = node.title;
+    $('#note-modal-path').textContent = node.path || '(无路径)';
+    const tags = $('#note-modal-tags');
+    tags.innerHTML = '';
+    for (const tag of node.tags || []) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.textContent = '#' + tag;
+      tags.appendChild(chip);
+    }
+    $('#note-modal-summary').textContent = node.summary || node.content || '（无可显示内容）';
+
+    const links = $('#note-modal-links');
+    links.innerHTML = '';
+    const neighbours = [];
+    for (const link of state.graph.links) {
+      if (link.source === id) neighbours.push(link.target);
+      else if (link.target === id) neighbours.push(link.source);
+    }
+    const uniq = [...new Set(neighbours)];
+    $('#note-modal-count').textContent = uniq.length ? '(' + uniq.length + ')' : '(无)';
+    for (const nid of uniq.slice(0, 40)) {
+      const target = state.graph.nodes.find(n => n.id === nid);
+      if (!target) continue;
+      const li = document.createElement('li');
+      const arrow = document.createElement('span');
+      arrow.className = 'link-arrow';
+      arrow.textContent = '→';
+      const label = document.createElement('span');
+      label.textContent = target.title;
+      li.append(arrow, label);
+      li.addEventListener('click', () => { closeNote(); openNote(nid); });
+      links.appendChild(li);
+    }
+    noteModal.hidden = false;
+    state.dirty = true;
+  }
+
+  function closeNote() {
+    noteModal.hidden = true;
+    modalNodeId = null;
+  }
+
+  $('#note-modal-close').addEventListener('click', closeNote);
+  noteModal.addEventListener('pointerdown', e => { if (e.target === noteModal) closeNote(); });
+  $('#note-modal-focus').addEventListener('click', () => {
+    if (modalNodeId) focusNode(modalNodeId);
+    closeNote();
+  });
+  $('#note-modal-local').addEventListener('click', () => {
+    if (!modalNodeId) return;
+    state.localRoot = modalNodeId;
+    setMode('local');
+    closeNote();
+  });
+
+  /* ── 文件树 ─────────────────────────────────────────────── */
+  function renderTree() {
+    fileTree.innerHTML = '';
+    if (!state.graph || !state.graph.notes.length) {
+      const empty = document.createElement('p');
+      empty.className = 'sidebar-foot';
+      empty.textContent = '（空）';
+      fileTree.appendChild(empty);
+      return;
+    }
+    const folders = new Map();
+    for (const note of state.graph.notes) {
+      const dir = note.dir || '';
+      if (!folders.has(dir)) folders.set(dir, []);
+      folders.get(dir).push(note);
+    }
+    const dirs = [...folders.keys()].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    for (const dir of dirs) {
+      const folder = document.createElement('div');
+      folder.className = 'tree-folder';
+      const chevron = document.createElement('span');
+      chevron.className = 'chevron';
+      chevron.textContent = '▾';
+      const name = document.createElement('span');
+      name.textContent = dir || '/';
+      folder.append(chevron, name);
+      const group = document.createElement('div');
+      folder.addEventListener('click', () => {
+        const collapsed = group.hidden;
+        group.hidden = !collapsed;
+        folder.classList.toggle('is-collapsed', collapsed);
+      });
+      fileTree.appendChild(folder);
+      fileTree.appendChild(group);
+      const notes = folders.get(dir).sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
+      for (const note of notes) {
+        const row = document.createElement('div');
+        row.className = 'tree-file';
+        row.dataset.id = note.id;
+        row.title = note.path;
+        const icon = document.createElement('span');
+        icon.className = 'file-icon';
+        icon.textContent = '▤';
+        const label = document.createElement('span');
+        label.className = 'file-name';
+        label.textContent = note.title;
+        row.append(icon, label);
+        row.addEventListener('click', () => { focusNode(note.id); openNote(note.id); });
+        group.appendChild(row);
+      }
+    }
+  }
+
+  function updateTreeSelection() {
+    $$('#file-tree .tree-file').forEach(row => {
+      row.classList.toggle('is-active', row.dataset.id === state.selectedId);
+    });
+  }
+
+  /* ── 设置面板 ───────────────────────────────────────────── */
+  function formatSetting(key, value) {
+    if (key === 'nodeSize') return Number(value).toFixed(1) + '×';
+    if (key === 'linkWidth') return Number(value).toFixed(1);
+    if (key === 'linkDistance') return Math.round(value) + 'px';
+    return String(Math.round(value * 10) / 10);
+  }
+
+  function syncSettingsUI() {
+    $$('[data-toggle]').forEach(el => {
+      el.checked = Boolean(settings[el.dataset.toggle]);
+    });
+    $$('[data-setting]').forEach(el => {
+      el.value = settings[el.dataset.setting];
+      const out = $('#out-' + el.dataset.setting);
+      if (out) out.textContent = formatSetting(el.dataset.setting, el.value);
+    });
+    $('#depth-input').value = settings.depth;
+    $('#depth-output').textContent = String(settings.depth);
+    $$('#mode-global, #mode-local').forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.mode === settings.mode);
+    });
+    renderGroups();
+  }
+
+  function renderGroups() {
+    const list = $('#group-list');
+    list.innerHTML = '';
+    settings.groups.forEach((group, index) => {
+      const row = document.createElement('div');
+      row.className = 'group-row';
+
+      const color = document.createElement('input');
+      color.type = 'color';
+      color.value = group.color;
+      color.addEventListener('input', () => { settings.groups[index].color = color.value; saveSettings(); state.dirty = true; });
+
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.value = group.query;
+      text.placeholder = '搜索表达式，如 tag:错题';
+      text.addEventListener('input', () => { settings.groups[index].query = text.value; saveSettings(); state.dirty = true; });
+
+      const remove = document.createElement('button');
+      remove.className = 'icon-btn small';
+      remove.title = '删除分组';
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        settings.groups.splice(index, 1);
+        saveSettings();
+        renderGroups();
+        state.dirty = true;
+      });
+
+      row.append(color, text, remove);
+      list.appendChild(row);
+    });
+  }
+
+  $('#add-group').addEventListener('click', () => {
+    settings.groups.push({ query: '', color: '#7a9eff' });
+    saveSettings();
+    renderGroups();
+  });
+
+  $('#reset-settings').addEventListener('click', () => {
+    Object.assign(settings, JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+    saveSettings();
+    syncSettingsUI();
+    rebuild({ fit: true });
+    toast('已恢复默认设置');
+  });
+
+  $$('[data-toggle]').forEach(el => {
+    el.addEventListener('change', () => {
+      settings[el.dataset.toggle] = el.checked;
+      saveSettings();
+      rebuild({});
+      state.dirty = true;
+    });
+  });
+
+  $$('[data-setting]').forEach(el => {
+    el.addEventListener('input', () => {
+      const key = el.dataset.setting;
+      settings[key] = Number(el.value);
+      const out = $('#out-' + key);
+      if (out) out.textContent = formatSetting(key, settings[key]);
+      if (key === 'textFade') state.dirty = true;
+      else {
+        if (state.sim) state.sim.setSettings(physicsSettings());
+        if (state.sim && key !== 'linkWidth') state.sim.reheat(0.25);
+        state.dirty = true;
+      }
+      saveSettings();
+    });
+  });
+
+  function setPanel(open) {
+    settingsPanel.hidden = !open;
+  }
+
+  /* ── 搜索 ───────────────────────────────────────────────── */
+  function setSearch(value) {
+    state.query = value;
+    searchInput.value = value;
+    rebuild({});
+    state.dirty = true;
+    const n = state.nodes.length;
+    if (value.trim()) toast('搜索命中 ' + n + ' 个节点');
+  }
+
+  searchInput.addEventListener('input', () => {
+    state.query = searchInput.value;
+    rebuild({});
+    state.dirty = true;
+  });
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { searchInput.value = ''; setSearch(''); searchInput.blur(); }
+  });
+  $('#search-clear').addEventListener('click', () => { setSearch(''); searchInput.focus(); });
+
+  $('#file-search').addEventListener('input', e => {
+    const keyword = e.target.value.trim().toLowerCase();
+    $$('#file-tree .tree-file').forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.classList.toggle('is-muted', Boolean(keyword) && !text.includes(keyword));
+    });
+  });
+
+  /* ── 模式 / 视图按钮 ─────────────────────────────────────── */
+  function setMode(mode) {
+    if (settings.mode === mode) return;
+    settings.mode = mode;
+    saveSettings();
+    syncSettingsUI();
+    rebuild({ fit: true });
+    toast(mode === 'local' ? '局部图谱 · 深度 ' + settings.depth : '全局图谱');
+  }
+
+  $$('#mode-global, #mode-local').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  });
+  $('#depth-input').addEventListener('input', e => {
+    settings.depth = Number(e.target.value);
+    $('#depth-output').textContent = String(settings.depth);
+    saveSettings();
+    if (settings.mode === 'local') rebuild({});
+  });
+  $('#btn-zoom-in').addEventListener('click', () => zoomAt(1.22));
+  $('#btn-zoom-out').addEventListener('click', () => zoomAt(1 / 1.22));
+  $('#btn-fit').addEventListener('click', () => fitView(true));
+  $('#btn-relayout').addEventListener('click', () => {
+    state.positions.clear();
+    for (const node of state.nodes) { delete node.x; delete node.y; node.vx = 0; node.vy = 0; }
+    rebuild({ fresh: true, fit: true });
+    toast('已重新计算布局');
+  });
+  $('#btn-theme').addEventListener('click', () => {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = state.theme;
+    try { localStorage.setItem(STORAGE_KEY + ':theme', state.theme); } catch (_) {}
+    state.dirty = true;
+  });
+  $('#btn-settings').addEventListener('click', () => setPanel(settingsPanel.hidden));
+  $('#btn-settings-close').addEventListener('click', () => setPanel(false));
+
+  $('#btn-open-folder').addEventListener('click', openViaPicker);
+  $('#btn-demo').addEventListener('click', loadDemo);
+  $('#btn-empty-demo').addEventListener('click', loadDemo);
+  $('#btn-clear').addEventListener('click', () => {
+    state.graph = null;
+    state.files = [];
+    state.nodes = [];
+    state.links = [];
+    state.index = new Map();
+    state.sim = null;
+    state.selectedId = null;
+    state.positions.clear();
+    state.vaultLabel = '（空）';
+    $('#vault-name').textContent = '（空）';
+    $('#vault-stats').textContent = '0 篇笔记';
+    $('#graph-empty').hidden = false;
+    renderTree();
+    updateStats(new Map());
+    state.dirty = true;
+    toast('已清空');
+  });
+
+  $('#folder-input').addEventListener('change', async e => {
+    const files = [...e.target.files];
+    if (!files.length) return;
+    const rootName = files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : '本地库';
+    const parsed = await readFileList(files);
+    if (!parsed.length) return toast('这个文件夹里没有 Markdown 笔记');
+    loadFiles(parsed, rootName);
+    toast('已读取 ' + rootName + '：' + parsed.length + ' 个文件');
+    e.target.value = '';
+  });
+
+  /* ── 拖放 ───────────────────────────────────────────────── */
+  let dragDepth = 0;
+  ['dragenter', 'dragover'].forEach(type => {
+    window.addEventListener(type, e => {
+      if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+      e.preventDefault();
+      if (type === 'dragenter') dragDepth += 1;
+      $('#drop-hint').hidden = false;
+    });
+  });
+  window.addEventListener('dragleave', e => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) $('#drop-hint').hidden = true;
+  });
+  window.addEventListener('drop', async e => {
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    dragDepth = 0;
+    $('#drop-hint').hidden = true;
+    try {
+      const parsed = await readDataTransfer(e.dataTransfer);
+      if (!parsed.length) return toast('没有找到 Markdown 笔记');
+      loadFiles(parsed, '拖入的库');
+      toast('已读取 ' + parsed.length + ' 个文件');
+    } catch (err) {
+      toast('读取失败：' + (err && err.message ? err.message : err));
+    }
+  });
+
+  /* ── 键盘 ───────────────────────────────────────────────── */
+  document.addEventListener('keydown', e => {
+    const inField = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.key.toLowerCase() === 'f')) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (!noteModal.hidden) { closeNote(); return; }
+      if (!settingsPanel.hidden) { setPanel(false); return; }
+      if (document.activeElement === searchInput) { setSearch(''); searchInput.blur(); return; }
+      state.selectedId = null;
+      state.dirty = true;
+      return;
+    }
+    if (inField) return;
+    if (e.key === '/') { e.preventDefault(); searchInput.focus(); return; }
+    const k = e.key.toLowerCase();
+    if (k === 'f') fitView(true);
+    else if (k === 'r') $('#btn-relayout').click();
+    else if (k === 'g') setMode('global');
+    else if (k === 'l') setMode('local');
+    else if (k === 's') setPanel(settingsPanel.hidden);
+    else if (e.key === '+' || e.key === '=') zoomAt(1.22);
+    else if (e.key === '-' || e.key === '_') zoomAt(1 / 1.22);
+  });
+
+  /* ── 图例 ───────────────────────────────────────────────── */
+  function renderLegend() {
+    const legend = $('#legend');
+    legend.innerHTML = '';
+    const colors = render.palette(state.theme);
+    const items = [
+      { label: '笔记', color: colors.node },
+      { label: '标签', color: colors.tag },
+      { label: '附件', color: colors.attachment },
+      { label: '未创建', color: colors.unresolved }
+    ];
+    for (const group of settings.groups) {
+      if (group.query && group.query.trim()) items.push({ label: group.query, color: group.color });
+    }
+    for (const item of items) {
+      const wrap = document.createElement('span');
+      wrap.className = 'legend-item';
+      const dot = document.createElement('span');
+      dot.className = 'legend-swatch';
+      dot.style.background = item.color;
+      const label = document.createElement('span');
+      label.textContent = item.label;
+      wrap.append(dot, label);
+      legend.appendChild(wrap);
+    }
+  }
+
+  /* ── 启动 ───────────────────────────────────────────────── */
+  const ro = new ResizeObserver(() => resize());
+  ro.observe(shell);
+
+  resize();
+  syncSettingsUI();
+  renderLegend();
+  loadDemo();
+  requestAnimationFrame(frame);
+
+  window.__raceAiNote = {
+    state, settings, rebuild, fitView, setMode, openNote, loadFiles, loadDemo,
+    get graph() { return state.graph; },
+    query, vault, physics, render
+  };
+  console.log('[Race-AiNote] ready');
+})();
+
+</script>
+</body>
+</html>

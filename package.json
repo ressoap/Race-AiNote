@@ -6,9 +6,13 @@
   "scripts": {
     "test": "node --test",
     "build": "node scripts/build.js",
-    "ai:organize": "node scripts/ai-organize.mjs"
+    "ai:organize": "node scripts/ai-organize.mjs",
+    "smoke": "node _tmp/smoke.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.0"
   }
 }
