@@ -592,3 +592,6 @@ input[type="range"]::-webkit-slider-thumb {
   .settings-panel { width: min(300px, calc(100% - 24px)); }
   .kbd-hint { display: none; }
 }
+
+/* hidden 属性必须压过组件自身的 display 设定 */
+[hidden] { display: none !important; }

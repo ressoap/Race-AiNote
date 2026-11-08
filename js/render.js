@@ -17,7 +17,7 @@
       linkDim: 'rgba(150,154,170,0.10)',
       node: '#8a90a6',
       nodeStroke: '#ffffff',
-      text: 'rgba(46,50,64,0.92)',
+      text: '#25293a',
       textDim: 'rgba(46,50,64,0.20)',
       ring: 'rgba(74,110,245,0.9)',
       tag: '#8b7cf6',
@@ -31,7 +31,7 @@
       linkDim: 'rgba(190,196,214,0.06)',
       node: '#9aa2b8',
       nodeStroke: '#1f2126',
-      text: 'rgba(232,236,246,0.92)',
+      text: '#e9edf7',
       textDim: 'rgba(232,236,246,0.18)',
       ring: 'rgba(122,158,255,0.95)',
       tag: '#a898ff',
@@ -147,7 +147,7 @@
     });
 
     for (const node of ordered) {
-      const r = radiusOf(node) * Math.max(0.55, Math.min(1.6, scale));
+      const r = radiusOf(node);
       const active = !hasHighlight || highlight.has(node.id);
       const color = opts.colorOf
         ? opts.colorOf(node)
@@ -188,23 +188,37 @@
     }
 
     // ── 标签（按屏幕半径阈值淡入淡出） ───────────────────────
-    const fadeAt = settings.textFade == null ? 35 : settings.textFade;
+    const fadeAt = settings.textFade == null ? 5 : settings.textFade;
+    const fadeThreshold = 0.28 + fadeAt / 100;
+    const drawnLabels = [];
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     for (const node of ordered) {
-      const screenR = radiusOf(node) * scale;
       const emphasis = node.id === opts.hoveredId || node.id === opts.selectedId;
-      let alpha = emphasis ? 1 : Math.max(0, Math.min(1, (screenR - fadeAt) / 26));
+      let alpha = emphasis ? 1 : Math.max(0, Math.min(1, (scale - fadeThreshold) / 0.22));
       if (node.type === 'tag') alpha = Math.max(alpha, emphasis ? 1 : 0);
       if (alpha <= 0.02) continue;
       const active = !hasHighlight || highlight.has(node.id);
       if (!active) alpha *= 0.25;
-      const fontSize = Math.max(9, Math.min(15, 11.5 / Math.max(0.8, scale * 0.9)));
+      const fontSize = Math.max(10, Math.min(15, 12 / Math.max(0.75, scale * 0.85)));
       ctx.globalAlpha = alpha;
-      ctx.font = fontSize + 'px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
+      ctx.font = '500 ' + fontSize + 'px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
       ctx.fillStyle = emphasis ? colors.text : colors.text;
       const label = node.title.length > 16 ? node.title.slice(0, 15) + '…' : node.title;
-      ctx.fillText(label, node.x, node.y + radiusOf(node) + 4);
+      // 标签避让：与已绘制标签重叠则跳过，避免文字糊成一团
+      const textWidth = ctx.measureText(label).width / scale;
+      const box = {
+        x1: node.x - textWidth / 2 - 2,
+        x2: node.x + textWidth / 2 + 2,
+        y1: node.y + radiusOf(node) + 3,
+        y2: node.y + radiusOf(node) + 4 + fontSize / scale
+      };
+      const clash = !emphasis && drawnLabels.some(b =>
+        box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1);
+      if (!clash) {
+        drawnLabels.push(box);
+        ctx.fillText(label, node.x, node.y + radiusOf(node) + 4);
+      }
       ctx.globalAlpha = 1;
     }
 

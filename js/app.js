@@ -21,17 +21,17 @@
     existingOnly: true,
     orphansOnly: false,
     arrows: false,
-    textFade: 35,
+    textFade: 5,
     nodeSize: 1,
     linkWidth: 1,
-    center: 3,
+    center: 2,
     repel: 5,
-    linkStrength: 6,
-    linkDistance: 110,
+    linkStrength: 8,
+    linkDistance: 140,
     groups: [
-      { query: 'tag:数学', color: '#4a90e2' },
-      { query: 'tag:错题', color: '#e2725b' },
-      { query: 'path:20-知识卡', color: '#43b581' }
+      { query: 'path:20-知识卡', color: '#3f9c6d' },
+      { query: 'path:30-课堂笔记', color: '#e2725b' },
+      { query: 'path:90-模板', color: '#8b7cf6' }
     ]
   };
 
@@ -83,9 +83,15 @@
     pan: null,
     pointerDown: null,
     dirty: true,
+    interacted: false,
     vaultLabel: '示例库'
   };
 
+  // 支持 ?theme=dark 强制主题（用于文档截图与演示录像）
+  try {
+    const forced = new URLSearchParams(location.search).get("theme");
+    if (forced === "dark" || forced === "light") state.theme = forced;
+  } catch (_) {}
   document.documentElement.dataset.theme = state.theme;
 
   const canvas = $('#graph-canvas');
@@ -100,6 +106,8 @@
 
   /* ── 通知 ───────────────────────────────────────────────── */
   let toastTimer = 0;
+  let fitPending = false;
+  let settleTimer = 0;
   function toast(message) {
     const el = $('#toast');
     el.textContent = message;
@@ -319,7 +327,19 @@
     state.dirty = true;
     updateStats(filtered.degree);
     updateTreeSelection();
-    if (options.fit) fitView(false);
+    if (options.fit) {
+      // 先同步预热，避免首屏看到半成品布局
+      for (let i = 0; i < 140; i++) state.sim.tick();
+      syncPositions();
+      fitView(false);
+      fitPending = true;
+    }
+  }
+
+  function syncPositions() {
+    for (const node of state.nodes) {
+      state.positions.set(node.id, { x: node.x, y: node.y, vx: node.vx, vy: node.vy });
+    }
   }
 
   function updateStats(degree) {
@@ -407,6 +427,11 @@
     const running = state.sim && !state.sim.paused;
     dot.classList.toggle('is-idle', !running);
     $('#status-engine').textContent = running ? '引擎运行中' : '引擎空闲';
+    if (state.sim && state.sim.paused && fitPending) {
+      fitPending = false;
+      syncPositions();
+      fitView(true);
+    }
     if (state.dirty) {
       draw();
       state.dirty = false;
@@ -499,6 +524,7 @@
   }
 
   canvas.addEventListener('pointerdown', e => {
+    state.interacted = true;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     const p = localPoint(e);
@@ -580,6 +606,7 @@
   });
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
+    state.interacted = true;
     const p = localPoint(e);
     const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.033 : 0.0018));
     zoomAt(factor, p.x, p.y);
