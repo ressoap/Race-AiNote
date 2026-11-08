@@ -1345,17 +1345,22 @@
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
+    onToast: message => toast(message),
     onRecordMistake: record => {
       const snippet = RG.ai.mistakeSnippet(record);
       let file = state.files.find(f => f.path === record.targetPath);
+      const questionKey = String(record.question || '').slice(0, 18);
+      if (file && questionKey && String(file.content || '').includes(questionKey)) {
+        toast('这条已经在《' + record.targetTitle + '》里，未重复写入');
+        return;
+      }
       if (file) file.content = String(file.content || '') + snippet;
       else state.files.push({ path: record.targetPath, content: snippet });
       state.graph = vault.buildVault(state.files);
       rebuild({});
       if (currentNoteId) renderNote();
-      toast('已记入《' + record.targetTitle + '》');
-    }
-  });
+      toast(record.duplicate ? '这条之前记过，《' + record.targetTitle + '》未重复写入' : '已记入《' + record.targetTitle + '》并标记为已解决');
+    }  });
 
   /* ── 启动 ───────────────────────────────────────────────── */
   const ro = new ResizeObserver(() => resize());

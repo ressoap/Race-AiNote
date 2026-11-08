@@ -411,6 +411,21 @@
         setMode('local');
       } finally {
         state.busy = false;
+        if (state.askMode === 'tutor' && loading.text && loading.text !== '思考中…') {
+          const existing = findRecord(question);
+          const alreadyResolved = Boolean(existing && existing.status === 'resolved');
+          upsertRecord({
+            question: question,
+            answer: loading.text,
+            status: alreadyResolved ? 'resolved' : 'open',
+            at: existing ? existing.at : Date.now(),
+            targetId: existing && alreadyResolved ? existing.targetId : null,
+            targetTitle: existing && alreadyResolved ? existing.targetTitle : null,
+            targetPath: existing && alreadyResolved ? existing.targetPath : null,
+            mode: state.askMode
+          });
+          if (alreadyResolved) { loading.resolved = true; loading.mistake = existing.targetTitle || null; loading.archived = true; }
+        }
         render();
       }
     }
@@ -431,7 +446,7 @@
           : '还没有载入笔记。点左上角文件夹图标选一个 Markdown 目录，或先用内置示例库试试。');
     }
 
-    /* ── 问题记录（右侧时间轴） ─────────────────────────────── */
+    /* ── 问题记录（右侧时间轴）与错题本去重 ─────────────────── */
     const RECORDS_KEY = 'race-ainote:mistakes';
 
     function loadRecords() {
@@ -439,7 +454,37 @@
     }
 
     function saveRecords(list) {
-      try { localStorage.setItem(RECORDS_KEY, JSON.stringify(list.slice(-200))); } catch (_) {}
+      try { localStorage.setItem(RECORDS_KEY, JSON.stringify(list.slice(-300))); } catch (_) {}
+    }
+
+    /** 归一化提问，用于判重：去掉空白与标点，取前 80 字 */
+    function signatureOf(text) {
+      return String(text || '')
+        .toLowerCase()
+        .replace(/[\s\u3000]+/g, '')
+        .replace(/[，。？！、；：,.?!;:"'`~()（）\[\]【】]/g, '')
+        .slice(0, 80);
+    }
+
+    function findRecord(question) {
+      const sig = signatureOf(question);
+      if (!sig) return null;
+      return loadRecords().find(function (r) { return r.sig === sig; }) || null;
+    }
+
+    /** 新增或更新记录（同一个问题只保留一条） */
+    function upsertRecord(patch) {
+      const sig = signatureOf(patch.question);
+      const list = loadRecords();
+      const idx = list.findIndex(function (r) { return r.sig === sig; });
+      if (idx >= 0) {
+        list[idx] = Object.assign({}, list[idx], patch, { sig: sig });
+      } else {
+        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig }));
+      }
+      saveRecords(list);
+      renderRecords();
+      return idx >= 0;
     }
 
     function formatTime(ts) {
@@ -453,29 +498,39 @@
       const countEl = document.getElementById('ai-records-count');
       if (!listEl) return;
       const list = loadRecords().slice().sort(function (a, b) { return a.at - b.at; });
-      if (countEl) countEl.textContent = String(list.length);
+      if (countEl) {
+        const open = list.filter(function (r) { return r.status !== 'resolved'; }).length;
+        countEl.textContent = open ? open + '待解决' : String(list.length);
+        countEl.classList.toggle('is-open', open > 0);
+      }
       listEl.innerHTML = '';
       if (!list.length) {
         const empty = document.createElement('p');
         empty.className = 'ai-record-empty';
-        empty.textContent = '答疑结束后可一键记入错题本';
+        empty.textContent = '答疑结束可记入错题本';
         listEl.appendChild(empty);
         return;
       }
       for (const rec of list) {
         const item = document.createElement('button');
-        item.className = 'ai-record';
+        item.className = 'ai-record' + (rec.status === 'resolved' ? ' is-resolved' : '');
         item.title = rec.question;
+        const head = document.createElement('span');
+        head.className = 'ai-record-head';
         const time = document.createElement('span');
         time.className = 'ai-record-time';
         time.textContent = formatTime(rec.at);
+        const badge = document.createElement('span');
+        badge.className = 'ai-record-badge' + (rec.status === 'resolved' ? ' is-resolved' : '');
+        badge.textContent = rec.status === 'resolved' ? '已解决' : '待解决';
+        head.append(time, badge);
         const title = document.createElement('span');
         title.className = 'ai-record-title';
         title.textContent = String(rec.question || '').slice(0, 18);
         const target = document.createElement('span');
         target.className = 'ai-record-target';
-        target.textContent = rec.targetTitle || '错题本';
-        item.append(time, title, target);
+        target.textContent = rec.targetTitle || (rec.status === 'resolved' ? '未记入错题本' : '未处理');
+        item.append(head, title, target);
         item.addEventListener('click', function () {
           if (opts.onOpenNote && rec.targetTitle) opts.onOpenNote(rec.targetTitle);
         });
@@ -484,35 +539,47 @@
       listEl.scrollTop = listEl.scrollHeight;
     }
 
-    /** 一条答疑结束后，追加「是否记入错题本」的操作条 */
+    /** 答疑结束后，追加「是否记入错题本 / 标记已解决」的操作条 */
     function buildMistakeBar(msg) {
       const bar = document.createElement('div');
       bar.className = 'ai-mistake';
+      const rec = findRecord(msg.question);
+      const resolved = Boolean(msg.resolved || (rec && rec.status === 'resolved'));
+      if (resolved && !msg.resolved) { msg.resolved = true; msg.archived = true; if (rec && rec.targetTitle) msg.mistake = rec.targetTitle; }
 
-      if (msg.mistake) {
+      if (resolved) {
         const done = document.createElement('span');
         done.className = 'ai-mistake-done';
-        done.textContent = '✓ 已记入《' + msg.mistake + '》，本轮对话不再作为上下文';
+        const target = msg.mistake || (rec && rec.targetTitle);
+        done.textContent = target
+          ? '✓ 已记入《' + target + '》· 已解决 · 本轮对话不再作为上下文'
+          : '✓ 已标记解决 · 本轮对话不再作为上下文';
         bar.appendChild(done);
         return bar;
       }
       if (msg.mistakeSkipped) {
         const skip = document.createElement('span');
         skip.className = 'ai-mistake-skip';
-        skip.textContent = '未记入错题本';
+        skip.textContent = '未记入错题本（仍在待解决列表）';
         bar.appendChild(skip);
         return bar;
       }
 
       const ask = document.createElement('span');
       ask.className = 'ai-mistake-ask';
-      ask.textContent = '要记入错题本吗？';
+      ask.textContent = '这道题解决了吗？';
+
       const saveBtn = document.createElement('button');
       saveBtn.className = 'ghost-btn tiny';
       saveBtn.textContent = '记入错题本';
+
+      const resolveBtn = document.createElement('button');
+      resolveBtn.className = 'ghost-btn tiny';
+      resolveBtn.textContent = '标记已解决';
+
       const skipBtn = document.createElement('button');
       skipBtn.className = 'ghost-btn tiny';
-      skipBtn.textContent = '不用了';
+      skipBtn.textContent = '稍后再说';
 
       saveBtn.addEventListener('click', function () {
         bar.innerHTML = '';
@@ -547,39 +614,53 @@
         ok.addEventListener('click', function () {
           const chosen = info.candidates.find(function (c) { return c.id === select.value; }) || info.recommended;
           if (!chosen) return;
+          const wasThere = findRecord(msg.question);
+          const createdAt = wasThere ? wasThere.at : Date.now();
           const record = {
-            id: 'mis-' + Date.now(),
-            at: Date.now(),
             question: msg.question || '',
             answer: msg.text || '',
             targetId: chosen.id,
             targetTitle: chosen.title,
             targetPath: chosen.path,
+            status: 'resolved',
+            resolvedAt: Date.now(),
+            at: createdAt,
             mode: state.askMode
           };
-          const list = loadRecords();
-          list.push(record);
-          saveRecords(list);
+          const existed = upsertRecord(record);
           msg.mistake = chosen.title;
-          msg.archived = true; // 记入后不再作为上下文读取
-          if (opts.onRecordMistake) opts.onRecordMistake(record);
+          msg.resolved = true;
+          msg.archived = true;
+          if (opts.onRecordMistake) opts.onRecordMistake(Object.assign({ at: createdAt }, record, { duplicate: existed }));
           render();
           renderRecords();
         });
 
-        cancel.addEventListener('click', function () {
-          render();
-        });
-
+        cancel.addEventListener('click', function () { render(); });
         bar.append(head, select, ok, cancel);
       });
 
-      skipBtn.addEventListener('click', function () {
-        msg.mistakeSkipped = true;
+      resolveBtn.addEventListener('click', function () {
+        const wasThere = findRecord(msg.question);
+        upsertRecord({
+          question: msg.question || '',
+          answer: msg.text || '',
+          targetId: null,
+          targetTitle: null,
+          targetPath: null,
+          status: 'resolved',
+          resolvedAt: Date.now(),
+          at: wasThere ? wasThere.at : Date.now(),
+          mode: state.askMode
+        });
+        msg.resolved = true;
+        msg.archived = true;
+        if (opts.onToast) opts.onToast('已标记解决，本轮不再作为上下文');
         render();
+        renderRecords();
       });
 
-      bar.append(ask, saveBtn, skipBtn);
+      bar.append(ask, saveBtn, resolveBtn, skipBtn);
       return bar;
     }
 
@@ -674,7 +755,7 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, threads: () => state.threads, records: loadRecords, renderRecords, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
