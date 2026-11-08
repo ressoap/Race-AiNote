@@ -1,0 +1,13 @@
+{
+  "name": "race-ainote",
+  "version": "0.1.0",
+  "private": true,
+  "description": "零依赖 Obsidian 风格关系图谱 + 真实 Markdown 库解析（传智杯 AI 创新应用挑战赛）",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "build": "node scripts/build.js",
+    "ai:organize": "node scripts/ai-organize.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
