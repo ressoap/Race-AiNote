@@ -185,7 +185,7 @@ Race-AiNote/
 | 主仓（Gitee，Public） | https://gitee.com/ressoap/race-ai-note |
 | 镜像（GitHub，Public） | https://github.com/ressoap/Race-AiNote |
 
-双远程配置、一键推两边的命令与常见坑见 。
+双远程配置、一键推两边的命令与常见坑见 `docs/REPO-MIRROR.md`。
 
 ---
 
