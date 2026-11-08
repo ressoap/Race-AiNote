@@ -8,15 +8,15 @@
 ```bash
 cd Race-AiNote
 # 主仓
-git remote add gitee  git@gitee.com:<你的账号>/Race-AiNote.git
+git remote add gitee  https://gitee.com/ressoap/race-ai-note.git
 # 镜像
-git remote add github git@github.com:<你的账号>/Race-AiNote.git
+git remote add github https://github.com/ressoap/Race-AiNote.git
 
 # 校验：应当看到两个远程
 git remote -v
 ```
 
-> 用 HTTPS 也行：`https://gitee.com/<账号>/Race-AiNote.git`。
+> 本仓库实际地址见 README 第 9 节。
 > 凭据交给系统的凭据管理器（Windows 的「凭据管理器」/ Git Credential Manager），
 > **不要**把 token 写进 remote URL，更不要提交到仓库。
 
@@ -30,8 +30,8 @@ git push github main
 或者一条命令推两边：
 
 ```bash
-git remote set-url --add --push origin git@gitee.com:<账号>/Race-AiNote.git
-git remote set-url --add --push origin git@github.com:<账号>/Race-AiNote.git
+git remote set-url --add --push origin https://gitee.com/ressoap/race-ai-note.git
+git remote set-url --add --push origin https://github.com/ressoap/Race-AiNote.git
 git push origin main        # 一次推两个仓库
 ```
 
