@@ -110,21 +110,26 @@
     const index = opts.index;
     const linkWidth = (settings.linkWidth == null ? 1 : settings.linkWidth);
 
+    const alphaOf = opts.alphaOf || (() => 1);
+    const linkAlphaOf = opts.linkAlphaOf || (() => 1);
+    const emphasisOf = opts.emphasisOf || (() => 0);
+
     // ── 连线 ────────────────────────────────────────────────
     for (const link of opts.links) {
       const a = index.get(link.source);
       const b = index.get(link.target);
       if (!a || !b) continue;
-      const active = !hasHighlight ||
-        (highlight.has(a.id) && highlight.has(b.id));
-      ctx.strokeStyle = active
-        ? (hasHighlight ? colors.linkHi : colors.link)
-        : colors.linkDim;
-      ctx.lineWidth = (active ? 1 : 0.7) * linkWidth;
+      const la = linkAlphaOf(link);
+      if (la <= 0.02) continue;
+      const strong = hasHighlight && la > 0.85;
+      ctx.globalAlpha = la;
+      ctx.strokeStyle = strong ? colors.linkHi : colors.link;
+      ctx.lineWidth = (0.35 + la * 0.65) * linkWidth;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     // ── 箭头（画在节点之前，避免压住节点） ───────────────────
@@ -147,13 +152,15 @@
     });
 
     for (const node of ordered) {
-      const r = radiusOf(node);
-      const active = !hasHighlight || highlight.has(node.id);
+      const na = alphaOf(node);
+      if (na <= 0.02) continue;
+      const emphasis = emphasisOf(node);
+      const r = radiusOf(node) * (1 + 0.22 * emphasis);
       const color = opts.colorOf
         ? opts.colorOf(node)
         : nodeColor(node, null, colors);
 
-      ctx.globalAlpha = active ? 1 : 0.22;
+      ctx.globalAlpha = na;
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
       ctx.fillStyle = color;
@@ -198,8 +205,7 @@
       let alpha = emphasis ? 1 : Math.max(0, Math.min(1, (scale - fadeThreshold) / 0.22));
       if (node.type === 'tag') alpha = Math.max(alpha, emphasis ? 1 : 0);
       if (alpha <= 0.02) continue;
-      const active = !hasHighlight || highlight.has(node.id);
-      if (!active) alpha *= 0.25;
+      alpha *= alphaOf(node);
       const fontSize = Math.max(10, Math.min(15, 12 / Math.max(0.75, scale * 0.85)));
       ctx.globalAlpha = alpha;
       ctx.font = '500 ' + fontSize + 'px ui-sans-serif, system-ui, "Segoe UI", sans-serif';

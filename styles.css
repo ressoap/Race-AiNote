@@ -595,3 +595,67 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* hidden 属性必须压过组件自身的 display 设定 */
 [hidden] { display: none !important; }
+
+/* ── 笔记正文渲染 ───────────────────────────────────────── */
+.modal-card { width: min(620px, 100%); }
+
+.md-body {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text);
+  max-height: 320px;
+  overflow: auto;
+}
+.md-body h2,
+.md-body h3,
+.md-body h4 { margin: 12px 0 6px; font-size: 14px; }
+.md-body h2:first-child,
+.md-body p:first-child { margin-top: 0; }
+.md-body p { margin: 0 0 8px; }
+.md-body ul,
+.md-body ol { margin: 0 0 8px; padding-left: 20px; }
+.md-body li { margin: 2px 0; }
+.md-body code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+}
+.md-body pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  overflow: auto;
+}
+.md-body pre code { background: none; padding: 0; font-size: 12px; line-height: 1.6; }
+.md-body blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--accent);
+  color: var(--text-soft);
+}
+.md-body hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+.md-body a { color: var(--accent); text-decoration: none; }
+.md-body a:hover { text-decoration: underline; }
+.md-link {
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent);
+}
+.md-link:hover { background: var(--accent-soft); }
+.md-tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.md-empty { color: var(--text-dim); margin: 0; }

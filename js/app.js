@@ -6,6 +6,7 @@
 
   const vault = RG.vault;
   const query = RG.query;
+  const markdown = RG.markdown;
   const physics = RG.physics;
   const render = RG.render;
 
@@ -84,6 +85,8 @@
     pointerDown: null,
     dirty: true,
     interacted: false,
+    anim: new Map(),
+    linkAnim: new Map(),
     vaultLabel: '示例库'
   };
 
@@ -367,6 +370,42 @@
     return physics.radiusOf(node, settings.nodeSize);
   }
 
+  const linkKey = l => l.source + "|" + l.target + "|" + (l.kind || "");
+
+  /** 每帧把透明度/强调度插值到目标值，得到渐入渐出而不是硬切 */
+  function stepAnim() {
+    const focus = state.hoveredId || state.selectedId;
+    const hasFocus = Boolean(focus && state.index.has(focus));
+    const near = new Set();
+    if (hasFocus) {
+      near.add(focus);
+      for (const link of state.links) {
+        if (link.source === focus) near.add(link.target);
+        else if (link.target === focus) near.add(link.source);
+      }
+    }
+    const rate = 0.16;
+    let moving = false;
+    for (const node of state.nodes) {
+      const cur = state.anim.get(node.id) || { a: 1, e: 0 };
+      const targetAlpha = hasFocus ? (near.has(node.id) ? 1 : 0.14) : 1;
+      const targetEmph = node.id === state.hoveredId ? 1 : (node.id === state.selectedId ? 0.55 : 0);
+      const a = cur.a + (targetAlpha - cur.a) * rate;
+      const e = cur.e + (targetEmph - cur.e) * rate;
+      if (Math.abs(targetAlpha - a) > 0.004 || Math.abs(targetEmph - e) > 0.004) moving = true;
+      state.anim.set(node.id, { a, e });
+    }
+    for (const link of state.links) {
+      const key = linkKey(link);
+      const cur = state.linkAnim.has(key) ? state.linkAnim.get(key) : 1;
+      const targetAlpha = hasFocus ? (near.has(link.source) && near.has(link.target) ? 1 : 0.1) : 1;
+      const a = cur + (targetAlpha - cur) * rate;
+      if (Math.abs(targetAlpha - a) > 0.004) moving = true;
+      state.linkAnim.set(key, a);
+    }
+    return moving;
+  }
+
   function highlightSet() {
     const focus = state.hoveredId || state.selectedId;
     if (!focus || !state.index.has(focus)) return null;
@@ -399,7 +438,10 @@
       selectedId: state.selectedId,
       highlight,
       radiusOf,
-      colorOf
+      colorOf,
+      alphaOf: node => (state.anim.get(node.id) ? state.anim.get(node.id).a : 1),
+      emphasisOf: node => (state.anim.get(node.id) ? state.anim.get(node.id).e : 0),
+      linkAlphaOf: link => (state.linkAnim.has(linkKey(link)) ? state.linkAnim.get(linkKey(link)) : 1)
     });
   }
 
@@ -427,6 +469,7 @@
     const running = state.sim && !state.sim.paused;
     dot.classList.toggle('is-idle', !running);
     $('#status-engine').textContent = running ? '引擎运行中' : '引擎空闲';
+    if (stepAnim()) state.dirty = true;
     if (state.sim && state.sim.paused && fitPending) {
       fitPending = false;
       syncPositions();
@@ -577,10 +620,17 @@
   });
 
   function endPointer(e) {
+    const p = localPoint(e);
+    const moved = Boolean(state.pointerDown && state.pointerDown.moved);
+    const hit = hitTest(p.x, p.y);
     endDrag();
     if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     state.pointerDown = null;
     state.dirty = true;
+    // 单击（没有拖动）= 直接打开笔记内容，和 Obsidian 一致
+    if (!moved && hit) openNote(hit.id);
+    // 单击空白处 = 取消选中
+    else if (!moved && !hit) { state.selectedId = null; state.dirty = true; }
   }
 
   function endDrag() {
@@ -636,7 +686,10 @@
       chip.textContent = '#' + tag;
       tags.appendChild(chip);
     }
-    $('#note-modal-summary').textContent = node.summary || node.content || '（无可显示内容）';
+    const body = $('#note-modal-body');
+    body.innerHTML = node.content && node.content.trim()
+      ? markdown.render(node.content)
+      : '<p class="md-empty">（这篇笔记还没有正文）</p>';
 
     const links = $('#note-modal-links');
     links.innerHTML = '';
@@ -667,6 +720,29 @@
   function closeNote() {
     noteModal.hidden = true;
     modalNodeId = null;
+  }
+
+  $('#note-modal-body').addEventListener('click', e => {
+    const linkEl = e.target.closest('[data-wikilink]');
+    if (linkEl) {
+      const title = linkEl.dataset.wikilink;
+      const target = findNodeByTitle(title);
+      if (target) openNote(target.id);
+      else toast('尚未创建：' + title);
+      return;
+    }
+    const tagEl = e.target.closest('.md-tag');
+    if (tagEl) {
+      closeNote();
+      setSearch('tag:' + tagEl.textContent.replace(/^#/, ''));
+    }
+  });
+
+  function findNodeByTitle(title) {
+    if (!state.graph) return null;
+    const want = String(title).trim().toLowerCase();
+    return state.graph.nodes.find(n => n.title.toLowerCase() === want)
+      || state.graph.nodes.find(n => n.path.toLowerCase().replace(/.md$/, '').endsWith(want));
   }
 
   $('#note-modal-close').addEventListener('click', closeNote);
