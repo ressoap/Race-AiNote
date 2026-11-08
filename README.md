@@ -50,7 +50,8 @@
 ### 2.4 从源码运行与构建（约 3 分钟）
 
 ```bash
-git clone <this-repo> && cd Race-AiNote
+git clone https://gitee.com/<你的账号>/Race-AiNote.git
+cd Race-AiNote
 npm install            # 只装 jsdom 一个开发依赖，用于冒烟测试
 npm test               # 29 项单元测试（解析层 / 查询层 / 物理层）
 npm run build          # 内联成 dist/Race-AiNote.html
@@ -177,6 +178,13 @@ Race-AiNote/
 
 ---
 
-## 9. 许可证
+## 9. 仓库托管
+
+主仓在 **Gitee**（国内访问快），GitHub 作为镜像（顺带跑 CI）。
+双远程配置、一键推两边的命令与常见坑见 。
+
+---
+
+## 10. 许可证
 
 仅供学习与参赛使用。
