@@ -7,7 +7,7 @@
     "test": "node --test",
     "build": "node scripts/build.js",
     "ai:organize": "node scripts/ai-organize.mjs",
-    "smoke": "node _tmp/smoke.js"
+    "smoke": "node scripts/smoke.js && node scripts/smoke-dist.js"
   },
   "engines": {
     "node": ">=20"

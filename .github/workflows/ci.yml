@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 安装开发依赖
+        run: npm ci || npm install
+      - name: 单元测试
+        run: npm test
+      - name: 构建单文件
+        run: npm run build
+      - name: 冒烟测试（源码版 + 单文件版）
+        run: npm run smoke
+      - name: 确认产物存在
+        run: test -f dist/Race-AiNote.html
