@@ -213,11 +213,14 @@
     const suggestEl = document.getElementById('ai-suggest');
     const useNoteEl = document.getElementById('ai-use-note');
 
-    const state = { messages: [], mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
+    // 两个独立会话：答疑老师 / 笔记问答，互不共享历史
+    const state = { threads: { tutor: [], notes: [] }, mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
+
+    function thread() { return state.threads[state.askMode]; }
 
     function addMessage(role, text, refs) {
       const msg = { role, text, refs: refs || [] };
-      state.messages.push(msg);
+      thread().push(msg);
       render();
       return msg;
     }
@@ -233,7 +236,7 @@
     function render() {
       if (!logEl) return;
       logEl.innerHTML = '';
-      for (const msg of state.messages) {
+      for (const msg of thread()) {
         const wrap = document.createElement('div');
         wrap.className = 'ai-msg ai-msg-' + msg.role;
         const bubble = document.createElement('div');
@@ -306,12 +309,12 @@
     async function send(text) {
       const question = String(text || '').trim();
       if (!question || state.busy) return;
+      const history = thread().slice(-8).filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.text }));
       addMessage('user', question);
       state.busy = true;
       const loading = addMessage('assistant', '思考中…');
 
       try {
-        const history = state.messages.slice(-8).filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.text }));
         if (state.mode === 'direct' || state.mode === 'proxy') {
           const context = contextPayload(question);
           const result = state.mode === 'direct'
@@ -338,7 +341,7 @@
     }
 
     function clear() {
-      state.messages = [];
+      state.threads[state.askMode] = [];
       render();
       greet();
     }
@@ -346,6 +349,7 @@
     function greet() {
       const graph = opts.getGraph();
       const count = graph ? graph.notes.length : 0;
+      if (thread().length) return;
       addMessage('assistant',
         count
           ? '已载入 ' + count + ' 篇笔记。可以这样问我：\n· 这篇笔记的核心考点是什么\n· 帮我找出薄弱环节并给出复习计划\n· 这个库里哪些笔记还没有被链接'
@@ -431,16 +435,18 @@
     function setAskMode(mode) {
       state.askMode = mode === 'notes' ? 'notes' : 'tutor';
       if (modeEl) modeEl.dataset.askMode = state.askMode;
+      render();
+      greet();
       return state.askMode;
     }
 
     function reset() {
-      state.messages = [];
+      state.threads = { tutor: [], notes: [] };
       render();
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, threads: () => state.threads, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

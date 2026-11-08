@@ -100,6 +100,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.fetchModelsOk = typeof mr.ok === 'boolean';
   await api.ai.applyConfig({ mode: 'local' });
   api.applyAskMode('tutor');
+  const tutorBefore = api.ai.threads().tutor.length;
   await api.ai.send('这道题我不会做，帮我一步步讲清楚');
   await sleep(120);
   out.tutorMode = api.ai.state.askMode;
@@ -107,6 +108,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.hasTutorHint = out.tutorAnswer.includes('框架引导');
   api.applyAskMode('notes');
   out.notesMode = api.ai.state.askMode;
+  out.tutorThread = api.ai.threads().tutor.length;
+  out.notesThread = api.ai.threads().notes.length;
+  out.threadsSeparated = out.tutorThread > out.notesThread;
+  out.tutorBefore = tutorBefore;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));
