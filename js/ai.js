@@ -99,6 +99,68 @@
     return { text: lines.join('\n'), refs: hits.map(n => n.title) };
   }
 
+  /* ── 配置（Key 只存本机 localStorage，不入库、不上传） ─────── */
+  const CONFIG_KEY = 'race-ainote:ai-config';
+  const DEFAULT_CONFIG = { mode: 'proxy', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', key: '' };
+
+  function loadConfig() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+      return Object.assign({}, DEFAULT_CONFIG, raw);
+    } catch (_) {
+      return Object.assign({}, DEFAULT_CONFIG);
+    }
+  }
+
+  function saveConfig(cfg) {
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (_) {}
+  }
+
+  function clearConfig() {
+    try { localStorage.removeItem(CONFIG_KEY); } catch (_) {}
+  }
+
+  function hasKey(cfg) { return Boolean(cfg && cfg.key && cfg.key.trim().length > 8); }
+
+  const RE_TRAILING_SLASH = /\/+$/;
+  const RE_WIKILINK = /\[\[([^\[\]]+?)\]\]/g;
+
+  /** 直连模式：浏览器直接请求 OpenAI 兼容接口（需要服务商允许 CORS） */
+  async function callDirect(cfg, question, context) {
+    const url = String(cfg.baseUrl || '').replace(RE_TRAILING_SLASH, '') + '/chat/completions';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key.trim() },
+      body: JSON.stringify({
+        model: cfg.model,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
+          { role: 'user', content: '【笔记内容】\n' + context + '\n\n【问题】\n' + question }
+        ]
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text()).slice(0, 120));
+    const data = await res.json();
+    const answer = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '').trim();
+    const refs = [...new Set([...answer.matchAll(RE_WIKILINK)].map(function (m) { return m[1].split("|")[0].trim(); }))];
+    return { answer: answer || '（模型没有返回内容）', refs: refs };
+  }
+
+  /** 代理模式：请求本机 scripts/serve.mjs 的 /api/chat，Key 在服务端 */
+  async function callProxy(question, context) {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, context })
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error('代理 ' + res.status + ' ' + text.slice(0, 120));
+    }
+    return await res.json();
+  }
+
   /* ── 面板控制器 ───────────────────────────────────────────── */
 
   function create(options) {
@@ -109,7 +171,7 @@
     const suggestEl = document.getElementById('ai-suggest');
     const useNoteEl = document.getElementById('ai-use-note');
 
-    const state = { messages: [], mode: 'local', busy: false, endpoint: null };
+    const state = { messages: [], mode: 'local', busy: false, config: loadConfig() };
 
     function addMessage(role, text, refs) {
       const msg = { role, text, refs: refs || [] };
@@ -165,16 +227,21 @@
       if (modeEl) modeEl.classList.toggle('is-remote', mode === 'remote');
     }
 
-    async function detectBackend() {
-      if (location.protocol === 'file:') return setMode('local');
+    async function detectTransport() {
+      const cfg = state.config;
+      if (cfg.mode === 'local') { setMode('local', '本地分析模式（已关闭 AI）'); return; }
+      if (cfg.mode === 'direct' && hasKey(cfg)) {
+        setMode('direct', '直连模式 · ' + (cfg.model || 'AI'));
+        return;
+      }
+      if (location.protocol === 'file:') { setMode('local', '本地分析模式（直连需用 http 打开）'); return; }
       try {
         const res = await fetch('/api/health', { cache: 'no-store' });
-        if (!res.ok) throw new Error('no backend');
+        if (!res.ok) throw new Error('no key on server');
         const info = await res.json();
-        state.endpoint = '/api/chat';
-        setMode('remote', '模型模式 · ' + (info.model || 'AI'));
+        setMode('proxy', '模型模式 · ' + (info.model || 'AI'));
       } catch (_) {
-        setMode('local');
+        setMode('local', hasKey(cfg) ? '本地分析模式（把连接方式切到「浏览器直连」即可用 Key）' : '本地分析模式（未填 API Key）');
       }
     }
 
@@ -202,17 +269,13 @@
       const loading = addMessage('assistant', '思考中…');
 
       try {
-        if (state.mode === 'remote' && state.endpoint) {
-          const res = await fetch(state.endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, context: contextPayload(question) })
-          });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          loading.text = data.answer || '（模型没有返回内容）';
-          loading.refs = data.refs || [];
-        } else {
+        if (state.mode === 'direct' || state.mode === 'proxy') {
+          const context = contextPayload(question);
+          const result = state.mode === 'direct'
+            ? await callDirect(state.config, question, context)
+            : await callProxy(question, context);
+          loading.text = result.answer || '（模型没有返回内容）';
+          loading.refs = result.refs || [];        } else {
           const result = answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
           loading.text = result.text;
           loading.refs = result.refs;
@@ -261,7 +324,32 @@
       });
     }
 
-    detectBackend();
+    /** 应用新配置（设置窗口保存时调用） */
+    async function applyConfig(patch) {
+      state.config = Object.assign({}, state.config, patch || {});
+      saveConfig(state.config);
+      await detectTransport();
+      return state.mode;
+    }
+
+    /** 测试连接：返回 { ok, message } */
+    async function testConnection(cfg) {
+      try {
+        if (cfg.mode === 'direct') {
+          if (!hasKey(cfg)) return { ok: false, message: '还没有填 API Key' };
+          const r = await callDirect(cfg, '只回复两个字：连通', '');
+          return { ok: true, message: '连接成功：' + String(r.answer).slice(0, 40) };
+        }
+        const res = await fetch('/api/health', { cache: 'no-store' });
+        if (!res.ok) return { ok: false, message: '本地代理未就绪：请先运行 node scripts/serve.mjs 并设置 COMMAND_CODE_API_KEY' };
+        const info = await res.json();
+        return { ok: true, message: '代理可用：' + (info.model || 'AI') };
+      } catch (err) {
+        return { ok: false, message: '连接失败：' + (err && err.message ? err.message : err) };
+      }
+    }
+
+    detectTransport();
     greet();
 
     function reset() {
@@ -270,7 +358,7 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, state, render };
+    return { send, clear, reset, setMode, applyConfig, testConnection, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

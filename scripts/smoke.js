@@ -83,6 +83,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.openByTitle = api.openNoteByTitle('导数及其应用');
   out.noteAfterJump = w.document.querySelector('#note-title').textContent;
 
+  // 设置窗口：保存配置并校验模式
+  api.openPrefs();
+  out.prefsVisible = !w.document.querySelector('#prefs-modal').hidden;
+  w.document.querySelector('#prefs-mode').value = 'direct';
+  w.document.querySelector('#prefs-baseurl').value = 'https://api.example.com/v1';
+  w.document.querySelector('#prefs-model').value = 'test-model';
+  w.document.querySelector('#prefs-key').value = 'sk-test-1234567890';
+  w.document.querySelector('#prefs-save').click();
+  await sleep(150);
+  out.savedMode = api.ai.state.config.mode;
+  out.savedModel = api.ai.state.config.model;
+  out.aiMode = api.ai.state.mode;
+  out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
+
   console.log(JSON.stringify(out, null, 2));
   process.exit(errors.length ? 1 : 0);
 })();

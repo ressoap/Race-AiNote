@@ -72,6 +72,9 @@
       <button id="btn-theme" class="icon-btn" title="切换明暗主题">
         <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
       </button>
+      <button id="btn-prefs" class="icon-btn" title="设置（AI / 数据）">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
       <button id="btn-ai" class="icon-btn" title="AI 问答面板 (A)">
         <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M12 8v4l3 2"/></svg>
       </button>
@@ -202,6 +205,50 @@
   </main>
 </div>
 
+
+<div id="prefs-modal" class="modal" hidden>
+  <div class="modal-card prefs-card">
+    <header>
+      <div>
+        <h2>设置</h2>
+        <p class="modal-path">AI 能力与本地数据</p>
+      </div>
+      <button id="prefs-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+
+    <section class="prefs-section">
+      <h3>AI 模式</h3>
+      <p class="prefs-tip">不填 Key 时，问答面板走本地分析（检索 + 规则），功能有限但离线可用。填了之后才是完整 AI。</p>
+      <label class="prefs-row">
+        <span>连接方式</span>
+        <select id="prefs-mode">
+          <option value="proxy">本地代理（推荐，Key 在服务端）</option>
+          <option value="direct">浏览器直连（Key 存本机）</option>
+          <option value="local">只用本地分析</option>
+        </select>
+      </label>
+      <label class="prefs-row"><span>接口地址</span><input id="prefs-baseurl" type="text" placeholder="https://api.deepseek.com/v1"></label>
+      <label class="prefs-row"><span>模型</span><input id="prefs-model" type="text" placeholder="deepseek-chat"></label>
+      <label class="prefs-row" id="prefs-key-row"><span>API Key</span><input id="prefs-key" type="password" placeholder="sk-…（只保存在本机浏览器）" autocomplete="off"></label>
+      <p class="prefs-warn">⚠ Key 只写入本浏览器 localStorage，不会上传到本项目的任何服务器，也不会进 Git 仓库。公共电脑上不要填。</p>
+      <div class="prefs-actions">
+        <button id="prefs-test" class="ghost-btn">测试连接</button>
+        <button id="prefs-clear-key" class="ghost-btn">清除 Key</button>
+        <button id="prefs-save" class="primary-btn">保存</button>
+      </div>
+      <p id="prefs-status" class="prefs-status"></p>
+    </section>
+
+    <section class="prefs-section">
+      <h3>本地数据</h3>
+      <div class="prefs-actions">
+        <button id="prefs-open-folder" class="ghost-btn">打开本地笔记文件夹</button>
+        <button id="prefs-reset" class="ghost-btn">重置全部本地设置</button>
+      </div>
+      <p class="prefs-tip">当前库：<span id="prefs-vault">—</span></p>
+    </section>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 
 <script src="js/vault.js"></script>

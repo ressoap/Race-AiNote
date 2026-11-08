@@ -1017,7 +1017,8 @@
     state.dirty = true;
   });
   searchInput.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { searchInput.value = ''; setSearch(''); searchInput.blur(); }
+    if (e.key === 'Escape') {
+      if (!prefsModal.hidden) { closePrefs(); return; } searchInput.value = ''; setSearch(''); searchInput.blur(); }
   });
   $('#search-clear').addEventListener('click', () => { setSearch(''); searchInput.focus(); });
 
@@ -1147,6 +1148,7 @@
     if (inField) return;
     if (e.key === '/') { e.preventDefault(); searchInput.focus(); return; }
     const k = e.key.toLowerCase();
+    if (k === 'p') { openPrefs(); return; }
     if (k === 'a') { setAiPanel($('#ai-panel').classList.contains('is-collapsed')); return; }
     if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); downloadNote(); return; }
     if (k === 'f') fitView(true);
@@ -1209,6 +1211,70 @@
     state.dirty = true;
   }
 
+  /* ── 设置窗口（AI / 本地数据） ──────────────────────────── */
+  const prefsModal = $('#prefs-modal');
+
+  function openPrefs() {
+    const cfg = ai.state.config;
+    $('#prefs-mode').value = cfg.mode || 'proxy';
+    $('#prefs-baseurl').value = cfg.baseUrl || '';
+    $('#prefs-model').value = cfg.model || '';
+    $('#prefs-key').value = cfg.key || '';
+    $('#prefs-vault').textContent = state.vaultLabel || '—';
+    $('#prefs-status').textContent = ai.state.mode === 'local' ? '当前：本地分析模式' : '当前：' + (ai.state.mode === 'direct' ? '直连模式' : '代理模式');
+    prefsModal.hidden = false;
+    syncKeyRow();
+  }
+
+  function closePrefs() { prefsModal.hidden = true; }
+
+  function syncKeyRow() {
+    const mode = $('#prefs-mode').value;
+    $('#prefs-key-row').hidden = mode !== 'direct';
+  }
+
+  $('#btn-prefs').addEventListener('click', openPrefs);
+  $('#prefs-close').addEventListener('click', closePrefs);
+  prefsModal.addEventListener('pointerdown', e => { if (e.target === prefsModal) closePrefs(); });
+  $('#prefs-mode').addEventListener('change', syncKeyRow);
+  $('#prefs-open-folder').addEventListener('click', () => { closePrefs(); openViaPicker(); });
+
+  $('#prefs-save').addEventListener('click', async () => {
+    const patch = {
+      mode: $('#prefs-mode').value,
+      baseUrl: $('#prefs-baseurl').value.trim(),
+      model: $('#prefs-model').value.trim(),
+      key: $('#prefs-key').value.trim()
+    };
+    const mode = await ai.applyConfig(patch);
+    $('#prefs-status').textContent = '已保存 · 当前模式：' + (mode === 'local' ? '本地分析' : mode === 'direct' ? '直连' : '代理');
+    toast('设置已保存（Key 只存在本机浏览器）');
+  });
+
+  $('#prefs-test').addEventListener('click', async () => {
+    $('#prefs-status').textContent = '测试中…';
+    const result = await ai.testConnection({
+      mode: $('#prefs-mode').value,
+      baseUrl: $('#prefs-baseurl').value.trim(),
+      model: $('#prefs-model').value.trim(),
+      key: $('#prefs-key').value.trim()
+    });
+    $('#prefs-status').textContent = (result.ok ? '✅ ' : '❌ ') + result.message;
+  });
+
+  $('#prefs-clear-key').addEventListener('click', () => {
+    $('#prefs-key').value = '';
+    ai.applyConfig({ key: '' });
+    $('#prefs-status').textContent = '已清除 Key，回到本地分析模式';
+  });
+
+  $('#prefs-reset').addEventListener('click', () => {
+    ai.clearConfig();
+    localStorage.removeItem('race-ainote:v1');
+    toast('已重置本地设置，即将刷新');
+    setTimeout(() => location.reload(), 600);
+  });
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
@@ -1229,13 +1295,14 @@
     const params = new URLSearchParams(location.search);
     if (params.get('view') === 'graph') showView('graph');
     if (params.get('ai') === '0') setAiPanel(false);
+    if (params.get('prefs') === '1') openPrefs();
     const openTitle = params.get('note');
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

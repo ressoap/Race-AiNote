@@ -72,14 +72,30 @@ npm run build          # 内联成 dist/Race-AiNote.html
 
 **B. 模型模式（需要密钥，密钥只在服务端）**
 
-```bash
-# 1) 启动本地服务（同时是静态服务器 + AI 代理）
-$env:COMMAND_CODE_API_KEY="你的key"      # PowerShell
-export COMMAND_CODE_API_KEY=你的key       # Git Bash / Linux / macOS
-node scripts/serve.mjs --port 4321
+最省事的方式：key 写进本机 `.env`，服务启动时自动读取（`.env` 已被 `.gitignore` 排除，不会进仓库）。
 
-# 2) 浏览器打开 http://localhost:4321
+```bash
+cp .env.example .env      # 然后编辑 .env，填入 COMMAND_CODE_API_KEY
+node scripts/serve.mjs    # 默认端口 4321，自动读取 .env
+# 浏览器打开 http://localhost:4321
 ```
+
+也可以临时用环境变量（不落盘）：
+
+```bash
+$env:COMMAND_CODE_API_KEY="你的key"   # PowerShell
+export COMMAND_CODE_API_KEY=你的key    # Git Bash / Linux / macOS
+node scripts/serve.mjs --port 4321
+```
+
+**C. 在界面里填 Key（设置窗口）**
+
+顶部工具栏齿轮图标（或按 `P`）打开设置窗口：
+
+- **连接方式** 选「浏览器直连」→ 直接填 Key，只写进本浏览器 `localStorage`，不经任何服务器；
+- 选「本地代理」→ 前端不碰 Key，用 `scripts/serve.mjs` 服务端的环境变量；
+- 选「只用本地分析」→ 强制离线模式；
+- 点「测试连接」会真实发一次极小请求验证连通性，「清除 Key」一键回到本地分析。
 
 面板右上角出现「模型模式」即为生效；接口不通时会自动降级回本地分析，不会白屏。
 
@@ -151,6 +167,7 @@ Race-AiNote/
 - 提问时自动带上当前笔记 + 关键词检索出的相关笔记作为上下文
 - 回答里的 `[[笔记标题]]` 渲染成可点击的引用，点一下直达那篇笔记
 - 四个一键提问：核心考点 / 薄弱环节 / 孤立笔记 / 整理成知识卡
+- 设置窗口：三种连接方式（服务端代理 / 浏览器直连 / 纯本地）、测试连接、清除 Key
 
 ### 关系图谱（辅助）
 - 全局图谱 / 局部图谱（以选中节点为根，BFS 深度 1–4）
@@ -164,6 +181,7 @@ Race-AiNote/
 
 | 键 | 作用 |
 | --- | --- |
+| `P` | 打开设置窗口 |
 | `A` | 开关 AI 问答面板 |
 | `Ctrl/Cmd + S` | 下载当前笔记为 .md |
 | `/` 或 `Ctrl/Cmd + K` | 聚焦图谱搜索框 |

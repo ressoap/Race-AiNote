@@ -20,6 +20,22 @@ const argOf = (name, def) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
 };
 
+/* 直接读本机 .env（已在 .gitignore 里，不会被提交），避免每次手敲环境变量 */
+function loadDotEnv() {
+  const file = path.join(ROOT, '.env');
+  if (!fs.existsSync(file)) return;
+  const text = fs.readFileSync(file, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.trim().startsWith('#')) continue;
+    const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    const value = m[2].trim().replace(/^["']|["']$/g, '');
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
+loadDotEnv();
+
 const PORT = Number(argOf('port', process.env.PORT || 4321));
 const API_KEY = process.env.COMMAND_CODE_API_KEY || process.env.AI_API_KEY || '';
 const BASE_URL = (process.env.AI_BASE_URL || 'https://api.deepseek.com/v1').replace(/\/+$/, '');

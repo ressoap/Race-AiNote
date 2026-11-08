@@ -860,6 +860,55 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .md-check.is-done { background: var(--accent); border-color: var(--accent); }
 
+/* ── 设置窗口 ───────────────────────────────────────────── */
+.prefs-card { width: min(560px, 100%); }
+.prefs-section { margin-top: 16px; }
+.prefs-section h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.prefs-tip { margin: 0 0 10px; font-size: 12px; line-height: 1.6; color: var(--text-soft); }
+.prefs-warn {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 159, 39, 0.12);
+  color: #b07514;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+:root[data-theme="dark"] .prefs-warn { color: #f0c27b; }
+
+.prefs-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+.prefs-row input,
+.prefs-row select {
+  width: 100%;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.prefs-row input:focus,
+.prefs-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.prefs-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.prefs-status { margin: 10px 0 0; font-size: 12px; color: var(--text-soft); min-height: 18px; }
+
 </style>
 </head>
 <body>
@@ -926,6 +975,9 @@ input[type="range"]::-webkit-slider-thumb {
       <div class="toolbar-spacer"></div>
       <button id="btn-theme" class="icon-btn" title="切换明暗主题">
         <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+      </button>
+      <button id="btn-prefs" class="icon-btn" title="设置（AI / 数据）">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
       <button id="btn-ai" class="icon-btn" title="AI 问答面板 (A)">
         <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M12 8v4l3 2"/></svg>
@@ -1057,6 +1109,50 @@ input[type="range"]::-webkit-slider-thumb {
   </main>
 </div>
 
+
+<div id="prefs-modal" class="modal" hidden>
+  <div class="modal-card prefs-card">
+    <header>
+      <div>
+        <h2>设置</h2>
+        <p class="modal-path">AI 能力与本地数据</p>
+      </div>
+      <button id="prefs-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+
+    <section class="prefs-section">
+      <h3>AI 模式</h3>
+      <p class="prefs-tip">不填 Key 时，问答面板走本地分析（检索 + 规则），功能有限但离线可用。填了之后才是完整 AI。</p>
+      <label class="prefs-row">
+        <span>连接方式</span>
+        <select id="prefs-mode">
+          <option value="proxy">本地代理（推荐，Key 在服务端）</option>
+          <option value="direct">浏览器直连（Key 存本机）</option>
+          <option value="local">只用本地分析</option>
+        </select>
+      </label>
+      <label class="prefs-row"><span>接口地址</span><input id="prefs-baseurl" type="text" placeholder="https://api.deepseek.com/v1"></label>
+      <label class="prefs-row"><span>模型</span><input id="prefs-model" type="text" placeholder="deepseek-chat"></label>
+      <label class="prefs-row" id="prefs-key-row"><span>API Key</span><input id="prefs-key" type="password" placeholder="sk-…（只保存在本机浏览器）" autocomplete="off"></label>
+      <p class="prefs-warn">⚠ Key 只写入本浏览器 localStorage，不会上传到本项目的任何服务器，也不会进 Git 仓库。公共电脑上不要填。</p>
+      <div class="prefs-actions">
+        <button id="prefs-test" class="ghost-btn">测试连接</button>
+        <button id="prefs-clear-key" class="ghost-btn">清除 Key</button>
+        <button id="prefs-save" class="primary-btn">保存</button>
+      </div>
+      <p id="prefs-status" class="prefs-status"></p>
+    </section>
+
+    <section class="prefs-section">
+      <h3>本地数据</h3>
+      <div class="prefs-actions">
+        <button id="prefs-open-folder" class="ghost-btn">打开本地笔记文件夹</button>
+        <button id="prefs-reset" class="ghost-btn">重置全部本地设置</button>
+      </div>
+      <p class="prefs-tip">当前库：<span id="prefs-vault">—</span></p>
+    </section>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 
 <script>
@@ -2291,6 +2387,68 @@ input[type="range"]::-webkit-slider-thumb {
     return { text: lines.join('\n'), refs: hits.map(n => n.title) };
   }
 
+  /* ── 配置（Key 只存本机 localStorage，不入库、不上传） ─────── */
+  const CONFIG_KEY = 'race-ainote:ai-config';
+  const DEFAULT_CONFIG = { mode: 'proxy', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', key: '' };
+
+  function loadConfig() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+      return Object.assign({}, DEFAULT_CONFIG, raw);
+    } catch (_) {
+      return Object.assign({}, DEFAULT_CONFIG);
+    }
+  }
+
+  function saveConfig(cfg) {
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (_) {}
+  }
+
+  function clearConfig() {
+    try { localStorage.removeItem(CONFIG_KEY); } catch (_) {}
+  }
+
+  function hasKey(cfg) { return Boolean(cfg && cfg.key && cfg.key.trim().length > 8); }
+
+  const RE_TRAILING_SLASH = /\/+$/;
+  const RE_WIKILINK = /\[\[([^\[\]]+?)\]\]/g;
+
+  /** 直连模式：浏览器直接请求 OpenAI 兼容接口（需要服务商允许 CORS） */
+  async function callDirect(cfg, question, context) {
+    const url = String(cfg.baseUrl || '').replace(RE_TRAILING_SLASH, '') + '/chat/completions';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key.trim() },
+      body: JSON.stringify({
+        model: cfg.model,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
+          { role: 'user', content: '【笔记内容】\n' + context + '\n\n【问题】\n' + question }
+        ]
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text()).slice(0, 120));
+    const data = await res.json();
+    const answer = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '').trim();
+    const refs = [...new Set([...answer.matchAll(RE_WIKILINK)].map(function (m) { return m[1].split("|")[0].trim(); }))];
+    return { answer: answer || '（模型没有返回内容）', refs: refs };
+  }
+
+  /** 代理模式：请求本机 scripts/serve.mjs 的 /api/chat，Key 在服务端 */
+  async function callProxy(question, context) {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, context })
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error('代理 ' + res.status + ' ' + text.slice(0, 120));
+    }
+    return await res.json();
+  }
+
   /* ── 面板控制器 ───────────────────────────────────────────── */
 
   function create(options) {
@@ -2301,7 +2459,7 @@ input[type="range"]::-webkit-slider-thumb {
     const suggestEl = document.getElementById('ai-suggest');
     const useNoteEl = document.getElementById('ai-use-note');
 
-    const state = { messages: [], mode: 'local', busy: false, endpoint: null };
+    const state = { messages: [], mode: 'local', busy: false, config: loadConfig() };
 
     function addMessage(role, text, refs) {
       const msg = { role, text, refs: refs || [] };
@@ -2357,16 +2515,21 @@ input[type="range"]::-webkit-slider-thumb {
       if (modeEl) modeEl.classList.toggle('is-remote', mode === 'remote');
     }
 
-    async function detectBackend() {
-      if (location.protocol === 'file:') return setMode('local');
+    async function detectTransport() {
+      const cfg = state.config;
+      if (cfg.mode === 'local') { setMode('local', '本地分析模式（已关闭 AI）'); return; }
+      if (cfg.mode === 'direct' && hasKey(cfg)) {
+        setMode('direct', '直连模式 · ' + (cfg.model || 'AI'));
+        return;
+      }
+      if (location.protocol === 'file:') { setMode('local', '本地分析模式（直连需用 http 打开）'); return; }
       try {
         const res = await fetch('/api/health', { cache: 'no-store' });
-        if (!res.ok) throw new Error('no backend');
+        if (!res.ok) throw new Error('no key on server');
         const info = await res.json();
-        state.endpoint = '/api/chat';
-        setMode('remote', '模型模式 · ' + (info.model || 'AI'));
+        setMode('proxy', '模型模式 · ' + (info.model || 'AI'));
       } catch (_) {
-        setMode('local');
+        setMode('local', hasKey(cfg) ? '本地分析模式（把连接方式切到「浏览器直连」即可用 Key）' : '本地分析模式（未填 API Key）');
       }
     }
 
@@ -2394,17 +2557,13 @@ input[type="range"]::-webkit-slider-thumb {
       const loading = addMessage('assistant', '思考中…');
 
       try {
-        if (state.mode === 'remote' && state.endpoint) {
-          const res = await fetch(state.endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, context: contextPayload(question) })
-          });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          loading.text = data.answer || '（模型没有返回内容）';
-          loading.refs = data.refs || [];
-        } else {
+        if (state.mode === 'direct' || state.mode === 'proxy') {
+          const context = contextPayload(question);
+          const result = state.mode === 'direct'
+            ? await callDirect(state.config, question, context)
+            : await callProxy(question, context);
+          loading.text = result.answer || '（模型没有返回内容）';
+          loading.refs = result.refs || [];        } else {
           const result = answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
           loading.text = result.text;
           loading.refs = result.refs;
@@ -2453,7 +2612,32 @@ input[type="range"]::-webkit-slider-thumb {
       });
     }
 
-    detectBackend();
+    /** 应用新配置（设置窗口保存时调用） */
+    async function applyConfig(patch) {
+      state.config = Object.assign({}, state.config, patch || {});
+      saveConfig(state.config);
+      await detectTransport();
+      return state.mode;
+    }
+
+    /** 测试连接：返回 { ok, message } */
+    async function testConnection(cfg) {
+      try {
+        if (cfg.mode === 'direct') {
+          if (!hasKey(cfg)) return { ok: false, message: '还没有填 API Key' };
+          const r = await callDirect(cfg, '只回复两个字：连通', '');
+          return { ok: true, message: '连接成功：' + String(r.answer).slice(0, 40) };
+        }
+        const res = await fetch('/api/health', { cache: 'no-store' });
+        if (!res.ok) return { ok: false, message: '本地代理未就绪：请先运行 node scripts/serve.mjs 并设置 COMMAND_CODE_API_KEY' };
+        const info = await res.json();
+        return { ok: true, message: '代理可用：' + (info.model || 'AI') };
+      } catch (err) {
+        return { ok: false, message: '连接失败：' + (err && err.message ? err.message : err) };
+      }
+    }
+
+    detectTransport();
     greet();
 
     function reset() {
@@ -2462,7 +2646,7 @@ input[type="range"]::-webkit-slider-thumb {
       greet();
     }
 
-    return { send, clear, reset, setMode, state, render };
+    return { send, clear, reset, setMode, applyConfig, testConnection, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
@@ -2474,7 +2658,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-08T13:30:46.290Z
+   生成时间：2026-11-08T13:46:00.577Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -3505,7 +3689,8 @@ input[type="range"]::-webkit-slider-thumb {
     state.dirty = true;
   });
   searchInput.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { searchInput.value = ''; setSearch(''); searchInput.blur(); }
+    if (e.key === 'Escape') {
+      if (!prefsModal.hidden) { closePrefs(); return; } searchInput.value = ''; setSearch(''); searchInput.blur(); }
   });
   $('#search-clear').addEventListener('click', () => { setSearch(''); searchInput.focus(); });
 
@@ -3635,6 +3820,7 @@ input[type="range"]::-webkit-slider-thumb {
     if (inField) return;
     if (e.key === '/') { e.preventDefault(); searchInput.focus(); return; }
     const k = e.key.toLowerCase();
+    if (k === 'p') { openPrefs(); return; }
     if (k === 'a') { setAiPanel($('#ai-panel').classList.contains('is-collapsed')); return; }
     if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); downloadNote(); return; }
     if (k === 'f') fitView(true);
@@ -3697,6 +3883,70 @@ input[type="range"]::-webkit-slider-thumb {
     state.dirty = true;
   }
 
+  /* ── 设置窗口（AI / 本地数据） ──────────────────────────── */
+  const prefsModal = $('#prefs-modal');
+
+  function openPrefs() {
+    const cfg = ai.state.config;
+    $('#prefs-mode').value = cfg.mode || 'proxy';
+    $('#prefs-baseurl').value = cfg.baseUrl || '';
+    $('#prefs-model').value = cfg.model || '';
+    $('#prefs-key').value = cfg.key || '';
+    $('#prefs-vault').textContent = state.vaultLabel || '—';
+    $('#prefs-status').textContent = ai.state.mode === 'local' ? '当前：本地分析模式' : '当前：' + (ai.state.mode === 'direct' ? '直连模式' : '代理模式');
+    prefsModal.hidden = false;
+    syncKeyRow();
+  }
+
+  function closePrefs() { prefsModal.hidden = true; }
+
+  function syncKeyRow() {
+    const mode = $('#prefs-mode').value;
+    $('#prefs-key-row').hidden = mode !== 'direct';
+  }
+
+  $('#btn-prefs').addEventListener('click', openPrefs);
+  $('#prefs-close').addEventListener('click', closePrefs);
+  prefsModal.addEventListener('pointerdown', e => { if (e.target === prefsModal) closePrefs(); });
+  $('#prefs-mode').addEventListener('change', syncKeyRow);
+  $('#prefs-open-folder').addEventListener('click', () => { closePrefs(); openViaPicker(); });
+
+  $('#prefs-save').addEventListener('click', async () => {
+    const patch = {
+      mode: $('#prefs-mode').value,
+      baseUrl: $('#prefs-baseurl').value.trim(),
+      model: $('#prefs-model').value.trim(),
+      key: $('#prefs-key').value.trim()
+    };
+    const mode = await ai.applyConfig(patch);
+    $('#prefs-status').textContent = '已保存 · 当前模式：' + (mode === 'local' ? '本地分析' : mode === 'direct' ? '直连' : '代理');
+    toast('设置已保存（Key 只存在本机浏览器）');
+  });
+
+  $('#prefs-test').addEventListener('click', async () => {
+    $('#prefs-status').textContent = '测试中…';
+    const result = await ai.testConnection({
+      mode: $('#prefs-mode').value,
+      baseUrl: $('#prefs-baseurl').value.trim(),
+      model: $('#prefs-model').value.trim(),
+      key: $('#prefs-key').value.trim()
+    });
+    $('#prefs-status').textContent = (result.ok ? '✅ ' : '❌ ') + result.message;
+  });
+
+  $('#prefs-clear-key').addEventListener('click', () => {
+    $('#prefs-key').value = '';
+    ai.applyConfig({ key: '' });
+    $('#prefs-status').textContent = '已清除 Key，回到本地分析模式';
+  });
+
+  $('#prefs-reset').addEventListener('click', () => {
+    ai.clearConfig();
+    localStorage.removeItem('race-ainote:v1');
+    toast('已重置本地设置，即将刷新');
+    setTimeout(() => location.reload(), 600);
+  });
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
@@ -3717,13 +3967,14 @@ input[type="range"]::-webkit-slider-thumb {
     const params = new URLSearchParams(location.search);
     if (params.get('view') === 'graph') showView('graph');
     if (params.get('ai') === '0') setAiPanel(false);
+    if (params.get('prefs') === '1') openPrefs();
     const openTitle = params.get('note');
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
