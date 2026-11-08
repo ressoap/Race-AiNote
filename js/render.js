@@ -156,9 +156,10 @@
       if (na <= 0.02) continue;
       const emphasis = emphasisOf(node);
       const r = radiusOf(node) * (1 + 0.22 * emphasis);
-      const color = opts.colorOf
-        ? opts.colorOf(node)
-        : nodeColor(node, null, colors);
+      // 分组色可能为 null（未命中任何分组），必须回落到类型默认色，
+      // 否则 fillStyle 被赋成 null 会被 canvas 静默忽略，节点会沿用上一个颜色。
+      const groupColor = opts.colorOf ? opts.colorOf(node) : null;
+      const color = groupColor || nodeColor(node, null, colors);
 
       ctx.globalAlpha = na;
       ctx.beginPath();

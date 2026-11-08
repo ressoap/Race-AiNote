@@ -1717,9 +1717,10 @@ input[type="range"]::-webkit-slider-thumb {
       if (na <= 0.02) continue;
       const emphasis = emphasisOf(node);
       const r = radiusOf(node) * (1 + 0.22 * emphasis);
-      const color = opts.colorOf
-        ? opts.colorOf(node)
-        : nodeColor(node, null, colors);
+      // 分组色可能为 null（未命中任何分组），必须回落到类型默认色，
+      // 否则 fillStyle 被赋成 null 会被 canvas 静默忽略，节点会沿用上一个颜色。
+      const groupColor = opts.colorOf ? opts.colorOf(node) : null;
+      const color = groupColor || nodeColor(node, null, colors);
 
       ctx.globalAlpha = na;
       ctx.beginPath();
@@ -1953,7 +1954,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-08T13:15:11.049Z
+   生成时间：2026-11-08T13:18:41.623Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
