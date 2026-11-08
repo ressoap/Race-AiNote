@@ -15,13 +15,13 @@
       link: 'rgba(120,124,140,0.34)',
       linkHi: 'rgba(74,110,245,0.85)',
       linkDim: 'rgba(150,154,170,0.10)',
-      node: '#8a90a6',
+      node: '#4f5b7d',
       nodeStroke: '#ffffff',
       text: '#25293a',
       textDim: 'rgba(46,50,64,0.20)',
       ring: 'rgba(74,110,245,0.9)',
-      tag: '#8b7cf6',
-      attachment: '#9aa3b2',
+      tag: '#7c6cf0',
+      attachment: '#6f7b90',
       unresolved: '#e2725b'
     },
     dark: {
@@ -29,13 +29,13 @@
       link: 'rgba(190,196,214,0.22)',
       linkHi: 'rgba(122,158,255,0.95)',
       linkDim: 'rgba(190,196,214,0.06)',
-      node: '#9aa2b8',
+      node: '#b3bddd',
       nodeStroke: '#1f2126',
       text: '#e9edf7',
       textDim: 'rgba(232,236,246,0.18)',
       ring: 'rgba(122,158,255,0.95)',
-      tag: '#a898ff',
-      attachment: '#7b8494',
+      tag: '#a294ff',
+      attachment: '#8d97ab',
       unresolved: '#ef8a72'
     }
   };
@@ -165,6 +165,10 @@
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
+      // 统一描边：即使节点色与背景接近也能看清轮廓
+      ctx.lineWidth = 1.2 / Math.max(0.45, Math.min(1.4, scale));
+      ctx.strokeStyle = colors.nodeStroke;
+      ctx.stroke();
 
       if (node.type === 'unresolved') {
         ctx.setLineDash([3, 3]);
@@ -172,10 +176,6 @@
         ctx.lineWidth = 1.4;
         ctx.stroke();
         ctx.setLineDash([]);
-      } else if (node.type === 'attachment') {
-        ctx.strokeStyle = colors.nodeStroke;
-        ctx.lineWidth = 1;
-        ctx.stroke();
       }
 
       if (node.id === opts.selectedId) {

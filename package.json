@@ -5,9 +5,10 @@
   "description": "零依赖 Obsidian 风格关系图谱 + 真实 Markdown 库解析（传智杯 AI 创新应用挑战赛）",
   "scripts": {
     "test": "node --test",
-    "build": "node scripts/build.js",
+    "build": "node scripts/gen-demo.js && node scripts/build.js",
     "ai:organize": "node scripts/ai-organize.mjs",
-    "smoke": "node scripts/smoke.js && node scripts/smoke-dist.js"
+    "smoke": "node scripts/smoke.js && node scripts/smoke-dist.js",
+    "demo": "node scripts/gen-demo.js"
   },
   "engines": {
     "node": ">=20"

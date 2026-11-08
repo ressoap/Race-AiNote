@@ -39,7 +39,7 @@
 
   function radiusOf(node, nodeSize) {
     const degree = node.degree || 0;
-    return (5 + Math.min(degree, 16) * 0.3) * (nodeSize == null ? 1 : nodeSize);
+    return (6.4 + Math.min(degree, 16) * 0.34) * (nodeSize == null ? 1 : nodeSize);
   }
 
   /** 环形 + 哈希抖动：同层节点分散，且不使用 Math.random */

@@ -23,16 +23,16 @@
     orphansOnly: false,
     arrows: false,
     textFade: 5,
-    nodeSize: 1,
+    nodeSize: 1.15,
     linkWidth: 1,
     center: 2,
     repel: 5,
     linkStrength: 8,
     linkDistance: 140,
     groups: [
-      { query: 'path:20-知识卡', color: '#3f9c6d' },
-      { query: 'path:30-课堂笔记', color: '#e2725b' },
-      { query: 'path:90-模板', color: '#8b7cf6' }
+      { query: 'path:20-数学', color: '#3f9c6d' },
+      { query: 'path:30-物理', color: '#e2725b' },
+      { query: 'path:10-错题本', color: '#ef9f27' }
     ]
   };
 
