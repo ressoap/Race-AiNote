@@ -95,6 +95,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.savedMode = api.ai.state.config.mode;
   out.savedModel = api.ai.state.config.model;
   out.aiMode = api.ai.state.mode;
+  out.modelsBtn = Boolean(w.document.querySelector('#prefs-models'));
+  const mr = await api.ai.fetchModels({ mode: 'proxy' });
+  out.fetchModelsOk = typeof mr.ok === 'boolean';
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

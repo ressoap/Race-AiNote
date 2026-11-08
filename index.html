@@ -228,7 +228,15 @@
         </select>
       </label>
       <label class="prefs-row"><span>接口地址</span><input id="prefs-baseurl" type="text" placeholder="https://api.deepseek.com/v1"></label>
-      <label class="prefs-row"><span>模型</span><input id="prefs-model" type="text" placeholder="deepseek-chat"></label>
+      <div class="prefs-row">
+        <span>模型</span>
+        <div class="prefs-row-inline">
+          <input id="prefs-model" type="text" list="prefs-model-list" placeholder="deepseek-chat">
+          <button id="prefs-models" class="ghost-btn" title="从服务商拉取可用模型列表">拉取模型</button>
+        </div>
+      </div>
+      <datalist id="prefs-model-list"></datalist>
+      <p id="prefs-model-status" class="prefs-status"></p>
       <label class="prefs-row" id="prefs-key-row"><span>API Key</span><input id="prefs-key" type="password" placeholder="sk-…（只保存在本机浏览器）" autocomplete="off"></label>
       <p class="prefs-warn">⚠ Key 只写入本浏览器 localStorage，不会上传到本项目的任何服务器，也不会进 Git 仓库。公共电脑上不要填。</p>
       <div class="prefs-actions">

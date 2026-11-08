@@ -86,6 +86,26 @@ function serveStatic(req, res, pathname) {
   fs.createReadStream(full).pipe(res);
 }
 
+/** 拉取可用模型列表（GET /models），密钥只在服务端 */
+async function handleModels(res) {
+  if (!API_KEY) return sendJson(res, 503, { error: '服务端未配置 COMMAND_CODE_API_KEY' });
+  try {
+    const upstream = await fetch(BASE_URL + '/models', {
+      headers: { Authorization: 'Bearer ' + API_KEY }
+    });
+    if (!upstream.ok) {
+      const text = (await upstream.text()).slice(0, 200);
+      return sendJson(res, 502, { error: 'upstream ' + upstream.status + ': ' + text });
+    }
+    const data = await upstream.json();
+    const list = Array.isArray(data.data) ? data.data : (Array.isArray(data.models) ? data.models : []);
+    const models = list.map(function (m) { return m.id || m.name || m.model || String(m); }).filter(Boolean);
+    sendJson(res, 200, { models: models, current: MODEL });
+  } catch (err) {
+    sendJson(res, 502, { error: String(err && err.message ? err.message : err) });
+  }
+}
+
 async function handleChat(req, res) {
   let raw = '';
   for await (const chunk of req) {
@@ -136,6 +156,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { ok: true, model: MODEL });
   }
   if (pathname === '/api/chat' && req.method === 'POST') return handleChat(req, res);
+  if (pathname === '/api/models' && req.method === 'GET') return handleModels(res);
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });

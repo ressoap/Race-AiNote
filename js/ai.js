@@ -324,6 +324,36 @@
       });
     }
 
+    /** 拉取可用模型列表：直连模式问服务商，代理模式问本地服务 */
+    async function fetchModels(cfg) {
+      const conf = Object.assign({}, state.config, cfg || {});
+      if (conf.mode === 'direct') {
+        if (!hasKey(conf)) return { ok: false, message: '先填 API Key 再拉取模型列表', models: [] };
+        const url = String(conf.baseUrl || '').replace(RE_TRAILING_SLASH, '') + '/models';
+        try {
+          const res = await fetch(url, { headers: { Authorization: 'Bearer ' + conf.key.trim() } });
+          if (!res.ok) return { ok: false, message: 'HTTP ' + res.status, models: [] };
+          const data = await res.json();
+          const list = Array.isArray(data.data) ? data.data : (Array.isArray(data.models) ? data.models : []);
+          const models = list.map(function (m) { return m.id || m.name || m.model || String(m); }).filter(Boolean);
+          return models.length
+            ? { ok: true, message: '共 ' + models.length + ' 个模型', models: models }
+            : { ok: false, message: '服务商没有返回模型列表', models: [] };
+        } catch (err) {
+          return { ok: false, message: '拉取失败：' + (err && err.message ? err.message : err) + '（可能是跨域限制，建议改用本地代理）', models: [] };
+        }
+      }
+      if (location.protocol === 'file:') return { ok: false, message: '单文件模式下没有代理，请用 http://localhost:4321', models: [] };
+      try {
+        const res = await fetch('/api/models', { cache: 'no-store' });
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok) return { ok: false, message: data.error || ('HTTP ' + res.status), models: [] };
+        return { ok: true, message: '共 ' + data.models.length + ' 个模型', models: data.models || [] };
+      } catch (err) {
+        return { ok: false, message: '拉取失败：' + (err && err.message ? err.message : err) + '（先运行 node scripts/serve.mjs）', models: [] };
+      }
+    }
+
     /** 应用新配置（设置窗口保存时调用） */
     async function applyConfig(patch) {
       state.config = Object.assign({}, state.config, patch || {});
@@ -358,7 +388,7 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, applyConfig, testConnection, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

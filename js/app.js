@@ -1220,7 +1220,13 @@
     $('#prefs-baseurl').value = cfg.baseUrl || '';
     $('#prefs-model').value = cfg.model || '';
     $('#prefs-key').value = cfg.key || '';
+    $('#prefs-model-status').textContent = '';
     $('#prefs-vault').textContent = state.vaultLabel || '—';
+    const listEl = $('#prefs-model-list');
+    if (listEl && !listEl.children.length) {
+      const cached = (ai.state.models || []).slice(0, 50);
+      for (const id of cached) { const o = document.createElement('option'); o.value = id; listEl.appendChild(o); }
+    }
     $('#prefs-status').textContent = ai.state.mode === 'local' ? '当前：本地分析模式' : '当前：' + (ai.state.mode === 'direct' ? '直连模式' : '代理模式');
     prefsModal.hidden = false;
     syncKeyRow();
@@ -1249,6 +1255,29 @@
     const mode = await ai.applyConfig(patch);
     $('#prefs-status').textContent = '已保存 · 当前模式：' + (mode === 'local' ? '本地分析' : mode === 'direct' ? '直连' : '代理');
     toast('设置已保存（Key 只存在本机浏览器）');
+  });
+
+  $('#prefs-models').addEventListener('click', async () => {
+    const statusEl = $('#prefs-model-status');
+    statusEl.textContent = '拉取中…';
+    const result = await ai.fetchModels({
+      mode: $('#prefs-mode').value,
+      baseUrl: $('#prefs-baseurl').value.trim(),
+      model: $('#prefs-model').value.trim(),
+      key: $('#prefs-key').value.trim()
+    });
+    if (!result.ok) { statusEl.textContent = '❌ ' + result.message; return; }
+    const list = $('#prefs-model-list');
+    list.innerHTML = '';
+    for (const id of result.models) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      list.appendChild(opt);
+    }
+    statusEl.textContent = '✅ ' + result.message + '（点输入框可选）';
+    if (!$('#prefs-model').value.trim() && result.models.length) {
+      $('#prefs-model').value = result.models[0];
+    }
   });
 
   $('#prefs-test').addEventListener('click', async () => {
