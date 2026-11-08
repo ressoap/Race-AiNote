@@ -668,7 +668,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 440px;
   min-height: 0;
   flex: 1;
 }
@@ -917,3 +917,85 @@ input[type="range"]::-webkit-slider-thumb {
   align-self: flex-start;
 }
 .ai-modeswitch .seg-btn { padding: 3px 10px; font-size: 11.5px; }
+
+/* ── AI 面板：对话 + 问题记录两栏 ─────────────────────────── */
+.ai-body { display: flex; flex: 1; min-height: 0; }
+.ai-chatcol { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+
+.ai-records {
+  width: 94px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+}
+.ai-records-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 8px 8px 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.ai-records-count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  font-size: 10px;
+}
+.ai-record-list { flex: 1; min-height: 0; overflow: auto; padding: 6px 5px; display: flex; flex-direction: column; gap: 5px; }
+.ai-record-empty { margin: 6px 4px; font-size: 10.5px; line-height: 1.5; color: var(--text-dim); }
+.ai-record {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-panel);
+  text-align: left;
+  cursor: pointer;
+  font-size: 10.5px;
+  color: var(--text);
+  overflow: hidden;
+}
+.ai-record:hover { border-color: var(--accent); background: var(--accent-soft); }
+.ai-record-time { color: var(--text-dim); font-size: 9.5px; }
+.ai-record-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-record-target { color: var(--accent); font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 记入错题本操作条 ───────────────────────────────────── */
+.ai-mistake {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 9px;
+  background: var(--bg);
+  font-size: 11.5px;
+}
+.ai-mistake-ask { color: var(--text-soft); }
+.ai-mistake-done { color: #3f9c6d; }
+.ai-mistake-skip { color: var(--text-dim); }
+.ghost-btn.tiny, .primary-btn.tiny { padding: 3px 9px; font-size: 11px; }
+.ai-mistake-select {
+  max-width: 130px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+@media (max-width: 1280px) {
+  .ai-records { display: none; }
+}

@@ -1344,7 +1344,17 @@
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
-    onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); }
+    onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
+    onRecordMistake: record => {
+      const snippet = RG.ai.mistakeSnippet(record);
+      let file = state.files.find(f => f.path === record.targetPath);
+      if (file) file.content = String(file.content || '') + snippet;
+      else state.files.push({ path: record.targetPath, content: snippet });
+      state.graph = vault.buildVault(state.files);
+      rebuild({});
+      if (currentNoteId) renderNote();
+      toast('已记入《' + record.targetTitle + '》');
+    }
   });
 
   /* ── 启动 ───────────────────────────────────────────────── */

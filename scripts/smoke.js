@@ -112,6 +112,23 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.notesThread = api.ai.threads().notes.length;
   out.threadsSeparated = out.tutorThread > out.notesThread;
   out.tutorBefore = tutorBefore;
+  // 错题本流程：答疑后出现操作条 → 记入 → 右侧记录 → 归档
+  api.applyAskMode('tutor');
+  await api.ai.send('这道导数题求切线方程，帮我讲讲');
+  await sleep(120);
+  const bar = w.document.querySelector('.ai-mistake');
+  out.mistakeBar = Boolean(bar);
+  if (bar) { bar.querySelector('.ghost-btn').click(); }
+  await sleep(60);
+  const sel = w.document.querySelector('.ai-mistake-select');
+  out.mistakeCandidates = sel ? sel.options.length : 0;
+  out.mistakeSuggested = sel ? sel.options[sel.selectedIndex].text : null;
+  const okBtn = w.document.querySelector('.ai-mistake .primary-btn');
+  if (okBtn) okBtn.click();
+  await sleep(150);
+  out.mistakeRecords = api.ai.records().length;
+  out.recordColumn = w.document.querySelectorAll('#ai-record-list .ai-record').length;
+  out.archivedMsgs = api.ai.threads().tutor.filter(m => m.archived).length;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

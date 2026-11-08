@@ -190,20 +190,26 @@
           <button id="ask-notes" class="seg-btn" data-ask="notes">笔记问答</button>
         </div>
         <div id="ai-mode" class="ai-mode" title="当前连接模式">本地分析模式</div>
-        <div id="ai-log" class="ai-log"></div>
-        <div class="ai-suggest" id="ai-suggest">
-          <button class="chip" data-q="这道题我不会做，帮我一步步讲清楚">讲题</button>
-          <button class="chip" data-q="这篇笔记的核心考点是什么？">核心考点</button>
-          <button class="chip" data-q="帮我找出薄弱环节并给出复习计划">薄弱环节</button>
-          <button class="chip" data-q="这个库里哪些笔记还没有被链接？">孤立笔记</button>
-          <button class="chip" data-q="把当前笔记整理成一张知识卡">整理成知识卡</button>
-        </div>
-        <div class="ai-input">
-          <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
-          <div class="ai-input-row">
-            <textarea id="ai-text" rows="2" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
-            <button id="ai-send" class="primary-btn">发送</button>
+
+        <div class="ai-body">
+          <div class="ai-chatcol">
+            <div id="ai-log" class="ai-log"></div>
+            <div class="ai-suggest" id="ai-suggest"></div>
+            <div class="ai-input">
+              <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
+              <div class="ai-input-row">
+                <textarea id="ai-text" rows="2" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
+                <button id="ai-send" class="primary-btn">发送</button>
+              </div>
+            </div>
           </div>
+          <aside id="ai-records" class="ai-records" aria-label="问题记录">
+            <header class="ai-records-head">
+              <span>问题记录</span>
+              <span id="ai-records-count" class="ai-records-count">0</span>
+            </header>
+            <div id="ai-record-list" class="ai-record-list"></div>
+          </aside>
         </div>
       </aside>
     </div>

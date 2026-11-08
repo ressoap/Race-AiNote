@@ -203,6 +203,76 @@
     return { text: lines.join(String.fromCharCode(10)), refs: hits.map(function (n) { return n.title; }) };
   }
 
+  /* ── 错题本：学科识别与目标推荐 ─────────────────────────── */
+  const SUBJECT_RULES = [
+    { subject: '数学', words: ['导数', '函数', '三角', '数列', '向量', '圆锥', '椭圆', '双曲线', '抛物线', '概率', '复数', '不等式', '方程', '几何', '集合', '对数', '指数'] },
+    { subject: '物理', words: ['力', '加速度', '速度', '电', '磁', '电路', '感应', '动量', '能量', '光学', '折射', '压强', '浮力', '万有引力', '洛伦兹'] },
+    { subject: '化学', words: ['化学', '氧化', '还原', '摩尔', '溶液', '元素', '有机', '反应', '电解', '沉淀'] },
+    { subject: '生物', words: ['细胞', '遗传', '基因', '生态', '酶', '光合', '呼吸作用', '免疫'] },
+    { subject: '英语', words: ['英语', '语法', '时态', '从句', '完形', '阅读', '作文', '单词'] },
+    { subject: '语文', words: ['语文', '文言', '诗歌', '鉴赏', '病句', '成语'] }
+  ];
+
+  /** 粗判题目学科 */
+  function guessSubject(text) {
+    const q = String(text || '');
+    let best = null;
+    let bestScore = 0;
+    for (const rule of SUBJECT_RULES) {
+      let score = 0;
+      for (const w of rule.words) if (q.includes(w)) score += 1;
+      if (score > bestScore) { bestScore = score; best = rule.subject; }
+    }
+    return { subject: best, score: bestScore };
+  }
+
+  /** 在「错题」类笔记里挑一个最匹配的，返回候选与推荐 */
+  function recommendMistakeBook(question, graph) {
+    if (!graph || !graph.notes) return { candidates: [], recommended: null, subject: null };
+    const notes = graph.notes.filter(function (n) { return n.type === 'note'; });
+    // 优先「XX-错题索引」这类真正的错题本，再退到路径含「错题」的笔记
+    const indexed = notes.filter(function (n) { return /错题索引/.test(n.title || ''); });
+    const byPath = notes.filter(function (n) { return /错题/.test(n.path || '') || /错题/.test(n.title || ''); });
+    const pool = indexed.length ? indexed : (byPath.length ? byPath : notes);
+    const subject = guessSubject(question).subject;
+    let recommended = null;
+    if (subject) {
+      recommended = pool.find(function (n) {
+        return (n.title || '').includes(subject) || (n.path || '').includes(subject);
+      }) || null;
+    }
+    if (!recommended && pool.length) {
+      const hits = retrieve(String(question).slice(0, 60), pool, 1);
+      recommended = hits[0] || pool[0];
+    }
+    return {
+      candidates: pool.map(function (n) { return { id: n.id, title: n.title, path: n.path }; }),
+      recommended: recommended ? { id: recommended.id, title: recommended.title, path: recommended.path } : null,
+      subject: subject
+    };
+  }
+
+  /** 生成写进错题本的 Markdown 片段 */
+  function mistakeSnippet(record) {
+    const when = new Date(record.at || Date.now());
+    const pad = function (n) { return String(n).padStart(2, '0'); };
+    const stamp = when.getFullYear() + '-' + pad(when.getMonth() + 1) + '-' + pad(when.getDate())
+      + ' ' + pad(when.getHours()) + ':' + pad(when.getMinutes());
+    const question = String(record.question || '').split(/\n+/).join(' ').slice(0, 500);
+    return [
+      '',
+      '## AI 答疑记录 ' + stamp,
+      '',
+      '**问**：' + question,
+      '',
+      '**答**：',
+      String(record.answer || '').trim(),
+      '',
+      '> 由答疑老师自动记录，建议手工补一行「我的错因」。',
+      ''
+    ].join('\n');
+  }
+
   /* ── 面板控制器 ───────────────────────────────────────────── */
 
   function create(options) {
@@ -261,6 +331,9 @@
           }
           wrap.appendChild(refs);
         }
+        if (msg.role === 'assistant' && msg.kind === 'answer' && state.askMode === 'tutor') {
+          wrap.appendChild(buildMistakeBar(msg));
+        }
         logEl.appendChild(wrap);
       }
       logEl.scrollTop = logEl.scrollHeight;
@@ -309,10 +382,12 @@
     async function send(text) {
       const question = String(text || '').trim();
       if (!question || state.busy) return;
-      const history = thread().slice(-8).filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.text }));
+      const history = thread().filter(m => !m.archived && (m.role === 'user' || m.role === 'assistant')).slice(-8).map(m => ({ role: m.role, content: m.text }));
       addMessage('user', question);
       state.busy = true;
       const loading = addMessage('assistant', '思考中…');
+      loading.kind = 'answer';
+      loading.question = question;
 
       try {
         if (state.mode === 'direct' || state.mode === 'proxy') {
@@ -354,6 +429,158 @@
         count
           ? '已载入 ' + count + ' 篇笔记。可以这样问我：\n· 这篇笔记的核心考点是什么\n· 帮我找出薄弱环节并给出复习计划\n· 这个库里哪些笔记还没有被链接'
           : '还没有载入笔记。点左上角文件夹图标选一个 Markdown 目录，或先用内置示例库试试。');
+    }
+
+    /* ── 问题记录（右侧时间轴） ─────────────────────────────── */
+    const RECORDS_KEY = 'race-ainote:mistakes';
+
+    function loadRecords() {
+      try { return JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]'); } catch (_) { return []; }
+    }
+
+    function saveRecords(list) {
+      try { localStorage.setItem(RECORDS_KEY, JSON.stringify(list.slice(-200))); } catch (_) {}
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts);
+      const pad = function (n) { return String(n).padStart(2, '0'); };
+      return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function renderRecords() {
+      const listEl = document.getElementById('ai-record-list');
+      const countEl = document.getElementById('ai-records-count');
+      if (!listEl) return;
+      const list = loadRecords().slice().sort(function (a, b) { return a.at - b.at; });
+      if (countEl) countEl.textContent = String(list.length);
+      listEl.innerHTML = '';
+      if (!list.length) {
+        const empty = document.createElement('p');
+        empty.className = 'ai-record-empty';
+        empty.textContent = '答疑结束后可一键记入错题本';
+        listEl.appendChild(empty);
+        return;
+      }
+      for (const rec of list) {
+        const item = document.createElement('button');
+        item.className = 'ai-record';
+        item.title = rec.question;
+        const time = document.createElement('span');
+        time.className = 'ai-record-time';
+        time.textContent = formatTime(rec.at);
+        const title = document.createElement('span');
+        title.className = 'ai-record-title';
+        title.textContent = String(rec.question || '').slice(0, 18);
+        const target = document.createElement('span');
+        target.className = 'ai-record-target';
+        target.textContent = rec.targetTitle || '错题本';
+        item.append(time, title, target);
+        item.addEventListener('click', function () {
+          if (opts.onOpenNote && rec.targetTitle) opts.onOpenNote(rec.targetTitle);
+        });
+        listEl.appendChild(item);
+      }
+      listEl.scrollTop = listEl.scrollHeight;
+    }
+
+    /** 一条答疑结束后，追加「是否记入错题本」的操作条 */
+    function buildMistakeBar(msg) {
+      const bar = document.createElement('div');
+      bar.className = 'ai-mistake';
+
+      if (msg.mistake) {
+        const done = document.createElement('span');
+        done.className = 'ai-mistake-done';
+        done.textContent = '✓ 已记入《' + msg.mistake + '》，本轮对话不再作为上下文';
+        bar.appendChild(done);
+        return bar;
+      }
+      if (msg.mistakeSkipped) {
+        const skip = document.createElement('span');
+        skip.className = 'ai-mistake-skip';
+        skip.textContent = '未记入错题本';
+        bar.appendChild(skip);
+        return bar;
+      }
+
+      const ask = document.createElement('span');
+      ask.className = 'ai-mistake-ask';
+      ask.textContent = '要记入错题本吗？';
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'ghost-btn tiny';
+      saveBtn.textContent = '记入错题本';
+      const skipBtn = document.createElement('button');
+      skipBtn.className = 'ghost-btn tiny';
+      skipBtn.textContent = '不用了';
+
+      saveBtn.addEventListener('click', function () {
+        bar.innerHTML = '';
+        const info = recommendMistakeBook(msg.question || '', opts.getGraph());
+        if (!info.candidates.length) {
+          const tip = document.createElement('span');
+          tip.className = 'ai-mistake-skip';
+          tip.textContent = '当前库里没有错题本类笔记，先建一篇吧';
+          bar.appendChild(tip);
+          return;
+        }
+        const head = document.createElement('span');
+        head.className = 'ai-mistake-ask';
+        head.textContent = info.subject ? ('AI 判断是' + info.subject + '题，推荐：') : 'AI 推荐：';
+
+        const select = document.createElement('select');
+        select.className = 'ai-mistake-select';
+        for (const c of info.candidates) {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.title;
+          if (info.recommended && c.id === info.recommended.id) opt.selected = true;
+          select.appendChild(opt);
+        }
+        const ok = document.createElement('button');
+        ok.className = 'primary-btn tiny';
+        ok.textContent = '确认';
+        const cancel = document.createElement('button');
+        cancel.className = 'ghost-btn tiny';
+        cancel.textContent = '取消';
+
+        ok.addEventListener('click', function () {
+          const chosen = info.candidates.find(function (c) { return c.id === select.value; }) || info.recommended;
+          if (!chosen) return;
+          const record = {
+            id: 'mis-' + Date.now(),
+            at: Date.now(),
+            question: msg.question || '',
+            answer: msg.text || '',
+            targetId: chosen.id,
+            targetTitle: chosen.title,
+            targetPath: chosen.path,
+            mode: state.askMode
+          };
+          const list = loadRecords();
+          list.push(record);
+          saveRecords(list);
+          msg.mistake = chosen.title;
+          msg.archived = true; // 记入后不再作为上下文读取
+          if (opts.onRecordMistake) opts.onRecordMistake(record);
+          render();
+          renderRecords();
+        });
+
+        cancel.addEventListener('click', function () {
+          render();
+        });
+
+        bar.append(head, select, ok, cancel);
+      });
+
+      skipBtn.addEventListener('click', function () {
+        msg.mistakeSkipped = true;
+        render();
+      });
+
+      bar.append(ask, saveBtn, skipBtn);
+      return bar;
     }
 
     // 事件绑定
@@ -430,6 +657,7 @@
 
     detectTransport();
     greet();
+    renderRecords();
 
     /** 切换问答人设：notes=只依据笔记；tutor=老师答疑 */
     function setAskMode(mode) {
@@ -446,9 +674,9 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, threads: () => state.threads, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, threads: () => state.threads, records: loadRecords, renderRecords, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
