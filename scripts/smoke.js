@@ -98,6 +98,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.modelsBtn = Boolean(w.document.querySelector('#prefs-models'));
   const mr = await api.ai.fetchModels({ mode: 'proxy' });
   out.fetchModelsOk = typeof mr.ok === 'boolean';
+  await api.ai.applyConfig({ mode: 'local' });
+  api.applyAskMode('tutor');
+  await api.ai.send('这道题我不会做，帮我一步步讲清楚');
+  await sleep(120);
+  out.tutorMode = api.ai.state.askMode;
+  out.tutorAnswer = (w.document.querySelector('#ai-log .ai-msg:last-child .ai-bubble') || {}).textContent || '';
+  out.hasTutorHint = out.tutorAnswer.includes('框架引导');
+  api.applyAskMode('notes');
+  out.notesMode = api.ai.state.askMode;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

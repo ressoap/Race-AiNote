@@ -913,6 +913,19 @@ input[type="range"]::-webkit-slider-thumb {
 .prefs-row-inline input { flex: 1; min-width: 0; }
 .prefs-row-inline .ghost-btn { flex: none; white-space: nowrap; }
 
+/* AI 人设切换 */
+.ai-modeswitch {
+  display: flex;
+  gap: 2px;
+  margin: 8px 12px 0;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  align-self: flex-start;
+}
+.ai-modeswitch .seg-btn { padding: 3px 10px; font-size: 11.5px; }
+
 </style>
 </head>
 <body>
@@ -1093,9 +1106,14 @@ input[type="range"]::-webkit-slider-thumb {
             <button id="btn-ai-close" class="icon-btn small" title="收起面板">⟩</button>
           </div>
         </header>
-        <div id="ai-mode" class="ai-mode" title="当前分析模式">本地分析模式</div>
+        <div class="ai-modeswitch" role="group" aria-label="问答模式">
+          <button id="ask-tutor" class="seg-btn is-active" data-ask="tutor">答疑老师</button>
+          <button id="ask-notes" class="seg-btn" data-ask="notes">笔记问答</button>
+        </div>
+        <div id="ai-mode" class="ai-mode" title="当前连接模式">本地分析模式</div>
         <div id="ai-log" class="ai-log"></div>
         <div class="ai-suggest" id="ai-suggest">
+          <button class="chip" data-q="这道题我不会做，帮我一步步讲清楚">讲题</button>
           <button class="chip" data-q="这篇笔记的核心考点是什么？">核心考点</button>
           <button class="chip" data-q="帮我找出薄弱环节并给出复习计划">薄弱环节</button>
           <button class="chip" data-q="这个库里哪些笔记还没有被链接？">孤立笔记</button>
@@ -1104,7 +1122,7 @@ input[type="range"]::-webkit-slider-thumb {
         <div class="ai-input">
           <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
           <div class="ai-input-row">
-            <textarea id="ai-text" rows="2" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+            <textarea id="ai-text" rows="2" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
             <button id="ai-send" class="primary-btn">发送</button>
           </div>
         </div>
@@ -2315,21 +2333,36 @@ input[type="range"]::-webkit-slider-thumb {
   }
 
   /** 极简 BM25 风格检索：按关键词命中数排序 */
+  /** 分词：英文按词，中文按二元组切开（中文没空格，二元组命中率更稳） */
+  function tokenize(text) {
+    const raw = String(text || '').toLowerCase();
+    const parts = raw.split(/[^0-9a-z\u4e00-\u9fa5]+/i).filter(Boolean);
+    const out = new Set();
+    for (const p of parts) {
+      out.add(p);
+      if (p.length > 2 && /[\u4e00-\u9fa5]/.test(p)) {
+        for (let i = 0; i < p.length - 1; i++) out.add(p.slice(i, i + 2));
+      }
+    }
+    return [...out].filter(t => t.length > 1 || /[0-9a-z]/i.test(t));
+  }
+
+  /** 极简 BM25 风格检索：按关键词命中数排序，标题命中加权 */
   function retrieve(question, noteList, limit) {
-    const terms = String(question).toLowerCase().split(/[\s,，。、?？!！]+/).filter(t => t.length >= 1);
+    const terms = tokenize(question);
     if (!terms.length) return [];
     const scored = [];
     for (const note of noteList) {
-      const hay = (note.title + ' ' + note.path + ' ' + (note.content || '') + ' ' + (note.tags || []).join(' ')).toLowerCase();
+      const title = String(note.title || '').toLowerCase();
+      const hay = (title + ' ' + (note.path || '') + ' ' + (note.content || '') + ' ' + (note.tags || []).join(' ')).toLowerCase();
       let score = 0;
       for (const t of terms) {
-        if (!t) continue;
-        const hits = hay.split(t).length - 1;
-        if (hits) score += hits * (note.title.toLowerCase().includes(t) ? 3 : 1);
+        if (!hay.includes(t)) continue;
+        score += title.includes(t) ? 4 : 1;
       }
       if (score > 0) scored.push({ note, score });
     }
-    return scored.sort((a, b) => b.score - a.score).slice(0, limit || 5).map(s => s.note);
+    return scored.sort((x, y) => y.score - x.score).slice(0, limit || 5).map(s => s.note);
   }
 
   function headingsOf(content) {
@@ -2435,7 +2468,9 @@ input[type="range"]::-webkit-slider-thumb {
         model: cfg.model,
         temperature: 0.2,
         messages: [
-          { role: 'system', content: '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
+          { role: 'system', content: cfg.askMode === 'tutor'
+            ? '你是一位耐心的学科老师。按「①考点定位 ②解题思路 ③分步推导 ④易错提醒 ⑤一句话拓展」作答；条件不足先追问；可以超出笔记范围，但要用 [[笔记标题]] 指出相关复习材料；不要编造标题。'
+            : '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
           { role: 'user', content: '【笔记内容】\n' + context + '\n\n【问题】\n' + question }
         ]
       })
@@ -2448,17 +2483,42 @@ input[type="range"]::-webkit-slider-thumb {
   }
 
   /** 代理模式：请求本机 scripts/serve.mjs 的 /api/chat，Key 在服务端 */
-  async function callProxy(question, context) {
+  async function callProxy(question, context, askMode, history) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, context })
+      body: JSON.stringify({ question, context, mode: askMode || 'notes', history: history || [] })
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error('代理 ' + res.status + ' ' + text.slice(0, 120));
     }
     return await res.json();
+  }
+
+  /** 老师模式（未接入模型时）：给出框架式引导，而不是假装会讲题 */
+  function answerTutorLocal(question, ctx) {
+    const notes = ctx.graph ? ctx.graph.notes : [];
+    const hits = retrieve(question, notes, 3);
+    const lines = [];
+    lines.push('【未接入模型 · 框架引导】');
+    if (/求|解|证明|算|多少|怎么|题|做|讲|思路|步骤|为什么/.test(question)) {
+      lines.push('1. 把题目条件抄下来，标清已知量和待求量；缺条件的先补条件。');
+      lines.push('2. 定位考点：这题想考哪个公式/定理，先把它写出来。');
+      lines.push('3. 从待求量倒推：要得到它，需要先知道什么？' + '逐步逼近已知条件。');
+      lines.push('4. 算完代回原式检查，特别是定义域、单位和符号。');
+    } else {
+      lines.push('1. 先用一句话复述你理解的概念，卡在哪一步说出来。');
+      lines.push('2. 回忆这个概念的适用条件，很多错误来自条件不满足。');
+      lines.push('3. 找一道最简单的例题对照着看，再回到原问题。');
+    }
+    if (hits.length) {
+      lines.push('');
+      lines.push('你笔记里可能有用的材料：' + hits.map(function (n) { return n.title; }).join('、'));
+    }
+    lines.push('');
+    lines.push('接入模型后（设置窗口填 Key，或在 .env 里配 COMMAND_CODE_API_KEY）我会直接给完整分步讲解，并能追问。');
+    return { text: lines.join(String.fromCharCode(10)), refs: hits.map(function (n) { return n.title; }) };
   }
 
   /* ── 面板控制器 ───────────────────────────────────────────── */
@@ -2471,7 +2531,7 @@ input[type="range"]::-webkit-slider-thumb {
     const suggestEl = document.getElementById('ai-suggest');
     const useNoteEl = document.getElementById('ai-use-note');
 
-    const state = { messages: [], mode: 'local', busy: false, config: loadConfig() };
+    const state = { messages: [], mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
 
     function addMessage(role, text, refs) {
       const msg = { role, text, refs: refs || [] };
@@ -2569,14 +2629,17 @@ input[type="range"]::-webkit-slider-thumb {
       const loading = addMessage('assistant', '思考中…');
 
       try {
+        const history = state.messages.slice(-8).filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.text }));
         if (state.mode === 'direct' || state.mode === 'proxy') {
           const context = contextPayload(question);
           const result = state.mode === 'direct'
-            ? await callDirect(state.config, question, context)
-            : await callProxy(question, context);
+            ? await callDirect(Object.assign({}, state.config, { askMode: state.askMode }), question, context)
+            : await callProxy(question, context, state.askMode, history);
           loading.text = result.answer || '（模型没有返回内容）';
           loading.refs = result.refs || [];        } else {
-          const result = answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
+          const result = state.askMode === 'tutor'
+            ? answerTutorLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() })
+            : answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
           loading.text = result.text;
           loading.refs = result.refs;
         }
@@ -2682,17 +2745,24 @@ input[type="range"]::-webkit-slider-thumb {
     detectTransport();
     greet();
 
+    /** 切换问答人设：notes=只依据笔记；tutor=老师答疑 */
+    function setAskMode(mode) {
+      state.askMode = mode === 'notes' ? 'notes' : 'tutor';
+      if (modeEl) modeEl.dataset.askMode = state.askMode;
+      return state.askMode;
+    }
+
     function reset() {
       state.messages = [];
       render();
       greet();
     }
 
-    return { send, clear, reset, setMode, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, retrieve, headingsOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -2700,7 +2770,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-08T13:55:52.841Z
+   生成时间：2026-11-08T14:39:12.621Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -4018,6 +4088,43 @@ input[type="range"]::-webkit-slider-thumb {
     setTimeout(() => location.reload(), 600);
   });
 
+  /* AI 人设切换：答疑老师 / 笔记问答 */
+  const SUGGEST = {
+    tutor: [
+      { label: '讲题', q: '这道题我不会做，帮我一步步讲清楚' },
+      { label: '为什么', q: '为什么这个公式的适用条件是这两个' },
+      { label: '找错因', q: '我总在这一类题上出错，帮我找原因' },
+      { label: '举个例子', q: '用一个生活里的例子解释这个概念' }
+    ],
+    notes: [
+      { label: '核心考点', q: '这篇笔记的核心考点是什么？' },
+      { label: '薄弱环节', q: '帮我找出薄弱环节并给出复习计划' },
+      { label: '孤立笔记', q: '这个库里哪些笔记还没有被链接？' },
+      { label: '知识卡', q: '把当前笔记整理成一张知识卡' }
+    ]
+  };
+
+  function applyAskMode(mode) {
+    ai.setAskMode(mode);
+    $('#ask-tutor').classList.toggle('is-active', mode === 'tutor');
+    $('#ask-notes').classList.toggle('is-active', mode === 'notes');
+    $('#ai-text').placeholder = mode === 'tutor'
+      ? '直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）'
+      : '问关于你笔记库的问题…（Enter 发送，Shift+Enter 换行）';
+    const box = $('#ai-suggest');
+    box.innerHTML = '';
+    for (const item of SUGGEST[mode]) {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.dataset.q = item.q;
+      b.textContent = item.label;
+      box.appendChild(b);
+    }
+  }
+
+  $('#ask-tutor').addEventListener('click', () => applyAskMode('tutor'));
+  $('#ask-notes').addEventListener('click', () => applyAskMode('notes'));
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
@@ -4042,10 +4149,11 @@ input[type="range"]::-webkit-slider-thumb {
     const openTitle = params.get('note');
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
+  applyAskMode('tutor');
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, applyAskMode, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

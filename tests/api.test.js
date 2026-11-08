@@ -22,8 +22,11 @@ function startMockUpstream() {
         const payload = JSON.parse(body || '{}');
         const hasAuth = Boolean(req.headers.authorization && req.headers.authorization.startsWith('Bearer '));
         res.writeHead(hasAuth ? 200 : 401, { 'Content-Type': 'application/json' });
+        const sys = (payload.messages || []).find(m => m.role === 'system') || { content: '' };
+        const history = (payload.messages || []).filter(m => m.role !== 'system');
+        const persona = sys.content.includes('学科老师') ? 'tutor' : 'notes';
         res.end(JSON.stringify({
-          choices: [{ message: { content: '依据笔记回答：见 [[导数及其应用]]。模型=' + payload.model } }]
+          choices: [{ message: { content: '依据笔记回答：见 [[导数及其应用]]。模型=' + payload.model + '｜人设=' + persona + '｜消息数=' + history.length } }]
         }));
       });
       return;
@@ -68,6 +71,20 @@ test('代理服务：健康检查 / 模型列表 / 对话转发', async (t) => {
   assert.match(chat.answer, /导数及其应用/);
   assert.match(chat.answer, /mock-small/);
   assert.deepEqual(chat.refs, ['导数及其应用']);
+
+  // 老师人设 + 多轮历史
+  const tutor = await fetch('http://127.0.0.1:' + SERVE_PORT + '/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question: '这道导数题怎么下手',
+      context: '',
+      mode: 'tutor',
+      history: [{ role: 'user', content: '上一问' }, { role: 'assistant', content: '上一答' }]
+    })
+  }).then(r => r.json());
+  assert.match(tutor.answer, /人设=tutor/);
+  assert.match(tutor.answer, /消息数=3/);
 });
 
 test('代理服务：未配置密钥时健康检查返回 503（前端据此降级）', async (t) => {

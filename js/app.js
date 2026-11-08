@@ -1304,6 +1304,43 @@
     setTimeout(() => location.reload(), 600);
   });
 
+  /* AI 人设切换：答疑老师 / 笔记问答 */
+  const SUGGEST = {
+    tutor: [
+      { label: '讲题', q: '这道题我不会做，帮我一步步讲清楚' },
+      { label: '为什么', q: '为什么这个公式的适用条件是这两个' },
+      { label: '找错因', q: '我总在这一类题上出错，帮我找原因' },
+      { label: '举个例子', q: '用一个生活里的例子解释这个概念' }
+    ],
+    notes: [
+      { label: '核心考点', q: '这篇笔记的核心考点是什么？' },
+      { label: '薄弱环节', q: '帮我找出薄弱环节并给出复习计划' },
+      { label: '孤立笔记', q: '这个库里哪些笔记还没有被链接？' },
+      { label: '知识卡', q: '把当前笔记整理成一张知识卡' }
+    ]
+  };
+
+  function applyAskMode(mode) {
+    ai.setAskMode(mode);
+    $('#ask-tutor').classList.toggle('is-active', mode === 'tutor');
+    $('#ask-notes').classList.toggle('is-active', mode === 'notes');
+    $('#ai-text').placeholder = mode === 'tutor'
+      ? '直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）'
+      : '问关于你笔记库的问题…（Enter 发送，Shift+Enter 换行）';
+    const box = $('#ai-suggest');
+    box.innerHTML = '';
+    for (const item of SUGGEST[mode]) {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.dataset.q = item.q;
+      b.textContent = item.label;
+      box.appendChild(b);
+    }
+  }
+
+  $('#ask-tutor').addEventListener('click', () => applyAskMode('tutor'));
+  $('#ask-notes').addEventListener('click', () => applyAskMode('notes'));
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
@@ -1328,10 +1365,11 @@
     const openTitle = params.get('note');
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
+  applyAskMode('tutor');
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, applyAskMode, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

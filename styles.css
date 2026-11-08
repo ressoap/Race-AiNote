@@ -904,3 +904,16 @@ input[type="range"]::-webkit-slider-thumb {
 .prefs-row-inline { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .prefs-row-inline input { flex: 1; min-width: 0; }
 .prefs-row-inline .ghost-btn { flex: none; white-space: nowrap; }
+
+/* AI 人设切换 */
+.ai-modeswitch {
+  display: flex;
+  gap: 2px;
+  margin: 8px 12px 0;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  align-self: flex-start;
+}
+.ai-modeswitch .seg-btn { padding: 3px 10px; font-size: 11.5px; }

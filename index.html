@@ -185,9 +185,14 @@
             <button id="btn-ai-close" class="icon-btn small" title="收起面板">⟩</button>
           </div>
         </header>
-        <div id="ai-mode" class="ai-mode" title="当前分析模式">本地分析模式</div>
+        <div class="ai-modeswitch" role="group" aria-label="问答模式">
+          <button id="ask-tutor" class="seg-btn is-active" data-ask="tutor">答疑老师</button>
+          <button id="ask-notes" class="seg-btn" data-ask="notes">笔记问答</button>
+        </div>
+        <div id="ai-mode" class="ai-mode" title="当前连接模式">本地分析模式</div>
         <div id="ai-log" class="ai-log"></div>
         <div class="ai-suggest" id="ai-suggest">
+          <button class="chip" data-q="这道题我不会做，帮我一步步讲清楚">讲题</button>
           <button class="chip" data-q="这篇笔记的核心考点是什么？">核心考点</button>
           <button class="chip" data-q="帮我找出薄弱环节并给出复习计划">薄弱环节</button>
           <button class="chip" data-q="这个库里哪些笔记还没有被链接？">孤立笔记</button>
@@ -196,7 +201,7 @@
         <div class="ai-input">
           <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
           <div class="ai-input-row">
-            <textarea id="ai-text" rows="2" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+            <textarea id="ai-text" rows="2" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
             <button id="ai-send" class="primary-btn">发送</button>
           </div>
         </div>

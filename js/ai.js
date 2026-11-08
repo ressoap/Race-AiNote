@@ -15,21 +15,36 @@
   }
 
   /** 极简 BM25 风格检索：按关键词命中数排序 */
+  /** 分词：英文按词，中文按二元组切开（中文没空格，二元组命中率更稳） */
+  function tokenize(text) {
+    const raw = String(text || '').toLowerCase();
+    const parts = raw.split(/[^0-9a-z\u4e00-\u9fa5]+/i).filter(Boolean);
+    const out = new Set();
+    for (const p of parts) {
+      out.add(p);
+      if (p.length > 2 && /[\u4e00-\u9fa5]/.test(p)) {
+        for (let i = 0; i < p.length - 1; i++) out.add(p.slice(i, i + 2));
+      }
+    }
+    return [...out].filter(t => t.length > 1 || /[0-9a-z]/i.test(t));
+  }
+
+  /** 极简 BM25 风格检索：按关键词命中数排序，标题命中加权 */
   function retrieve(question, noteList, limit) {
-    const terms = String(question).toLowerCase().split(/[\s,，。、?？!！]+/).filter(t => t.length >= 1);
+    const terms = tokenize(question);
     if (!terms.length) return [];
     const scored = [];
     for (const note of noteList) {
-      const hay = (note.title + ' ' + note.path + ' ' + (note.content || '') + ' ' + (note.tags || []).join(' ')).toLowerCase();
+      const title = String(note.title || '').toLowerCase();
+      const hay = (title + ' ' + (note.path || '') + ' ' + (note.content || '') + ' ' + (note.tags || []).join(' ')).toLowerCase();
       let score = 0;
       for (const t of terms) {
-        if (!t) continue;
-        const hits = hay.split(t).length - 1;
-        if (hits) score += hits * (note.title.toLowerCase().includes(t) ? 3 : 1);
+        if (!hay.includes(t)) continue;
+        score += title.includes(t) ? 4 : 1;
       }
       if (score > 0) scored.push({ note, score });
     }
-    return scored.sort((a, b) => b.score - a.score).slice(0, limit || 5).map(s => s.note);
+    return scored.sort((x, y) => y.score - x.score).slice(0, limit || 5).map(s => s.note);
   }
 
   function headingsOf(content) {
@@ -135,7 +150,9 @@
         model: cfg.model,
         temperature: 0.2,
         messages: [
-          { role: 'system', content: '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
+          { role: 'system', content: cfg.askMode === 'tutor'
+            ? '你是一位耐心的学科老师。按「①考点定位 ②解题思路 ③分步推导 ④易错提醒 ⑤一句话拓展」作答；条件不足先追问；可以超出笔记范围，但要用 [[笔记标题]] 指出相关复习材料；不要编造标题。'
+            : '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
           { role: 'user', content: '【笔记内容】\n' + context + '\n\n【问题】\n' + question }
         ]
       })
@@ -148,17 +165,42 @@
   }
 
   /** 代理模式：请求本机 scripts/serve.mjs 的 /api/chat，Key 在服务端 */
-  async function callProxy(question, context) {
+  async function callProxy(question, context, askMode, history) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, context })
+      body: JSON.stringify({ question, context, mode: askMode || 'notes', history: history || [] })
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error('代理 ' + res.status + ' ' + text.slice(0, 120));
     }
     return await res.json();
+  }
+
+  /** 老师模式（未接入模型时）：给出框架式引导，而不是假装会讲题 */
+  function answerTutorLocal(question, ctx) {
+    const notes = ctx.graph ? ctx.graph.notes : [];
+    const hits = retrieve(question, notes, 3);
+    const lines = [];
+    lines.push('【未接入模型 · 框架引导】');
+    if (/求|解|证明|算|多少|怎么|题|做|讲|思路|步骤|为什么/.test(question)) {
+      lines.push('1. 把题目条件抄下来，标清已知量和待求量；缺条件的先补条件。');
+      lines.push('2. 定位考点：这题想考哪个公式/定理，先把它写出来。');
+      lines.push('3. 从待求量倒推：要得到它，需要先知道什么？' + '逐步逼近已知条件。');
+      lines.push('4. 算完代回原式检查，特别是定义域、单位和符号。');
+    } else {
+      lines.push('1. 先用一句话复述你理解的概念，卡在哪一步说出来。');
+      lines.push('2. 回忆这个概念的适用条件，很多错误来自条件不满足。');
+      lines.push('3. 找一道最简单的例题对照着看，再回到原问题。');
+    }
+    if (hits.length) {
+      lines.push('');
+      lines.push('你笔记里可能有用的材料：' + hits.map(function (n) { return n.title; }).join('、'));
+    }
+    lines.push('');
+    lines.push('接入模型后（设置窗口填 Key，或在 .env 里配 COMMAND_CODE_API_KEY）我会直接给完整分步讲解，并能追问。');
+    return { text: lines.join(String.fromCharCode(10)), refs: hits.map(function (n) { return n.title; }) };
   }
 
   /* ── 面板控制器 ───────────────────────────────────────────── */
@@ -171,7 +213,7 @@
     const suggestEl = document.getElementById('ai-suggest');
     const useNoteEl = document.getElementById('ai-use-note');
 
-    const state = { messages: [], mode: 'local', busy: false, config: loadConfig() };
+    const state = { messages: [], mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
 
     function addMessage(role, text, refs) {
       const msg = { role, text, refs: refs || [] };
@@ -269,14 +311,17 @@
       const loading = addMessage('assistant', '思考中…');
 
       try {
+        const history = state.messages.slice(-8).filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.text }));
         if (state.mode === 'direct' || state.mode === 'proxy') {
           const context = contextPayload(question);
           const result = state.mode === 'direct'
-            ? await callDirect(state.config, question, context)
-            : await callProxy(question, context);
+            ? await callDirect(Object.assign({}, state.config, { askMode: state.askMode }), question, context)
+            : await callProxy(question, context, state.askMode, history);
           loading.text = result.answer || '（模型没有返回内容）';
           loading.refs = result.refs || [];        } else {
-          const result = answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
+          const result = state.askMode === 'tutor'
+            ? answerTutorLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() })
+            : answerLocal(question, { graph: opts.getGraph(), currentNote: opts.getCurrentNote() });
           loading.text = result.text;
           loading.refs = result.refs;
         }
@@ -382,15 +427,22 @@
     detectTransport();
     greet();
 
+    /** 切换问答人设：notes=只依据笔记；tutor=老师答疑 */
+    function setAskMode(mode) {
+      state.askMode = mode === 'notes' ? 'notes' : 'tutor';
+      if (modeEl) modeEl.dataset.askMode = state.askMode;
+      return state.askMode;
+    }
+
     function reset() {
       state.messages = [];
       render();
       greet();
     }
 
-    return { send, clear, reset, setMode, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, retrieve, headingsOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

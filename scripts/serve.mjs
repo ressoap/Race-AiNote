@@ -57,14 +57,26 @@ const MIME = {
   '.ico': 'image/x-icon'
 };
 
-const SYSTEM_PROMPT = [
-  '你是用户的私人学习笔记助手，基于用户提供的笔记内容回答问题。',
-  '规则：',
-  '1. 只依据给出的笔记作答，笔记里没有的信息要明确说「笔记里没有」。',
-  '2. 回答用中文，简洁分点，不超过 300 字。',
-  '3. 引用到某篇笔记时，用 [[笔记标题]] 的形式标注，方便用户点击跳转。',
-  '4. 不要编造不存在的笔记标题。'
-].join('\n');
+/** 两种人设：notes = 只依据笔记作答；tutor = 老师答疑，可分步讲题 */
+const PROMPTS = {
+  notes: [
+    '你是用户的私人学习笔记助手，基于用户提供的笔记内容回答问题。',
+    '规则：',
+    '1. 只依据给出的笔记作答，笔记里没有的信息要明确说「笔记里没有」。',
+    '2. 回答用中文，简洁分点，不超过 300 字。',
+    '3. 引用到某篇笔记时，用 [[笔记标题]] 的形式标注，方便用户点击跳转。',
+    '4. 不要编造不存在的笔记标题。'
+  ].join(String.fromCharCode(10)),
+  tutor: [
+    '你是一位耐心、严谨的学科老师，职责是给学生答疑解惑。',
+    '规则：',
+    '1. 先判断学生问的是概念问题还是具体题目；若题目缺少条件，先追问关键条件，不要凭空假设。',
+    '2. 讲题按这个结构输出：① 考点定位 ② 解题思路 ③ 分步推导 ④ 易错提醒 ⑤ 一句话拓展。',
+    '3. 可以超出学生笔记的范围作答（这是讲课，不是检索），但若笔记里有相关材料，用 [[笔记标题]] 指出该复习哪篇。',
+    '4. 用中文，讲清推理过程而不是只给答案；不确定的地方要直说不确定，不要编造。',
+    '5. 篇幅 300 字以内，能讲完就收，不要凑字数。'
+  ].join(String.fromCharCode(10))
+};
 
 function sendJson(res, code, data) {
   const body = JSON.stringify(data);
@@ -116,6 +128,8 @@ async function handleChat(req, res) {
   try { payload = JSON.parse(raw || '{}'); } catch { sendJson(res, 400, { error: 'bad json' }); return; }
 
   const question = String(payload.question || '').slice(0, 2000);
+  const mode = payload.mode === 'tutor' ? 'tutor' : 'notes';
+  const history = Array.isArray(payload.history) ? payload.history.slice(-8) : [];
   const context = String(payload.context || '').slice(0, 20000);
   if (!question) { sendJson(res, 400, { error: 'question required' }); return; }
   if (!API_KEY) { sendJson(res, 503, { error: '服务端未配置 COMMAND_CODE_API_KEY' }); return; }
@@ -128,8 +142,11 @@ async function handleChat(req, res) {
         model: MODEL,
         temperature: 0.2,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: '【笔记内容】\n' + context + '\n\n【问题】\n' + question }
+          { role: 'system', content: PROMPTS[mode] },
+          ...history
+            .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant'); })
+            .map(function (m) { return { role: m.role, content: String(m.content || '').slice(0, 1500) }; }),
+          { role: 'user', content: (context ? '【笔记内容】\n' + context + '\n\n' : '') + '【问题】\n' + question }
         ]
       })
     });
