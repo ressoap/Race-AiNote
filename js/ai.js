@@ -519,8 +519,51 @@
       try { return JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]'); } catch (_) { return []; }
     }
 
+    let pushTimer = 0;
+
     function saveRecords(list) {
-      try { localStorage.setItem(RECORDS_KEY, JSON.stringify(list.slice(-300))); } catch (_) {}
+      const trimmed = list.slice(-300);
+      try { localStorage.setItem(RECORDS_KEY, JSON.stringify(trimmed)); } catch (_) {}
+      pushToServer(trimmed);
+    }
+
+    /** 写一份到本地服务（serve.mjs），换端口 / 换浏览器也能读回 */
+    function pushToServer(records) {
+      if (location.protocol === 'file:') return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(() => {
+        fetch('/api/store/records', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: records })
+        }).catch(() => {});
+      }, 400);
+    }
+
+    /** 启动时把服务端的记录合并进来（按 id 去重，保留更新的那条） */
+    async function initRecords() {
+      if (location.protocol === 'file:') return loadRecords().length;
+      try {
+        const res = await fetch('/api/store/records', { cache: 'no-store' });
+        if (!res.ok) return loadRecords().length;
+        const data = await res.json();
+        const remote = Array.isArray(data.records) ? data.records : [];
+        const local = loadRecords();
+        const byId = new Map();
+        for (const rec of remote) byId.set(rec.id, rec);
+        for (const rec of local) {
+          const other = byId.get(rec.id);
+          const newer = !other || (rec.resolvedAt || rec.at || 0) >= (other.resolvedAt || other.at || 0);
+          if (newer) byId.set(rec.id, rec);
+        }
+        const merged = [...byId.values()].sort((x, y) => (x.order || x.at) - (y.order || y.at));
+        try { localStorage.setItem(RECORDS_KEY, JSON.stringify(merged.slice(-300))); } catch (_) {}
+        if (merged.length) pushToServer(merged);
+        renderRecords();
+        return merged.length;
+      } catch (_) {
+        return loadRecords().length;
+      }
     }
 
     /** 归一化提问，用于判重：去掉空白与标点，取前 80 字 */
@@ -972,7 +1015,7 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

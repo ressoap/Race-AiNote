@@ -2599,6 +2599,7 @@
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
   applyAskMode('tutor');
+  ai.initRecords();
   pluginHost.boot();
   renderPluginUI();
   refreshNoteWidgets();

@@ -17,3 +17,6 @@ _tmp/
 *.log
 .DS_Store
 Thumbs.db
+
+# 本地数据（问题记录等）
+data/

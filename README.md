@@ -290,6 +290,8 @@ Race-AiNote/
 - 说明：纯前端项目**不适合**内嵌任何 API Key（打包后明文可见），所以默认走 `scripts/serve.mjs` 代理，AI 逻辑一律在本地 Node 侧。
 - 发出去的只有「当前笔记 + 关键词检索出的少数相关笔记片段」，且只发给你自己填的接口地址。
 - 云同步的 token 与 AI Key 同样只存本机 localStorage；备份包只写进你自己指定的仓库/网盘。
+- 问题记录除了浏览器 localStorage，还会通过本地服务写到 `data/records.json`（已在 `.gitignore` 里），
+  所以换端口、换浏览器、重装都不丢；启动时会把服务端与本地两份按 id 合并。
 
 ---
 

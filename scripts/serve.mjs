@@ -108,6 +108,37 @@ function serveStatic(req, res, pathname) {
 }
 
 /** 拉取可用模型列表（GET /models），密钥只在服务端 */
+/* 问题记录：落成本地文件，跨端口 / 跨浏览器都能读回 */
+const DATA_DIR = path.join(ROOT, 'data');
+const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
+
+async function handleRecords(req, res) {
+  if (req.method === 'GET') {
+    try {
+      const raw = fs.existsSync(RECORDS_FILE) ? fs.readFileSync(RECORDS_FILE, 'utf8') : '[]';
+      sendJson(res, 200, { records: JSON.parse(raw || '[]') });
+    } catch (err) {
+      sendJson(res, 200, { records: [], error: String(err && err.message ? err.message : err) });
+    }
+    return;
+  }
+  let raw = '';
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > 4_000_000) { sendJson(res, 413, { error: 'payload too large' }); return; }
+  }
+  let payload = {};
+  try { payload = JSON.parse(raw || '{}'); } catch { sendJson(res, 400, { error: 'bad json' }); return; }
+  const records = Array.isArray(payload.records) ? payload.records.slice(-500) : [];
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(RECORDS_FILE, JSON.stringify(records, null, 2), 'utf8');
+    sendJson(res, 200, { ok: true, count: records.length });
+  } catch (err) {
+    sendJson(res, 500, { error: String(err && err.message ? err.message : err) });
+  }
+}
+
 /** 把一段文本整理成干净的 Markdown */
 async function handleFormat(req, res) {
   let raw = '';
@@ -334,6 +365,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/models' && req.method === 'GET') return handleModels(res);
   if (pathname === '/api/format' && req.method === 'POST') return handleFormat(req, res);
   if (pathname === '/api/cloud/baidu' && req.method === 'POST') return handleBaidu(req, res);
+  if (pathname === '/api/store/records' && (req.method === 'GET' || req.method === 'POST')) return handleRecords(req, res);
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
