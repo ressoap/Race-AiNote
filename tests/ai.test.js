@@ -51,3 +51,41 @@ test('检索按关键词排序，命中标题权重更高', () => {
   const hits = ai.retrieve('导数', notes, 2);
   assert.equal(hits[0].title, '导数及其应用');
 });
+
+test('格式整理绝不改动正文：标记去掉后逐字一致', () => {
+  const cases = [
+    '· 第一点\n1、第二点\n一、小标题\n普通段落',
+    '今天复习导数。求 f(x)=x^2 的导数，答案是 2x。\n\n\n结论：幂函数求导。',
+    '## 已有标题\n\n- 列表一\n- 列表二\n\n> 引用一句'
+  ];
+  for (const src of cases) {
+    const out = ai.formatLocally(src);
+    assert.equal(ai.plainTextOf(out), ai.plainTextOf(src), '格式整理改变了正文：\n' + src + '\n→\n' + out);
+  }
+});
+
+test('模型结果校验：改动一个字就判定为不可用', () => {
+  const src = ['定义', '', '导数定义是极限。'].join(String.fromCharCode(10));
+  const faithful = '## 定义\n\n导数定义是极限。';
+  const changed = '## 定义\n\n导数的定义是极限。'; // 多了个「的」
+  assert.equal(ai.plainTextOf(faithful), ai.plainTextOf(src));
+  assert.notEqual(ai.plainTextOf(changed), ai.plainTextOf(src));
+});
+
+test('示例库 50 篇全部走一遍格式整理，正文一个字都不能变', () => {
+  const vm = require('node:vm');
+  const sandbox = { console };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'demo-vault.js'), 'utf8'), sandbox);
+  const vault = require('../js/vault.js');
+  const graph = vault.buildVault(sandbox.RG.demoVault.files);
+  let checked = 0;
+  for (const note of graph.notes) {
+    const out = ai.formatLocally(note.content);
+    assert.equal(ai.plainTextOf(out), ai.plainTextOf(note.content), '笔记被改动：' + note.title);
+    checked += 1;
+  }
+  assert.ok(checked >= 40);
+});

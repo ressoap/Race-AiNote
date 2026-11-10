@@ -250,6 +250,9 @@
       <datalist id="prefs-model-list"></datalist>
       <p id="prefs-model-status" class="prefs-status"></p>
       <label class="prefs-row" id="prefs-key-row"><span>API Key</span><input id="prefs-key" type="password" placeholder="sk-…（只保存在本机浏览器）" autocomplete="off"></label>
+      <label class="switch-row"><span>用模型优化格式</span><input type="checkbox" id="prefs-ai-format"><i></i></label>
+      <p class="prefs-tip">默认关闭：格式整理走确定性本地规则，绝不会改动文字。开启后由模型排版，
+        但结果必须通过「去掉标记后逐字一致」的校验，改动过一个字就自动回退本地结果。</p>
       <p class="prefs-warn">⚠ Key 只写入本浏览器 localStorage，不会上传到本项目的任何服务器，也不会进 Git 仓库。公共电脑上不要填。</p>
       <div class="prefs-actions">
         <button id="prefs-test" class="ghost-btn">测试连接</button>

@@ -1348,17 +1348,19 @@
     toast('正在整理格式…');
     try {
       const result = await ai.optimizeFormat(source);
-      if (!result || !result.trim()) return toast('AI 没有返回内容');
+      const output = typeof result === 'string' ? result : (result && result.text) || '';
+      const note = (result && result.note) || (result && result.used === 'model' ? '已用模型整理排版（正文未改动）' : '已用本地规则整理排版');
+      if (!output.trim()) return toast('没有产生可用的排版结果');
       if (editing) {
-        editor.innerHTML = markdown.render(result);
-        toast('格式已优化，确认后点「保存」');
+        editor.innerHTML = markdown.render(output);
+        toast(note + '，确认后点「保存」');
       } else {
-        node.content = result;
-        node.summary = vault.summarize(result);
-        state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: result }) : f)));
+        node.content = output;
+        node.summary = vault.summarize(output);
+        state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: output }) : f)));
         rebuild({});
         renderNote();
-        toast('格式已优化并保存到当前会话');
+        toast(note);
       }
     } catch (err) {
       toast('优化失败：' + (err && err.message ? err.message : err));
@@ -1398,6 +1400,7 @@
     $('#prefs-baseurl').value = cfg.baseUrl || '';
     $('#prefs-model').value = cfg.model || '';
     $('#prefs-key').value = cfg.key || '';
+    $('#prefs-ai-format').checked = Boolean(cfg.aiFormatModel);
     $('#prefs-model-status').textContent = '';
     $('#prefs-vault').textContent = state.vaultLabel || '—';
     const listEl = $('#prefs-model-list');
@@ -1428,7 +1431,8 @@
       mode: $('#prefs-mode').value,
       baseUrl: $('#prefs-baseurl').value.trim(),
       model: $('#prefs-model').value.trim(),
-      key: $('#prefs-key').value.trim()
+      key: $('#prefs-key').value.trim(),
+      aiFormatModel: $('#prefs-ai-format').checked
     };
     const mode = await ai.applyConfig(patch);
     $('#prefs-status').textContent = '已保存 · 当前模式：' + (mode === 'local' ? '本地分析' : mode === 'direct' ? '直连' : '代理');

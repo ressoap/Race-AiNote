@@ -150,7 +150,9 @@
         model: cfg.model,
         temperature: 0.2,
         messages: [
-          { role: 'system', content: cfg.askMode === 'tutor'
+          { role: 'system', content: cfg.askMode === 'format'
+            ? '你是排版助手。只允许插入 Markdown 标记（##、-、**、空行）来整理格式，严禁增加、删除或改动任何文字内容；原样保留 [[双链]]、#标签、代码块。直接输出整理后的正文，不要解释，不要加代码围栏。'
+            : cfg.askMode === 'tutor'
             ? '你是一位耐心的学科老师。按「①考点定位 ②解题思路 ③分步推导 ④易错提醒 ⑤一句话拓展」作答；条件不足先追问；可以超出笔记范围，但要用 [[笔记标题]] 指出相关复习材料；不要编造标题。'
             : '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。' },
           { role: 'user', content: '【笔记内容】\n' + context + '\n\n【问题】\n' + question }
@@ -203,30 +205,68 @@
     return { text: lines.join(String.fromCharCode(10)), refs: hits.map(function (n) { return n.title; }) };
   }
 
-  /** 本地格式整理：规范化空行、列表标记、标题间距（不改变内容语义） */
+  /** 本地格式整理：只做最小必要的规范化，绝不改变行序与语义 */
   function formatLocally(text) {
     const lines = String(text || '').replace(/@@r\n/g, '\n').split('\n');
     const out = [];
     for (const raw of lines) {
       let line = raw.replace(/[ \t]+$/g, '');
       if (!line.trim()) {
-        if (out[out.length - 1] !== '') out.push('');
+        if (out.length && out[out.length - 1] !== '') out.push('');
         continue;
       }
-      // 常见的非标准列表写法归一：· • ● ※、1、1) （1）
-      const bullet = line.match(/^[·•●※]\s*(.+)$/) || line.match(/^[（(]?\d+[)）.、]\s*(.+)$/);
-      if (bullet) line = '- ' + bullet[1].trim();
-      // 「一、标题」这类中文编号，短行视为小标题
-      if (/^[一二三四五六七八九十]+、\s*\S/.test(line) && line.length <= 24) {
-        line = '## ' + line.replace(/^[一二三四五六七八九十]+、\s*/, '');
+      // 1) 圆点类符号 → 无序列表
+      const dot = line.match(/^\s*[·•●※]\s*(.+)$/);
+      if (dot) {
+        line = '- ' + dot[1].trim();
+      } else {
+        // 2) 「1、」「（1）」「1）」→ 规范有序列表，编号保留
+        const cn = line.match(/^\s*[（(]?(\d+)[)）、]\s*(.+)$/);
+        if (cn) line = cn[1] + '. ' + cn[2].trim();
       }
       out.push(line);
     }
-    let result = out.join('\n').replace(/\n{3,}/g, '\n\n');
-    // 标题前后各留一个空行
-    result = result.replace(/([^\n])\n(?=## )/g, '$1\n\n');
-    result = result.replace(/\n(## .*)/g, '\n$1');
+    let result = out.join('\n');
+    // 折叠多余空行
+    result = result.replace(/\n{3,}/g, '\n\n');
+    // 按行重排：标题、列表、段落之间保证一个空行，但不打断列表
+    const rows = result.split('\n');
+    const listKind = function (s) {
+      if (s == null) return null;
+      if (/^[-*+] /.test(s)) return 'ul';
+      if (/^\d+\. /.test(s)) return 'ol';
+      return null;
+    };
+    const spaced = [];
+    for (const row of rows) {
+      const prev = spaced[spaced.length - 1];
+      const isHeading = /^#{1,6} /.test(row);
+      const kind = listKind(row);
+      const prevKind = listKind(prev);
+      const prevIsHeading = prev != null && /^#{1,6} /.test(prev);
+      if ((isHeading || kind) && prev != null && prev !== '' && prevKind !== kind) spaced.push('');
+      if (!isHeading && !kind && row !== '' && prevKind) spaced.push('');
+      if (prevIsHeading && row !== '' && !isHeading) spaced.push('');
+      spaced.push(row);
+    }
+    result = spaced.join('\n').replace(/\n{3,}/g, '\n\n');
     return result.trim();
+  }
+
+  /** 去掉 Markdown 标记，得到纯文本指纹（用于校验「只改格式不改内容」） */
+  function plainTextOf(text) {
+    return String(text || '')
+      .replace(/^\s*#{1,6}\s+/gm, '')
+      .replace(/^\s*[-*+]\s+/gm, '')
+      .replace(/^\s*[·•●※]\s*/gm, '')
+      .replace(/^\s*[（(]?\d+[)）.、]\s*/gm, '')
+      .replace(/^\s*[一二三四五六七八九十]+、\s*/gm, '')
+      .replace(/^\s*>\s?/gm, '')
+      .replace(/[*_~`]/g, '')
+      .replace(/<\/?(u|mark)>/g, '')
+      .replace(/\[\[([^\]]*)\]\]/g, '$1')
+      .replace(/\s+/g, '')
+      .trim();
   }
 
   /* ── 错题本：学科识别与目标推荐 ─────────────────────────── */
@@ -707,20 +747,24 @@
       });
     }
 
-    /** AI 优化格式：模型模式交给模型，本地模式走规则整理 */
+    /**
+     * AI 优化格式。
+     * 安全策略：默认只用确定性本地规则；开启模型整理时，结果必须通过
+     * 「去掉 Markdown 标记后逐字一致」的校验，否则自动回退本地结果。
+     */
     async function optimizeFormat(text) {
       const source = String(text || '');
-      if (!source.trim()) return source;
-      if (state.mode === 'direct') {
-        try {
-          const r = await callDirect(Object.assign({}, state.config, { askMode: 'format' }), source, '');
-          return cleanFormatAnswer(r.answer) || formatLocally(source);
-        } catch (_) {
-          return formatLocally(source);
-        }
-      }
-      if (state.mode === 'proxy') {
-        try {
+      if (!source.trim()) return { text: source, used: 'local' };
+      const local = formatLocally(source);
+      const useModel = Boolean(state.config.aiFormatModel);
+      if (!useModel || state.mode === 'local') return { text: local, used: 'local' };
+
+      let raw = '';
+      try {
+        if (state.mode === 'direct') {
+          const r = await callDirect(Object.assign({}, state.config, { askMode: 'format' }), '', source);
+          raw = r.answer || '';
+        } else {
           const res = await fetch('/api/format', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -728,20 +772,18 @@
           });
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const data = await res.json();
-          return cleanFormatAnswer(data.markdown) || formatLocally(source);
-        } catch (_) {
-          return formatLocally(source);
+          raw = data.markdown || '';
         }
+      } catch (_) {
+        return { text: local, used: 'local', note: '模型不可用，已用本地规则整理' };
       }
-      return formatLocally(source);
-    }
 
-    /** 模型可能返回 ```md 包裹，去掉围栏 */
-    function cleanFormatAnswer(text) {
-      const s = String(text || '').trim();
-      const fence = /^```[a-zA-Z]*\s*([\s\S]*?)```$/;
-      const m = s.match(fence);
-      return (m ? m[1] : s).trim();
+      const cleaned = cleanFormatAnswer(raw);
+      if (!cleaned) return { text: local, used: 'local', note: '模型没有返回内容，已用本地规则整理' };
+      if (plainTextOf(cleaned) !== plainTextOf(source)) {
+        return { text: local, used: 'local', note: '模型改动了正文，已回退为本地规则（原文未变）' };
+      }
+      return { text: cleaned, used: 'model' };
     }
 
     /** 拉取可用模型列表：直连模式问服务商，代理模式问本地服务 */
@@ -822,5 +864,5 @@
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet, formatLocally };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet, formatLocally, plainTextOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

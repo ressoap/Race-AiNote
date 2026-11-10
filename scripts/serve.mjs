@@ -70,10 +70,11 @@ const PROMPTS = {
   format: [
     '你是排版助手，负责把用户随手写的笔记整理成干净的 Markdown。',
     '规则：',
-    '1. 只调整格式与分段，不增加、不删除、不改写任何事实内容。',
-    '2. 合理使用 ## 小标题、- 列表、**加粗** 关键词；原文有编号的保留编号顺序。',
-    '3. 保留原有的 [[双链]]、#标签、代码块，不要改写它们。',
-    '4. 直接输出整理后的 Markdown 正文，不要解释、不要加代码围栏。'
+    '1. 你只能插入 Markdown 标记（## 小标题、- 列表、**加粗**、空行）。',
+    '2. 严禁增加、删除、替换、改写任何一个字；不能总结，不能补全，不能改动标点。',
+    '3. 原文有编号的保留原编号顺序，只把「1、」「·」这类写法规范化。',
+    '4. 原样保留 [[双链]]、#标签、代码块内容。',
+    '5. 直接输出整理后的正文，不要解释，不要加代码围栏。若无法在「不改字」的前提下整理，就原样输出输入内容。'
   ].join(String.fromCharCode(10)),
   tutor: [
     '你是一位耐心、严谨的学科老师，职责是给学生答疑解惑。',
@@ -125,7 +126,7 @@ async function handleFormat(req, res) {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + API_KEY },
       body: JSON.stringify({
         model: MODEL,
-        temperature: 0.1,
+        temperature: 0,
         messages: [
           { role: 'system', content: PROMPTS.format },
           { role: 'user', content: text }
