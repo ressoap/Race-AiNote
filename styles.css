@@ -1222,3 +1222,48 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 11.5px;
   color: var(--text-soft);
 }
+
+/* ── 问题记录：搜索 / 日期分块 / 拖拽 ───────────────────── */
+.record-search {
+  margin: 6px 6px 4px;
+  width: calc(100% - 12px);
+  padding: 4px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  outline: none;
+}
+.record-search:focus { border-color: var(--accent); }
+
+.record-date {
+  margin: 8px 2px 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 2px;
+}
+.ai-record.is-drop-target { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ai-record.is-dragging { opacity: 0.45; }
+
+/* ── 记录详情弹窗 ───────────────────────────────────────── */
+.record-card { width: min(560px, 100%); }
+.record-status {
+  margin: 10px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  align-self: flex-start;
+  display: inline-block;
+  background: rgba(239, 159, 39, 0.16);
+  color: #b07514;
+  font-size: 11.5px;
+}
+.record-status.is-resolved { background: rgba(63, 156, 109, 0.16); color: #3f9c6d; }
+.record-body { max-height: 420px; }
+.record-sub { margin: 12px 0 4px; font-size: 11px; letter-spacing: 0.05em; color: var(--text-dim); }
+.record-question { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-panel); border: 1px solid var(--border); font-size: 12.5px; line-height: 1.7; }
+.record-answer { font-size: 12.5px; line-height: 1.75; }
+.record-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

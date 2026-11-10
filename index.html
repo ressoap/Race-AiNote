@@ -229,6 +229,7 @@
               <span>问题记录</span>
               <span id="ai-records-count" class="ai-records-count">0</span>
             </header>
+            <input id="record-search" class="record-search" type="search" placeholder="搜索问题…" autocomplete="off" spellcheck="false">
             <div id="ai-record-list" class="ai-record-list"></div>
           </aside>
         </div>
@@ -363,6 +364,36 @@
   <button data-act="new-folder">新建文件夹</button>
   <button data-act="rename">重命名</button>
   <button data-act="delete" class="is-danger">删除</button>
+</div>
+
+<div id="record-menu" class="tree-menu" hidden>
+  <button data-act="toggle-mistake">记入错题本</button>
+  <button data-act="ask-again">继续询问</button>
+  <button data-act="delete" class="is-danger">删除此条记录</button>
+</div>
+
+<div id="record-modal" class="modal" hidden>
+  <div class="modal-card record-card">
+    <header>
+      <div>
+        <h2 id="record-title">问题记录</h2>
+        <p class="modal-path" id="record-meta">—</p>
+      </div>
+      <button id="record-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <div class="record-status" id="record-status"></div>
+    <div class="md-body record-body">
+      <h3 class="record-sub">提问</h3>
+      <div id="record-question" class="record-question"></div>
+      <h3 class="record-sub">回答</h3>
+      <div id="record-answer" class="record-answer"></div>
+    </div>
+    <footer class="record-actions">
+      <button id="record-ask" class="ghost-btn">继续询问</button>
+      <button id="record-copy" class="ghost-btn">复制问答</button>
+      <button id="record-toggle" class="primary-btn">记入错题本</button>
+    </footer>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>

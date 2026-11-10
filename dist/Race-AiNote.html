@@ -1231,6 +1231,51 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--text-soft);
 }
 
+/* ── 问题记录：搜索 / 日期分块 / 拖拽 ───────────────────── */
+.record-search {
+  margin: 6px 6px 4px;
+  width: calc(100% - 12px);
+  padding: 4px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  outline: none;
+}
+.record-search:focus { border-color: var(--accent); }
+
+.record-date {
+  margin: 8px 2px 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 2px;
+}
+.ai-record.is-drop-target { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ai-record.is-dragging { opacity: 0.45; }
+
+/* ── 记录详情弹窗 ───────────────────────────────────────── */
+.record-card { width: min(560px, 100%); }
+.record-status {
+  margin: 10px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  align-self: flex-start;
+  display: inline-block;
+  background: rgba(239, 159, 39, 0.16);
+  color: #b07514;
+  font-size: 11.5px;
+}
+.record-status.is-resolved { background: rgba(63, 156, 109, 0.16); color: #3f9c6d; }
+.record-body { max-height: 420px; }
+.record-sub { margin: 12px 0 4px; font-size: 11px; letter-spacing: 0.05em; color: var(--text-dim); }
+.record-question { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-panel); border: 1px solid var(--border); font-size: 12.5px; line-height: 1.7; }
+.record-answer { font-size: 12.5px; line-height: 1.75; }
+.record-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
 </style>
 </head>
 <body>
@@ -1455,6 +1500,7 @@ input[type="range"]::-webkit-slider-thumb {
               <span>问题记录</span>
               <span id="ai-records-count" class="ai-records-count">0</span>
             </header>
+            <input id="record-search" class="record-search" type="search" placeholder="搜索问题…" autocomplete="off" spellcheck="false">
             <div id="ai-record-list" class="ai-record-list"></div>
           </aside>
         </div>
@@ -1589,6 +1635,36 @@ input[type="range"]::-webkit-slider-thumb {
   <button data-act="new-folder">新建文件夹</button>
   <button data-act="rename">重命名</button>
   <button data-act="delete" class="is-danger">删除</button>
+</div>
+
+<div id="record-menu" class="tree-menu" hidden>
+  <button data-act="toggle-mistake">记入错题本</button>
+  <button data-act="ask-again">继续询问</button>
+  <button data-act="delete" class="is-danger">删除此条记录</button>
+</div>
+
+<div id="record-modal" class="modal" hidden>
+  <div class="modal-card record-card">
+    <header>
+      <div>
+        <h2 id="record-title">问题记录</h2>
+        <p class="modal-path" id="record-meta">—</p>
+      </div>
+      <button id="record-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <div class="record-status" id="record-status"></div>
+    <div class="md-body record-body">
+      <h3 class="record-sub">提问</h3>
+      <div id="record-question" class="record-question"></div>
+      <h3 class="record-sub">回答</h3>
+      <div id="record-answer" class="record-answer"></div>
+    </div>
+    <footer class="record-actions">
+      <button id="record-ask" class="ghost-btn">继续询问</button>
+      <button id="record-copy" class="ghost-btn">复制问答</button>
+      <button id="record-toggle" class="primary-btn">记入错题本</button>
+    </footer>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -4037,7 +4113,7 @@ input[type="range"]::-webkit-slider-thumb {
       if (idx >= 0) {
         list[idx] = Object.assign({}, list[idx], patch, { sig: sig });
       } else {
-        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig }));
+        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig, order: Date.now() }));
       }
       saveRecords(list);
       renderRecords();
@@ -4050,50 +4126,162 @@ input[type="range"]::-webkit-slider-thumb {
       return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
 
+    /* ── 问题记录：搜索 / 日期分块 / 拖拽排序 / 右键 ───────── */
+    const state2 = state;
+    state2.recordSearch = '';
+
+    function dateKey(ts) {
+      const d = new Date(ts);
+      const pad = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+
+    function dateLabel(key) {
+      const today = dateKey(Date.now());
+      const yesterday = dateKey(Date.now() - 86400000);
+      if (key === today) return '今天';
+      if (key === yesterday) return '昨天';
+      return key;
+    }
+
+    function filteredRecords() {
+      const all = loadRecords().slice().sort((a, b) => (a.order || a.at) - (b.order || b.at));
+      const kw = String(state2.recordSearch || '').trim().toLowerCase();
+      if (!kw) return all;
+      return all.filter(r =>
+        String(r.question || '').toLowerCase().includes(kw) ||
+        String(r.answer || '').toLowerCase().includes(kw) ||
+        String(r.targetTitle || '').toLowerCase().includes(kw));
+    }
+
     function renderRecords() {
       const listEl = document.getElementById('ai-record-list');
       const countEl = document.getElementById('ai-records-count');
       if (!listEl) return;
-      const list = loadRecords().slice().sort(function (a, b) { return a.at - b.at; });
+
+      const all = loadRecords();
+      const list = filteredRecords();
       if (countEl) {
-        const open = list.filter(function (r) { return r.status !== 'resolved'; }).length;
-        countEl.textContent = open ? open + '待解决' : String(list.length);
+        const open = all.filter(r => r.status !== 'resolved').length;
+        countEl.textContent = open ? open + '待解决' : String(all.length);
         countEl.classList.toggle('is-open', open > 0);
       }
+
       listEl.innerHTML = '';
       if (!list.length) {
         const empty = document.createElement('p');
         empty.className = 'ai-record-empty';
-        empty.textContent = '答疑结束可记入错题本';
+        empty.textContent = all.length ? '没有匹配的记录' : '答疑结束可记入错题本';
         listEl.appendChild(empty);
         return;
       }
+
+      // 按日期分块
+      const groups = new Map();
       for (const rec of list) {
-        const item = document.createElement('button');
-        item.className = 'ai-record' + (rec.status === 'resolved' ? ' is-resolved' : '');
-        item.title = rec.question;
-        const head = document.createElement('span');
-        head.className = 'ai-record-head';
-        const time = document.createElement('span');
-        time.className = 'ai-record-time';
-        time.textContent = formatTime(rec.at);
-        const badge = document.createElement('span');
-        badge.className = 'ai-record-badge' + (rec.status === 'resolved' ? ' is-resolved' : '');
-        badge.textContent = rec.status === 'resolved' ? '已解决' : '待解决';
-        head.append(time, badge);
-        const title = document.createElement('span');
-        title.className = 'ai-record-title';
-        title.textContent = String(rec.question || '').slice(0, 18);
-        const target = document.createElement('span');
-        target.className = 'ai-record-target';
-        target.textContent = rec.targetTitle || (rec.status === 'resolved' ? '未记入错题本' : '未处理');
-        item.append(head, title, target);
-        item.addEventListener('click', function () {
-          if (opts.onOpenNote && rec.targetTitle) opts.onOpenNote(rec.targetTitle);
-        });
-        listEl.appendChild(item);
+        const key = dateKey(rec.at);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(rec);
+      }
+      for (const [key, items] of groups) {
+        const head = document.createElement('div');
+        head.className = 'record-date';
+        head.textContent = dateLabel(key) + ' · ' + items.length;
+        listEl.appendChild(head);
+
+        for (const rec of items) {
+          const item = document.createElement('button');
+          item.className = 'ai-record' + (rec.status === 'resolved' ? ' is-resolved' : '');
+          item.draggable = true;
+          item.dataset.recordId = rec.id;
+          item.title = rec.question;
+
+          const head2 = document.createElement('span');
+          head2.className = 'ai-record-head';
+          const time = document.createElement('span');
+          time.className = 'ai-record-time';
+          time.textContent = new Date(rec.at).toTimeString().slice(0, 5);
+          const badge = document.createElement('span');
+          badge.className = 'ai-record-badge' + (rec.status === 'resolved' ? ' is-resolved' : '');
+          badge.textContent = rec.status === 'resolved' ? '已解决' : '待解决';
+          head2.append(time, badge);
+
+          const title = document.createElement('span');
+          title.className = 'ai-record-title';
+          title.textContent = String(rec.question || '').slice(0, 18);
+          const target = document.createElement('span');
+          target.className = 'ai-record-target';
+          target.textContent = rec.targetTitle || (rec.status === 'resolved' ? '未记入错题本' : '未处理');
+
+          item.append(head2, title, target);
+
+          item.addEventListener('click', () => {
+            if (opts.onRecordOpen) opts.onRecordOpen(rec);
+          });
+          item.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (opts.onRecordMenu) opts.onRecordMenu(e, rec);
+          });
+          item.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', 'record:' + rec.id);
+            item.classList.add('is-dragging');
+          });
+          item.addEventListener('dragend', () => item.classList.remove('is-dragging'));
+          item.addEventListener('dragover', e => {
+            e.preventDefault();
+            item.classList.add('is-drop-target');
+          });
+          item.addEventListener('dragleave', () => item.classList.remove('is-drop-target'));
+          item.addEventListener('drop', e => {
+            e.preventDefault();
+            item.classList.remove('is-drop-target');
+            const payload = e.dataTransfer.getData('text/plain') || '';
+            if (!payload.startsWith('record:')) return;
+            const fromId = payload.slice(7);
+            if (!fromId || fromId === rec.id) return;
+            reorderRecords(fromId, rec.id);
+          });
+
+          listEl.appendChild(item);
+        }
       }
       listEl.scrollTop = listEl.scrollHeight;
+    }
+
+    /** 把 fromId 移动到 targetId 的位置（按当前显示顺序重排 order） */
+    function reorderRecords(fromId, targetId) {
+      const list = loadRecords().slice().sort((a, b) => (a.order || a.at) - (b.order || b.at));
+      const fromIdx = list.findIndex(r => r.id === fromId);
+      const toIdx = list.findIndex(r => r.id === targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = list.splice(fromIdx, 1);
+      list.splice(toIdx, 0, moved);
+      const stamp = Date.now();
+      list.forEach((r, i) => { r.order = stamp + i; });
+      saveRecords(list);
+      renderRecords();
+    }
+
+    function updateRecord(id, patch) {
+      const list = loadRecords();
+      const idx = list.findIndex(r => r.id === id);
+      if (idx < 0) return null;
+      list[idx] = Object.assign({}, list[idx], patch);
+      saveRecords(list);
+      renderRecords();
+      return list[idx];
+    }
+
+    function deleteRecord(id) {
+      const list = loadRecords().filter(r => r.id !== id);
+      saveRecords(list);
+      renderRecords();
+    }
+
+    function setRecordSearch(keyword) {
+      state2.recordSearch = String(keyword || '');
+      renderRecords();
     }
 
     /** 答疑结束后，追加「是否记入错题本 / 标记已解决」的操作条 */
@@ -4351,7 +4539,7 @@ input[type="range"]::-webkit-slider-thumb {
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
@@ -4363,7 +4551,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T04:34:42.830Z
+   生成时间：2026-11-10T04:39:15.501Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -6473,11 +6661,155 @@ input[type="range"]::-webkit-slider-thumb {
   $('#ask-tutor').addEventListener('click', () => applyAskMode('tutor'));
   $('#ask-notes').addEventListener('click', () => applyAskMode('notes'));
 
+  /* ── 问题记录：详情弹窗 / 右键菜单 / 搜索 ───────────────── */
+  const recordModal = $('#record-modal');
+  const recordMenu = $('#record-menu');
+  let recordMenuTarget = null;
+  let recordOpenId = null;
+
+  function findRecordById(id) {
+    return (ai.records() || []).find(r => r.id === id) || null;
+  }
+
+  function openRecordDetail(record) {
+    if (!record) return;
+    recordOpenId = record.id;
+    $('#record-title').textContent = '问题记录';
+    const when = new Date(record.at).toLocaleString('zh-CN');
+    $('#record-meta').textContent = when + ' · ' + (record.mode === 'notes' ? '笔记问答' : '答疑老师');
+    const status = $('#record-status');
+    status.className = 'record-status ' + (record.status === 'resolved' ? 'is-resolved' : '');
+    status.textContent = record.status === 'resolved'
+      ? '已解决' + (record.targetTitle ? ' · 已记入《' + record.targetTitle + '》' : ' · 未记入错题本')
+      : '待解决';
+    $('#record-question').textContent = record.question || '（无）';
+    const answerEl = $('#record-answer');
+    answerEl.innerHTML = record.answer ? markdown.render(record.answer) : '（无）';
+    $('#record-toggle').textContent = record.targetTitle ? '取消记入错题本' : '记入错题本';
+    recordModal.hidden = false;
+  }
+
+  function closeRecordDetail() {
+    recordModal.hidden = true;
+    recordOpenId = null;
+  }
+
+  $('#record-close').addEventListener('click', closeRecordDetail);
+  recordModal.addEventListener('pointerdown', e => { if (e.target === recordModal) closeRecordDetail(); });
+
+  $('#record-ask').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    closeRecordDetail();
+    if (record) continueAsking(record);
+  });
+
+  $('#record-copy').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    if (!record || !navigator.clipboard) return;
+    const text = '问：' + (record.question || '') + '\n\n答：\n' + (record.answer || '');
+    navigator.clipboard.writeText(text).then(() => toast('已复制问答'));
+  });
+
+  $('#record-toggle').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    if (record) toggleRecordMistake(record);
+  });
+
+  /** 记入 / 取消记入错题本 */
+  function toggleRecordMistake(record) {
+    if (record.targetTitle) {
+      ai.updateRecord(record.id, { targetId: null, targetTitle: null, targetPath: null, status: 'open' });
+      toast('已取消记入《' + record.targetTitle + '》，状态回到待解决');
+      const fresh = findRecordById(record.id);
+      if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
+      return;
+    }
+    const info = RG.ai.recommendMistakeBook(record.question || '', state.graph);
+    if (!info.candidates.length) return toast('当前库里没有错题本类笔记');
+    const chosen = info.recommended || info.candidates[0];
+    const record2 = Object.assign({}, record, {
+      targetId: chosen.id,
+      targetTitle: chosen.title,
+      targetPath: chosen.path,
+      status: 'resolved',
+      resolvedAt: Date.now()
+    });
+    ai.updateRecord(record.id, {
+      targetId: chosen.id, targetTitle: chosen.title, targetPath: chosen.path,
+      status: 'resolved', resolvedAt: Date.now()
+    });
+    const file = state.files.find(f => f.path === chosen.path);
+    const snippet = RG.ai.mistakeSnippet(record2);
+    if (file) file.content = String(file.content || '') + snippet;
+    else state.files.push({ path: chosen.path, content: snippet });
+    state.graph = vault.buildVault(state.files);
+    rebuild({});
+    if (currentNoteId) renderNote();
+    toast('已记入《' + chosen.title + '》并标记为已解决');
+    const fresh = findRecordById(record.id);
+    if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
+  }
+
+  /** 继续追问：把这个问题带回答疑老师继续聊 */
+  function continueAsking(record) {
+    applyAskMode('tutor');
+    setAiPanel(true);
+    const box = $('#ai-text');
+    box.value = '接着上面这个问题继续：' + String(record.question || '').slice(0, 200);
+    box.focus();
+    toast('已把问题带回答疑老师，按 Enter 发送');
+  }
+
+  /* 右键菜单 */
+  function openRecordMenu(event, record) {
+    recordMenuTarget = record;
+    recordMenu.hidden = false;
+    recordMenu.style.left = Math.min(event.clientX, window.innerWidth - 170) + 'px';
+    recordMenu.style.top = Math.min(event.clientY, window.innerHeight - 130) + 'px';
+    const toggle = recordMenu.querySelector('[data-act="toggle-mistake"]');
+    if (toggle) toggle.textContent = record.targetTitle ? '取消记入错题本' : '记入错题本';
+  }
+
+  function closeRecordMenu() {
+    recordMenu.hidden = true;
+    recordMenuTarget = null;
+  }
+
+  document.addEventListener('mousedown', e => {
+    if (!recordMenu.hidden && !e.target.closest('#record-menu')) closeRecordMenu();
+  });
+
+  recordMenu.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || !recordMenuTarget) return;
+    const record = recordMenuTarget;
+    closeRecordMenu();
+    if (btn.dataset.act === 'toggle-mistake') toggleRecordMistake(record);
+    else if (btn.dataset.act === 'ask-again') continueAsking(record);
+    else if (btn.dataset.act === 'delete') {
+      if (!window.confirm('删除这条问题记录？（不会删除错题本里的内容）')) return;
+      ai.deleteRecord(record.id);
+      if (recordOpenId === record.id) closeRecordDetail();
+      toast('已删除该条记录');
+    }
+  });
+
+  /* 搜索 */
+  const recordSearch = $('#record-search');
+  if (recordSearch) {
+    recordSearch.addEventListener('input', () => ai.setRecordSearch(recordSearch.value));
+    recordSearch.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { recordSearch.value = ''; ai.setRecordSearch(''); recordSearch.blur(); }
+    });
+  }
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
     onToast: message => toast(message),
+    onRecordOpen: record => openRecordDetail(record),
+    onRecordMenu: (event, record) => openRecordMenu(event, record),
     onRecordMistake: record => {
       const snippet = RG.ai.mistakeSnippet(record);
       let file = state.files.find(f => f.path === record.targetPath);
@@ -6719,7 +7051,7 @@ input[type="range"]::-webkit-slider-thumb {
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

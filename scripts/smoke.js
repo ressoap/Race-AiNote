@@ -258,6 +258,53 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await sleep(60);
   }
   out.afterUninstall = api.pluginHost.list().length;
+  // 问题记录：日期分块 / 搜索 / 左键详情 / 右键菜单 / 拖拽排序 / 删除
+  w.localStorage.removeItem('race-ainote:mistakes');
+  api.ai.renderRecords();
+  for (const q of ['导数题怎么下手', '磁场偏转角怎么求', '概率分布列怎么列']) {
+    await api.ai.send(q);
+    await sleep(60);
+  }
+  out.recordCount = api.ai.records().length;
+  out.recordDateBlocks = w.document.querySelectorAll('.record-date').length;
+
+  const rsearch = w.document.querySelector('#record-search');
+  rsearch.value = '磁场';
+  rsearch.dispatchEvent(new w.Event('input'));
+  await sleep(80);
+  out.recordSearchHits = w.document.querySelectorAll('#ai-record-list .ai-record').length;
+  rsearch.value = '';
+  rsearch.dispatchEvent(new w.Event('input'));
+  await sleep(60);
+
+  w.document.querySelector('#ai-record-list .ai-record').click();
+  await sleep(60);
+  out.recordDetailOpen = !w.document.querySelector('#record-modal').hidden;
+  w.document.querySelector('#record-close').click();
+
+  const recItem = w.document.querySelector('#ai-record-list .ai-record');
+  recItem.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 40 }));
+  await sleep(60);
+  out.recordMenuOpen = !w.document.querySelector('#record-menu').hidden;
+  out.recordMenuItems = [...w.document.querySelectorAll('#record-menu button')].length;
+  [...w.document.querySelectorAll('#record-menu button')].find(b => b.dataset.act === 'toggle-mistake').click();
+  await sleep(120);
+  out.recordToggled = api.ai.records().some(r => r.status === 'resolved' && r.targetTitle);
+
+  const ids = [...w.document.querySelectorAll('#ai-record-list .ai-record')].map(e => e.dataset.recordId);
+  const before0 = ids[0];
+  api.ai.reorderRecords(ids[ids.length - 1], ids[0]);
+  await sleep(100);
+  const after0 = w.document.querySelector('#ai-record-list .ai-record').dataset.recordId;
+  out.recordReordered = after0 !== before0;
+
+  const countBefore = api.ai.records().length;
+  const delItem = w.document.querySelector('#ai-record-list .ai-record');
+  delItem.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 40 }));
+  await sleep(60);
+  [...w.document.querySelectorAll('#record-menu button')].find(b => b.dataset.act === 'delete').click();
+  await sleep(100);
+  out.recordDeleted = api.ai.records().length === countBefore - 1;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

@@ -2096,11 +2096,155 @@
   $('#ask-tutor').addEventListener('click', () => applyAskMode('tutor'));
   $('#ask-notes').addEventListener('click', () => applyAskMode('notes'));
 
+  /* ── 问题记录：详情弹窗 / 右键菜单 / 搜索 ───────────────── */
+  const recordModal = $('#record-modal');
+  const recordMenu = $('#record-menu');
+  let recordMenuTarget = null;
+  let recordOpenId = null;
+
+  function findRecordById(id) {
+    return (ai.records() || []).find(r => r.id === id) || null;
+  }
+
+  function openRecordDetail(record) {
+    if (!record) return;
+    recordOpenId = record.id;
+    $('#record-title').textContent = '问题记录';
+    const when = new Date(record.at).toLocaleString('zh-CN');
+    $('#record-meta').textContent = when + ' · ' + (record.mode === 'notes' ? '笔记问答' : '答疑老师');
+    const status = $('#record-status');
+    status.className = 'record-status ' + (record.status === 'resolved' ? 'is-resolved' : '');
+    status.textContent = record.status === 'resolved'
+      ? '已解决' + (record.targetTitle ? ' · 已记入《' + record.targetTitle + '》' : ' · 未记入错题本')
+      : '待解决';
+    $('#record-question').textContent = record.question || '（无）';
+    const answerEl = $('#record-answer');
+    answerEl.innerHTML = record.answer ? markdown.render(record.answer) : '（无）';
+    $('#record-toggle').textContent = record.targetTitle ? '取消记入错题本' : '记入错题本';
+    recordModal.hidden = false;
+  }
+
+  function closeRecordDetail() {
+    recordModal.hidden = true;
+    recordOpenId = null;
+  }
+
+  $('#record-close').addEventListener('click', closeRecordDetail);
+  recordModal.addEventListener('pointerdown', e => { if (e.target === recordModal) closeRecordDetail(); });
+
+  $('#record-ask').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    closeRecordDetail();
+    if (record) continueAsking(record);
+  });
+
+  $('#record-copy').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    if (!record || !navigator.clipboard) return;
+    const text = '问：' + (record.question || '') + '\n\n答：\n' + (record.answer || '');
+    navigator.clipboard.writeText(text).then(() => toast('已复制问答'));
+  });
+
+  $('#record-toggle').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    if (record) toggleRecordMistake(record);
+  });
+
+  /** 记入 / 取消记入错题本 */
+  function toggleRecordMistake(record) {
+    if (record.targetTitle) {
+      ai.updateRecord(record.id, { targetId: null, targetTitle: null, targetPath: null, status: 'open' });
+      toast('已取消记入《' + record.targetTitle + '》，状态回到待解决');
+      const fresh = findRecordById(record.id);
+      if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
+      return;
+    }
+    const info = RG.ai.recommendMistakeBook(record.question || '', state.graph);
+    if (!info.candidates.length) return toast('当前库里没有错题本类笔记');
+    const chosen = info.recommended || info.candidates[0];
+    const record2 = Object.assign({}, record, {
+      targetId: chosen.id,
+      targetTitle: chosen.title,
+      targetPath: chosen.path,
+      status: 'resolved',
+      resolvedAt: Date.now()
+    });
+    ai.updateRecord(record.id, {
+      targetId: chosen.id, targetTitle: chosen.title, targetPath: chosen.path,
+      status: 'resolved', resolvedAt: Date.now()
+    });
+    const file = state.files.find(f => f.path === chosen.path);
+    const snippet = RG.ai.mistakeSnippet(record2);
+    if (file) file.content = String(file.content || '') + snippet;
+    else state.files.push({ path: chosen.path, content: snippet });
+    state.graph = vault.buildVault(state.files);
+    rebuild({});
+    if (currentNoteId) renderNote();
+    toast('已记入《' + chosen.title + '》并标记为已解决');
+    const fresh = findRecordById(record.id);
+    if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
+  }
+
+  /** 继续追问：把这个问题带回答疑老师继续聊 */
+  function continueAsking(record) {
+    applyAskMode('tutor');
+    setAiPanel(true);
+    const box = $('#ai-text');
+    box.value = '接着上面这个问题继续：' + String(record.question || '').slice(0, 200);
+    box.focus();
+    toast('已把问题带回答疑老师，按 Enter 发送');
+  }
+
+  /* 右键菜单 */
+  function openRecordMenu(event, record) {
+    recordMenuTarget = record;
+    recordMenu.hidden = false;
+    recordMenu.style.left = Math.min(event.clientX, window.innerWidth - 170) + 'px';
+    recordMenu.style.top = Math.min(event.clientY, window.innerHeight - 130) + 'px';
+    const toggle = recordMenu.querySelector('[data-act="toggle-mistake"]');
+    if (toggle) toggle.textContent = record.targetTitle ? '取消记入错题本' : '记入错题本';
+  }
+
+  function closeRecordMenu() {
+    recordMenu.hidden = true;
+    recordMenuTarget = null;
+  }
+
+  document.addEventListener('mousedown', e => {
+    if (!recordMenu.hidden && !e.target.closest('#record-menu')) closeRecordMenu();
+  });
+
+  recordMenu.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || !recordMenuTarget) return;
+    const record = recordMenuTarget;
+    closeRecordMenu();
+    if (btn.dataset.act === 'toggle-mistake') toggleRecordMistake(record);
+    else if (btn.dataset.act === 'ask-again') continueAsking(record);
+    else if (btn.dataset.act === 'delete') {
+      if (!window.confirm('删除这条问题记录？（不会删除错题本里的内容）')) return;
+      ai.deleteRecord(record.id);
+      if (recordOpenId === record.id) closeRecordDetail();
+      toast('已删除该条记录');
+    }
+  });
+
+  /* 搜索 */
+  const recordSearch = $('#record-search');
+  if (recordSearch) {
+    recordSearch.addEventListener('input', () => ai.setRecordSearch(recordSearch.value));
+    recordSearch.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { recordSearch.value = ''; ai.setRecordSearch(''); recordSearch.blur(); }
+    });
+  }
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
     onToast: message => toast(message),
+    onRecordOpen: record => openRecordDetail(record),
+    onRecordMenu: (event, record) => openRecordMenu(event, record),
     onRecordMistake: record => {
       const snippet = RG.ai.mistakeSnippet(record);
       let file = state.files.find(f => f.path === record.targetPath);
@@ -2342,7 +2486,7 @@
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

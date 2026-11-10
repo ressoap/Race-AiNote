@@ -546,7 +546,7 @@
       if (idx >= 0) {
         list[idx] = Object.assign({}, list[idx], patch, { sig: sig });
       } else {
-        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig }));
+        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig, order: Date.now() }));
       }
       saveRecords(list);
       renderRecords();
@@ -559,50 +559,162 @@
       return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
 
+    /* ── 问题记录：搜索 / 日期分块 / 拖拽排序 / 右键 ───────── */
+    const state2 = state;
+    state2.recordSearch = '';
+
+    function dateKey(ts) {
+      const d = new Date(ts);
+      const pad = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+
+    function dateLabel(key) {
+      const today = dateKey(Date.now());
+      const yesterday = dateKey(Date.now() - 86400000);
+      if (key === today) return '今天';
+      if (key === yesterday) return '昨天';
+      return key;
+    }
+
+    function filteredRecords() {
+      const all = loadRecords().slice().sort((a, b) => (a.order || a.at) - (b.order || b.at));
+      const kw = String(state2.recordSearch || '').trim().toLowerCase();
+      if (!kw) return all;
+      return all.filter(r =>
+        String(r.question || '').toLowerCase().includes(kw) ||
+        String(r.answer || '').toLowerCase().includes(kw) ||
+        String(r.targetTitle || '').toLowerCase().includes(kw));
+    }
+
     function renderRecords() {
       const listEl = document.getElementById('ai-record-list');
       const countEl = document.getElementById('ai-records-count');
       if (!listEl) return;
-      const list = loadRecords().slice().sort(function (a, b) { return a.at - b.at; });
+
+      const all = loadRecords();
+      const list = filteredRecords();
       if (countEl) {
-        const open = list.filter(function (r) { return r.status !== 'resolved'; }).length;
-        countEl.textContent = open ? open + '待解决' : String(list.length);
+        const open = all.filter(r => r.status !== 'resolved').length;
+        countEl.textContent = open ? open + '待解决' : String(all.length);
         countEl.classList.toggle('is-open', open > 0);
       }
+
       listEl.innerHTML = '';
       if (!list.length) {
         const empty = document.createElement('p');
         empty.className = 'ai-record-empty';
-        empty.textContent = '答疑结束可记入错题本';
+        empty.textContent = all.length ? '没有匹配的记录' : '答疑结束可记入错题本';
         listEl.appendChild(empty);
         return;
       }
+
+      // 按日期分块
+      const groups = new Map();
       for (const rec of list) {
-        const item = document.createElement('button');
-        item.className = 'ai-record' + (rec.status === 'resolved' ? ' is-resolved' : '');
-        item.title = rec.question;
-        const head = document.createElement('span');
-        head.className = 'ai-record-head';
-        const time = document.createElement('span');
-        time.className = 'ai-record-time';
-        time.textContent = formatTime(rec.at);
-        const badge = document.createElement('span');
-        badge.className = 'ai-record-badge' + (rec.status === 'resolved' ? ' is-resolved' : '');
-        badge.textContent = rec.status === 'resolved' ? '已解决' : '待解决';
-        head.append(time, badge);
-        const title = document.createElement('span');
-        title.className = 'ai-record-title';
-        title.textContent = String(rec.question || '').slice(0, 18);
-        const target = document.createElement('span');
-        target.className = 'ai-record-target';
-        target.textContent = rec.targetTitle || (rec.status === 'resolved' ? '未记入错题本' : '未处理');
-        item.append(head, title, target);
-        item.addEventListener('click', function () {
-          if (opts.onOpenNote && rec.targetTitle) opts.onOpenNote(rec.targetTitle);
-        });
-        listEl.appendChild(item);
+        const key = dateKey(rec.at);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(rec);
+      }
+      for (const [key, items] of groups) {
+        const head = document.createElement('div');
+        head.className = 'record-date';
+        head.textContent = dateLabel(key) + ' · ' + items.length;
+        listEl.appendChild(head);
+
+        for (const rec of items) {
+          const item = document.createElement('button');
+          item.className = 'ai-record' + (rec.status === 'resolved' ? ' is-resolved' : '');
+          item.draggable = true;
+          item.dataset.recordId = rec.id;
+          item.title = rec.question;
+
+          const head2 = document.createElement('span');
+          head2.className = 'ai-record-head';
+          const time = document.createElement('span');
+          time.className = 'ai-record-time';
+          time.textContent = new Date(rec.at).toTimeString().slice(0, 5);
+          const badge = document.createElement('span');
+          badge.className = 'ai-record-badge' + (rec.status === 'resolved' ? ' is-resolved' : '');
+          badge.textContent = rec.status === 'resolved' ? '已解决' : '待解决';
+          head2.append(time, badge);
+
+          const title = document.createElement('span');
+          title.className = 'ai-record-title';
+          title.textContent = String(rec.question || '').slice(0, 18);
+          const target = document.createElement('span');
+          target.className = 'ai-record-target';
+          target.textContent = rec.targetTitle || (rec.status === 'resolved' ? '未记入错题本' : '未处理');
+
+          item.append(head2, title, target);
+
+          item.addEventListener('click', () => {
+            if (opts.onRecordOpen) opts.onRecordOpen(rec);
+          });
+          item.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (opts.onRecordMenu) opts.onRecordMenu(e, rec);
+          });
+          item.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('text/plain', 'record:' + rec.id);
+            item.classList.add('is-dragging');
+          });
+          item.addEventListener('dragend', () => item.classList.remove('is-dragging'));
+          item.addEventListener('dragover', e => {
+            e.preventDefault();
+            item.classList.add('is-drop-target');
+          });
+          item.addEventListener('dragleave', () => item.classList.remove('is-drop-target'));
+          item.addEventListener('drop', e => {
+            e.preventDefault();
+            item.classList.remove('is-drop-target');
+            const payload = e.dataTransfer.getData('text/plain') || '';
+            if (!payload.startsWith('record:')) return;
+            const fromId = payload.slice(7);
+            if (!fromId || fromId === rec.id) return;
+            reorderRecords(fromId, rec.id);
+          });
+
+          listEl.appendChild(item);
+        }
       }
       listEl.scrollTop = listEl.scrollHeight;
+    }
+
+    /** 把 fromId 移动到 targetId 的位置（按当前显示顺序重排 order） */
+    function reorderRecords(fromId, targetId) {
+      const list = loadRecords().slice().sort((a, b) => (a.order || a.at) - (b.order || b.at));
+      const fromIdx = list.findIndex(r => r.id === fromId);
+      const toIdx = list.findIndex(r => r.id === targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = list.splice(fromIdx, 1);
+      list.splice(toIdx, 0, moved);
+      const stamp = Date.now();
+      list.forEach((r, i) => { r.order = stamp + i; });
+      saveRecords(list);
+      renderRecords();
+    }
+
+    function updateRecord(id, patch) {
+      const list = loadRecords();
+      const idx = list.findIndex(r => r.id === id);
+      if (idx < 0) return null;
+      list[idx] = Object.assign({}, list[idx], patch);
+      saveRecords(list);
+      renderRecords();
+      return list[idx];
+    }
+
+    function deleteRecord(id) {
+      const list = loadRecords().filter(r => r.id !== id);
+      saveRecords(list);
+      renderRecords();
+    }
+
+    function setRecordSearch(keyword) {
+      state2.recordSearch = String(keyword || '');
+      renderRecords();
     }
 
     /** 答疑结束后，追加「是否记入错题本 / 标记已解决」的操作条 */
@@ -860,7 +972,7 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
