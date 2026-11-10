@@ -190,6 +190,33 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   w.document.querySelector('#cloud-provider').dispatchEvent(new w.Event('change'));
   out.githubFields = w.document.querySelectorAll('#cloud-fields [data-cloud-key]').length;
   out.cloudApi = typeof w.RG.cloud.backup === 'function' && typeof w.RG.cloud.restore === 'function';
+  // 文件树：多级目录 + 新建/重命名/删除
+  out.treeFolders = w.document.querySelectorAll('#file-tree .tree-folder').length;
+  const filesBefore = api.state.files.length;
+  w.prompt = () => '冒烟新笔记';
+  w.document.querySelector('#btn-new-note').click();
+  await sleep(120);
+  out.createdNote = api.state.files.length === filesBefore + 1;
+  out.createdPath = (api.state.files[api.state.files.length - 1] || {}).path;
+  out.vaultPersisted = Boolean(w.localStorage.getItem('race-ainote:vault'));
+
+  // 右键重命名
+  const firstRow = w.document.querySelector('#file-tree .tree-file');
+  firstRow.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
+  out.menuVisible = !w.document.querySelector('#tree-menu').hidden;
+  w.prompt = () => '冒烟改名';
+  [...w.document.querySelectorAll('#tree-menu button')].find(b => b.dataset.act === 'rename').click();
+  await sleep(120);
+  out.renamed = api.state.files.some(f => f.path.includes('冒烟改名'));
+
+  // 右键删除
+  const rowNow = w.document.querySelector('#file-tree .tree-file');
+  rowNow.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
+  const filesBeforeDelete = api.state.files.length;
+  w.confirm = () => true;
+  [...w.document.querySelectorAll('#tree-menu button')].find(b => b.dataset.act === 'delete').click();
+  await sleep(120);
+  out.deleted = api.state.files.length === filesBeforeDelete - 1;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

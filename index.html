@@ -24,6 +24,12 @@
         <button id="btn-demo" class="icon-btn" title="载入内置示例库">
           <svg viewBox="0 0 24 24"><path d="M4 5.5h6l2 2h8v11H4z"/><path d="M8 12h8M8 15h5"/></svg>
         </button>
+        <button id="btn-new-note" class="icon-btn" title="新建笔记">
+          <svg viewBox="0 0 24 24"><path d="M13.5 4.5H6v15h12V9"/><path d="M13 4.5V9h4.5"/><path d="M9 14h6M12 11v6"/></svg>
+        </button>
+        <button id="btn-new-folder" class="icon-btn" title="新建文件夹">
+          <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M12 11.5v5M9.5 14h5"/></svg>
+        </button>
         <button id="btn-clear" class="icon-btn" title="清空当前库">
           <svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M7 7l1 12h8l1-12"/></svg>
         </button>
@@ -312,6 +318,13 @@
     <input id="link-picker-search" class="link-picker-search" type="search" placeholder="搜索笔记标题…" autocomplete="off">
     <div id="link-picker-list" class="link-picker-list"></div>
   </div>
+</div>
+
+<div id="tree-menu" class="tree-menu" hidden>
+  <button data-act="new-note">新建笔记</button>
+  <button data-act="new-folder">新建文件夹</button>
+  <button data-act="rename">重命名</button>
+  <button data-act="delete" class="is-danger">删除</button>
 </div>
 
 <div id="toast" class="toast"></div>

@@ -87,6 +87,7 @@
     dirty: true,
     interacted: false,
     anim: new Map(),
+    collapsedFolders: new Set(),
     linkAnim: new Map(),
     vaultLabel: '示例库'
   };
@@ -151,6 +152,7 @@
     currentNoteId = null;
     if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
+    if (typeof saveLocalVault === 'function') saveLocalVault();
   }
 
   function loadDemo() {
@@ -859,57 +861,262 @@
     toast('已下载 ' + a.download);
   }
 
-  /* ── 文件树 ─────────────────────────────────────────────── */
+  /* ── 文件树：多级目录 + 增删改查 ───────────────────────── */
+  const VAULT_KEY = 'race-ainote:vault';
+  let treeMenuTarget = null;
+
+  function saveLocalVault() {
+    try {
+      localStorage.setItem(VAULT_KEY, JSON.stringify({
+        label: state.vaultLabel,
+        savedAt: Date.now(),
+        files: state.files
+      }));
+    } catch (_) {}
+  }
+
+  function loadLocalVault() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(VAULT_KEY) || 'null');
+      if (!raw || !Array.isArray(raw.files) || !raw.files.length) return null;
+      return raw;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** 由文件路径构建多级树 */
+  function buildTree(notes) {
+    const root = { name: '', path: '', folders: new Map(), notes: [] };
+    for (const note of notes) {
+      const parts = String(note.path || '').split('/');
+      const fileName = parts.pop();
+      let cursor = root;
+      let acc = '';
+      for (const part of parts) {
+        acc = acc ? acc + '/' + part : part;
+        if (!cursor.folders.has(part)) {
+          cursor.folders.set(part, { name: part, path: acc, folders: new Map(), notes: [] });
+        }
+        cursor = cursor.folders.get(part);
+      }
+      cursor.notes.push(Object.assign({ fileName: fileName }, note));
+    }
+    return root;
+  }
+
   function renderTree() {
     fileTree.innerHTML = '';
-    if (!state.graph || !state.graph.notes.length) {
+    const notes = state.graph ? state.graph.notes : [];
+    if (!notes.length) {
       const empty = document.createElement('p');
       empty.className = 'sidebar-foot';
-      empty.textContent = '（空）';
+      empty.textContent = '（空库，点上面的 ＋ 新建笔记）';
       fileTree.appendChild(empty);
       return;
     }
-    const folders = new Map();
-    for (const note of state.graph.notes) {
-      const dir = note.dir || '';
-      if (!folders.has(dir)) folders.set(dir, []);
-      folders.get(dir).push(note);
-    }
-    const dirs = [...folders.keys()].sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    for (const dir of dirs) {
-      const folder = document.createElement('div');
-      folder.className = 'tree-folder';
+    fileTree.appendChild(renderFolderNode(buildTree(notes), 0));
+  }
+
+  function renderFolderNode(node, depth) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tree-group';
+    const collapsed = state.collapsedFolders;
+
+    for (const folder of [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))) {
+      const row = document.createElement('div');
+      row.className = 'tree-folder';
+      row.style.paddingLeft = (6 + depth * 12) + 'px';
+      row.dataset.folder = folder.path;
       const chevron = document.createElement('span');
       chevron.className = 'chevron';
       chevron.textContent = '▾';
       const name = document.createElement('span');
-      name.textContent = dir || '/';
-      folder.append(chevron, name);
-      const group = document.createElement('div');
-      folder.addEventListener('click', () => {
-        const collapsed = group.hidden;
-        group.hidden = !collapsed;
-        folder.classList.toggle('is-collapsed', collapsed);
+      name.className = 'file-name';
+      name.textContent = folder.name;
+      row.append(chevron, name);
+
+      const children = document.createElement('div');
+      children.className = 'tree-children';
+      children.appendChild(renderFolderNode(folder, depth + 1));
+      const isCollapsed = collapsed.has(folder.path);
+      children.hidden = isCollapsed;
+      row.classList.toggle('is-collapsed', isCollapsed);
+
+      row.addEventListener('click', () => {
+        if (collapsed.has(folder.path)) collapsed.delete(folder.path);
+        else collapsed.add(folder.path);
+        children.hidden = collapsed.has(folder.path);
+        row.classList.toggle('is-collapsed', children.hidden);
       });
-      fileTree.appendChild(folder);
-      fileTree.appendChild(group);
-      const notes = folders.get(dir).sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
-      for (const note of notes) {
-        const row = document.createElement('div');
-        row.className = 'tree-file';
-        row.dataset.id = note.id;
-        row.title = note.path;
-        const icon = document.createElement('span');
-        icon.className = 'file-icon';
-        icon.textContent = '▤';
-        const label = document.createElement('span');
-        label.className = 'file-name';
-        label.textContent = note.title;
-        row.append(icon, label);
-        row.addEventListener('click', () => { openNote(note.id); showView('note'); });
-        group.appendChild(row);
-      }
+      row.addEventListener('contextmenu', e => openTreeMenu(e, 'folder', folder.path));
+      row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('is-drop'); });
+      row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        row.classList.remove('is-drop');
+        const from = e.dataTransfer.getData('text/plain');
+        if (from) moveNote(from, folder.path);
+      });
+
+      wrap.appendChild(row);
+      wrap.appendChild(children);
     }
+
+    for (const note of node.notes.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))) {
+      const row = document.createElement('div');
+      row.className = 'tree-file';
+      row.style.paddingLeft = (20 + depth * 12) + 'px';
+      row.dataset.id = note.id;
+      row.draggable = true;
+      row.title = note.path;
+      const icon = document.createElement('span');
+      icon.className = 'file-icon';
+      icon.textContent = '▤';
+      const label = document.createElement('span');
+      label.className = 'file-name';
+      label.textContent = note.title;
+      row.append(icon, label);
+      row.addEventListener('click', () => { openNote(note.id); showView('note'); });
+      row.addEventListener('contextmenu', e => openTreeMenu(e, 'note', note.path));
+      row.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', note.path));
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  /* ── 右键菜单 ───────────────────────────────────────────── */
+  const treeMenu = $('#tree-menu');
+
+  function openTreeMenu(event, kind, path) {
+    event.preventDefault();
+    event.stopPropagation();
+    treeMenuTarget = { kind: kind, path: path };
+    treeMenu.hidden = false;
+    treeMenu.style.left = Math.min(event.clientX, window.innerWidth - 160) + 'px';
+    treeMenu.style.top = Math.min(event.clientY, window.innerHeight - 150) + 'px';
+  }
+
+  function closeTreeMenu() {
+    treeMenu.hidden = true;
+    treeMenuTarget = null;
+  }
+
+  document.addEventListener('mousedown', e => {
+    if (!treeMenu.hidden && !e.target.closest('#tree-menu')) closeTreeMenu();
+  });
+
+  treeMenu.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || !treeMenuTarget) return;
+    const target = treeMenuTarget;
+    closeTreeMenu();
+    const dir = target.kind === 'folder' ? target.path : target.path.split('/').slice(0, -1).join('/');
+    if (btn.dataset.act === 'new-note') createNote(dir);
+    else if (btn.dataset.act === 'new-folder') createFolder(dir);
+    else if (btn.dataset.act === 'rename') renameEntry(target);
+    else if (btn.dataset.act === 'delete') deleteEntry(target);
+  });
+
+  $('#btn-new-note').addEventListener('click', () => {
+    const dir = state.selectedId && state.graph
+      ? (state.graph.nodes.find(n => n.id === state.selectedId) || { path: '' }).path.split('/').slice(0, -1).join('/')
+      : '';
+    createNote(dir);
+  });
+  $('#btn-new-folder').addEventListener('click', () => createFolder(''));
+
+  /* ── 增删改查 ───────────────────────────────────────────── */
+  function uniquePath(dir, base) {
+    let candidate = (dir ? dir + '/' : '') + base + '.md';
+    let i = 2;
+    while (state.files.some(f => f.path === candidate)) {
+      candidate = (dir ? dir + '/' : '') + base + '-' + i + '.md';
+      i += 1;
+    }
+    return candidate;
+  }
+
+  function createNote(dir) {
+    const input = window.prompt('新建笔记，输入标题：', '未命名笔记');
+    if (input == null) return;
+    const title = input.trim();
+    if (!title) return;
+    const path = uniquePath(dir || '', title.replace(/[\/:*?"<>|]/g, '-'));
+    state.files.push({ path: path, content: '# ' + title + '\n\n' });
+    refreshVault('已新建笔记：' + title);
+    openNoteByTitle(title);
+    showView('note');
+  }
+
+  function createFolder(dir) {
+    const input = window.prompt('新建文件夹，输入名称：', '新文件夹');
+    if (input == null) return;
+    const folder = input.trim().replace(/[\/:*?"<>|]/g, '-');
+    if (!folder) return;
+    const path = (dir ? dir + '/' : '') + folder + '/.folder.md';
+    if (state.files.some(f => f.path === path)) return toast('这个文件夹已存在');
+    state.files.push({ path: path, content: '# ' + folder + '\n\n' });
+    refreshVault('已新建文件夹：' + folder);
+  }
+
+  function renameEntry(target) {
+    const isFolder = target.kind === 'folder';
+    const base = target.path.split('/').pop().replace(/\.md$/, '');
+    const input = window.prompt(isFolder ? '重命名文件夹：' : '重命名笔记：', base);
+    if (input == null) return;
+    const clean = input.trim().replace(/[\/:*?"<>|]/g, '-');
+    if (!clean || clean === base) return;
+    const parentDir = target.path.split('/').slice(0, -1).join('/');
+    if (isFolder) {
+      const prefix = target.path + '/';
+      for (const file of state.files) {
+        if (file.path.startsWith(prefix)) {
+          file.path = (parentDir ? parentDir + '/' : '') + clean + '/' + file.path.slice(prefix.length);
+        }
+      }
+    } else {
+      const file = state.files.find(f => f.path === target.path);
+      if (!file) return;
+      file.path = uniquePath(parentDir, clean);
+    }
+    refreshVault('已重命名');
+  }
+
+  function deleteEntry(target) {
+    const isFolder = target.kind === 'folder';
+    const label = isFolder ? '文件夹 ' + target.path + ' 及其中所有内容' : target.path;
+    if (!window.confirm('确定删除 ' + label + ' ？')) return;
+    if (isFolder) {
+      const prefix = target.path + '/';
+      state.files = state.files.filter(f => !f.path.startsWith(prefix));
+    } else {
+      state.files = state.files.filter(f => f.path !== target.path);
+    }
+    refreshVault('已删除');
+  }
+
+  function moveNote(fromPath, toDir) {
+    const file = state.files.find(f => f.path === fromPath);
+    if (!file) return;
+    const currentDir = fromPath.split('/').slice(0, -1).join('/');
+    if (currentDir === toDir) return;
+    const name = fromPath.split('/').pop().replace(/\.md$/, '');
+    file.path = uniquePath(toDir, name);
+    refreshVault('已移动到 ' + (toDir || '根目录'));
+  }
+
+  /** 结构改动后统一刷新：重解析 → 重画树 → 落本地 */
+  function refreshVault(message) {
+    const keep = currentNoteId;
+    state.graph = vault.buildVault(state.files);
+    state.positions = new Map();
+    rebuild({ fresh: true });
+    renderTree();
+    if (keep && state.graph.nodes.some(n => n.id === keep)) openNote(keep);
+    else if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
+    saveLocalVault();
+    if (message) toast(message);
   }
 
   function updateTreeSelection() {
@@ -1680,7 +1887,13 @@
   resize();
   syncSettingsUI();
   renderLegend();
-  loadDemo();
+  const localVault = loadLocalVault();
+  if (localVault) {
+    loadFiles(localVault.files, localVault.label || '本地库');
+    toast('已恢复本地笔记库（' + localVault.files.length + ' 个文件）');
+  } else {
+    loadDemo();
+  }
   showView('note');
   if (state.graph && state.graph.notes[0]) openNote(state.graph.notes[0].id);
   try {
