@@ -88,6 +88,9 @@
     interacted: false,
     anim: new Map(),
     collapsedFolders: new Set(),
+    sortMode: 'usage',
+    usage: {},
+    manualOrder: {},
     linkAnim: new Map(),
     vaultLabel: '示例库'
   };
@@ -767,6 +770,7 @@
   function openNote(id) {
     const node = state.graph && state.graph.nodes.find(n => n.id === id);
     if (!node) return;
+    if (node.type === 'note') touchUsage(node.path, 'open');
     currentNoteId = id;
     state.selectedId = id;
     editing = false;
@@ -836,6 +840,7 @@
 
   function saveEditing(node, editor) {
     const md = richtext.htmlToMarkdown(editor.innerHTML);
+    touchUsage(node.path, 'edit');
     node.content = md;
     node.summary = vault.summarize(md);
     node.links = vault.extractLinks(md);
@@ -864,6 +869,79 @@
   /* ── 文件树：多级目录 + 增删改查 ───────────────────────── */
   const VAULT_KEY = 'race-ainote:vault';
   let treeMenuTarget = null;
+
+  const USAGE_KEY = 'race-ainote:usage';
+  const ORDER_KEY = 'race-ainote:order';
+  const SORT_KEY = 'race-ainote:sort';
+
+  function loadMeta() {
+    try { state.usage = JSON.parse(localStorage.getItem(USAGE_KEY) || '{}') || {}; } catch (_) { state.usage = {}; }
+    try { state.manualOrder = JSON.parse(localStorage.getItem(ORDER_KEY) || '{}') || {}; } catch (_) { state.manualOrder = {}; }
+    try { state.sortMode = localStorage.getItem(SORT_KEY) || 'usage'; } catch (_) { state.sortMode = 'usage'; }
+  }
+
+  function saveUsage() {
+    try { localStorage.setItem(USAGE_KEY, JSON.stringify(state.usage)); } catch (_) {}
+  }
+
+  function saveOrder() {
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(state.manualOrder)); } catch (_) {}
+  }
+
+  /** 记录一次使用：打开/编辑都会累加，用于「使用频率」和「更新日期」排序 */
+  function touchUsage(path, kind) {
+    if (!path) return;
+    const rec = state.usage[path] || { count: 0, openedAt: 0, updatedAt: 0 };
+    if (kind === 'open') rec.count += 1;
+    rec.openedAt = Date.now();
+    if (kind !== 'open') rec.updatedAt = Date.now();
+    state.usage[path] = rec;
+    saveUsage();
+  }
+
+  function usageOf(path) {
+    const rec = state.usage[path];
+    return rec ? rec.count : 0;
+  }
+
+  function updatedAtOf(path) {
+    const rec = state.usage[path];
+    if (rec && rec.updatedAt) return rec.updatedAt;
+    if (rec && rec.openedAt) return rec.openedAt;
+    const file = state.files.find(f => f.path === path);
+    return (file && file.mtime) || 0;
+  }
+
+  /** 文件夹聚合使用频率：其下所有笔记之和 */
+  function folderUsage(folderPath) {
+    const prefix = folderPath + '/';
+    let total = 0;
+    for (const key in state.usage) {
+      if (key.startsWith(prefix)) total += state.usage[key].count || 0;
+    }
+    return total;
+  }
+
+  function folderUpdatedAt(folderPath) {
+    const prefix = folderPath + '/';
+    let latest = 0;
+    for (const key in state.usage) {
+      if (key.startsWith(prefix)) latest = Math.max(latest, updatedAtOf(key));
+    }
+    return latest;
+  }
+
+  /** 手动顺序：没记录过的按名称排在后面 */
+  function manualRank(parentPath, name) {
+    const list = state.manualOrder[parentPath || ''] || [];
+    const i = list.indexOf(name);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  }
+
+  function setManualOrder(parentPath, names) {
+    state.manualOrder[parentPath || ''] = names;
+    saveOrder();
+  }
 
   function saveLocalVault() {
     try {
@@ -918,12 +996,51 @@
     fileTree.appendChild(renderFolderNode(buildTree(notes), 0));
   }
 
+  /** 按当前排序模式排序文件夹 */
+  function sortFolders(list, parentPath) {
+    if (state.sortMode === 'manual') {
+      return list.slice().sort((a, b) => {
+        const ra = manualRank(parentPath, a.name);
+        const rb = manualRank(parentPath, b.name);
+        if (ra !== rb) return ra - rb;
+        return a.name.localeCompare(b.name, 'zh-CN');
+      });
+    }
+    if (state.sortMode === 'updated') {
+      return list.slice().sort((a, b) => folderUpdatedAt(b.path) - folderUpdatedAt(a.path) || a.name.localeCompare(b.name, 'zh-CN'));
+    }
+    if (state.sortMode === 'name') {
+      return list.slice().sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    }
+    // 默认：使用频率优先
+    return list.slice().sort((a, b) => folderUsage(b.path) - folderUsage(a.path) || a.name.localeCompare(b.name, 'zh-CN'));
+  }
+
+  /** 按当前排序模式排序笔记 */
+  function sortNotes(list, parentPath) {
+    if (state.sortMode === 'manual') {
+      return list.slice().sort((a, b) => {
+        const ra = manualRank(parentPath, a.fileName);
+        const rb = manualRank(parentPath, b.fileName);
+        if (ra !== rb) return ra - rb;
+        return a.title.localeCompare(b.title, 'zh-CN');
+      });
+    }
+    if (state.sortMode === 'updated') {
+      return list.slice().sort((a, b) => updatedAtOf(b.path) - updatedAtOf(a.path) || a.title.localeCompare(b.title, 'zh-CN'));
+    }
+    if (state.sortMode === 'name') {
+      return list.slice().sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
+    }
+    return list.slice().sort((a, b) => usageOf(b.path) - usageOf(a.path) || a.title.localeCompare(b.title, 'zh-CN'));
+  }
+
   function renderFolderNode(node, depth) {
     const wrap = document.createElement('div');
     wrap.className = 'tree-group';
     const collapsed = state.collapsedFolders;
 
-    for (const folder of [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))) {
+    for (const folder of sortFolders([...node.folders.values()], node.path)) {
       const row = document.createElement('div');
       row.className = 'tree-folder';
       row.style.paddingLeft = (6 + depth * 12) + 'px';
@@ -950,20 +1067,28 @@
         row.classList.toggle('is-collapsed', children.hidden);
       });
       row.addEventListener('contextmenu', e => openTreeMenu(e, 'folder', folder.path));
-      row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('is-drop'); });
+      row.draggable = true;
+      row.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', 'folder:' + folder.path);
+        row.classList.add('is-dragging');
+      });
+      row.addEventListener('dragend', () => row.classList.remove('is-dragging'));
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        row.classList.add('is-drop');
+      });
       row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
       row.addEventListener('drop', e => {
         e.preventDefault();
         row.classList.remove('is-drop');
-        const from = e.dataTransfer.getData('text/plain');
-        if (from) moveNote(from, folder.path);
+        handleDrop(e.dataTransfer.getData('text/plain'), { kind: 'folder', path: folder.path });
       });
 
       wrap.appendChild(row);
       wrap.appendChild(children);
     }
 
-    for (const note of node.notes.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))) {
+    for (const note of sortNotes(node.notes, node.path)) {
       const row = document.createElement('div');
       row.className = 'tree-file';
       row.style.paddingLeft = (20 + depth * 12) + 'px';
@@ -979,7 +1104,28 @@
       row.append(icon, label);
       row.addEventListener('click', () => { openNote(note.id); showView('note'); });
       row.addEventListener('contextmenu', e => openTreeMenu(e, 'note', note.path));
-      row.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', note.path));
+      row.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', 'note:' + note.path);
+        row.classList.add('is-dragging');
+      });
+      row.addEventListener('dragend', () => row.classList.remove('is-dragging'));
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        row.classList.toggle('is-drop-before', !after);
+        row.classList.toggle('is-drop-after', after);
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('is-drop-before', 'is-drop-after');
+      });
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        row.classList.remove('is-drop-before', 'is-drop-after');
+        const rect = row.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        handleDrop(e.dataTransfer.getData('text/plain'), { kind: 'note', path: note.path, after: after, parent: node.path });
+      });
       wrap.appendChild(row);
     }
     return wrap;
@@ -1104,6 +1250,87 @@
     const name = fromPath.split('/').pop().replace(/\.md$/, '');
     file.path = uniquePath(toDir, name);
     refreshVault('已移动到 ' + (toDir || '根目录'));
+  }
+
+  /** 处理拖放：笔记进文件夹=移动；同级之间=手动排序 */
+  function handleDrop(payload, target) {
+    if (!payload) return;
+    const sep = payload.indexOf(':');
+    const kind = payload.slice(0, sep);
+    const fromPath = payload.slice(sep + 1);
+    if (!fromPath) return;
+
+    if (kind === 'note') {
+      if (target.kind === 'folder') { moveNote(fromPath, target.path); return; }
+      const fromDir = fromPath.split('/').slice(0, -1).join('/');
+      const toDir = target.parent || '';
+      if (fromDir !== toDir) moveNote(fromPath, toDir);
+      reorderWithin(toDir, fromPath, target.path, target.after);
+      return;
+    }
+
+    if (kind === 'folder') {
+      if (target.kind !== 'folder') return;
+      const parent = fromPath.split('/').slice(0, -1).join('/');
+      const targetParent = target.path.split('/').slice(0, -1).join('/');
+      if (parent !== targetParent) return;
+      reorderFolders(targetParent, fromPath, target.path);
+    }
+  }
+
+  /** 笔记同级重排：把 fromPath 放到 targetPath 前/后，写入手动顺序 */
+  function reorderWithin(dir, fromPath, targetPath, after) {
+    const notes = sortNotes(
+      (state.graph ? state.graph.notes : []).filter(n => n.path.startsWith(dir ? dir + '/' : '')
+        && !n.path.slice(dir ? dir.length + 1 : 0).includes('/')),
+      dir
+    );
+    const names = notes.map(n => n.path.split('/').pop());
+    const fromName = fromPath.split('/').pop();
+    const targetName = targetPath.split('/').pop();
+    if (fromName === targetName) return;
+    const without = names.filter(n => n !== fromName);
+    let idx = without.indexOf(targetName);
+    if (idx < 0) idx = without.length;
+    else if (after) idx += 1;
+    without.splice(idx, 0, fromName);
+    setManualOrder(dir, without);
+    switchToManual();
+  }
+
+  /** 文件夹同级重排 */
+  function reorderFolders(parentPath, fromPath, targetPath) {
+    const prefix = parentPath ? parentPath + '/' : '';
+    const folders = sortFolders(
+      [...new Set((state.graph ? state.graph.notes : []).
+        map(n => n.path).filter(p => p.startsWith(prefix)).
+        map(p => p.slice(prefix.length).split('/')[0]).filter(Boolean))]
+        .map(name => ({ name: name, path: prefix + name })),
+      parentPath
+    );
+    const names = folders.map(f => f.name);
+    const fromName = fromPath.split('/').pop();
+    const targetName = targetPath.split('/').pop();
+    if (fromName === targetName) return;
+    const without = names.filter(n => n !== fromName);
+    let idx = without.indexOf(targetName);
+    if (idx < 0) idx = without.length;
+    without.splice(idx, 0, fromName);
+    const existing = state.manualOrder[parentPath || ''] || [];
+    const merged = without.concat(existing.filter(n => !without.includes(n)));
+    setManualOrder(parentPath, merged);
+    switchToManual();
+  }
+
+  /** 拖过一次就切到手动排序，避免下次刷新又被打回按频率排 */
+  function switchToManual() {
+    if (state.sortMode !== 'manual') {
+      state.sortMode = 'manual';
+      try { localStorage.setItem(SORT_KEY, 'manual'); } catch (_) {}
+      const sel = $('#sort-mode');
+      if (sel) sel.value = 'manual';
+    }
+    refreshVault();
   }
 
   /** 结构改动后统一刷新：重解析 → 重画树 → 落本地 */
@@ -1884,6 +2111,18 @@
   const ro = new ResizeObserver(() => resize());
   ro.observe(shell);
 
+  loadMeta();
+  const sortSelect = $('#sort-mode');
+  if (sortSelect) {
+    sortSelect.value = state.sortMode;
+    sortSelect.addEventListener('change', () => {
+      state.sortMode = sortSelect.value;
+      try { localStorage.setItem(SORT_KEY, state.sortMode); } catch (_) {}
+      renderTree();
+      toast('排序：' + sortSelect.options[sortSelect.selectedIndex].textContent);
+    });
+  }
+
   resize();
   syncSettingsUI();
   renderLegend();
@@ -1908,7 +2147,7 @@
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, showView, setAiPanel, openPrefs, applyAskMode, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

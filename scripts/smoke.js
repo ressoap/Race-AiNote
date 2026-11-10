@@ -217,6 +217,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   [...w.document.querySelectorAll('#tree-menu button')].find(b => b.dataset.act === 'delete').click();
   await sleep(120);
   out.deleted = api.state.files.length === filesBeforeDelete - 1;
+  // 排序：默认按使用频率；拖拽后转手动
+  out.defaultSort = api.state.sortMode;
+  const idxOf = name => [...w.document.querySelectorAll('#file-tree .tree-file .file-name')].findIndex(e => e.textContent === name);
+  const targetNote = api.graph.notes.find(n => n.title === '磁场');
+  for (let i = 0; i < 4; i++) api.openNote(targetNote.id);
+  await sleep(100);
+  out.usageCount = (api.state.usage['30-物理/磁场.md'] || {}).count;
+  const beforeIdx = idxOf('圆周运动与万有引力');
+  api.handleDrop('note:30-物理/圆周运动与万有引力.md', { kind: 'note', path: '30-物理/磁场.md', after: false, parent: '30-物理' });
+  await sleep(200);
+  out.sortAfterDrag = api.state.sortMode;
+  out.dragMoved = idxOf('圆周运动与万有引力') < idxOf('磁场');
+  out.orderSaved = Boolean(w.localStorage.getItem('race-ainote:order'));
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));
