@@ -618,9 +618,20 @@ input[type="range"]::-webkit-slider-thumb {
   max-height: 320px;
   overflow: auto;
 }
+.md-body h1,
 .md-body h2,
 .md-body h3,
-.md-body h4 { margin: 12px 0 6px; font-size: 14px; }
+.md-body h4,
+.md-body h5,
+.md-body h6 { line-height: 1.4; color: var(--text); font-weight: 650; }
+.md-body h1 { font-size: 22px; margin: 22px 0 10px; }
+.md-body h2 { font-size: 18px; margin: 20px 0 8px; }
+.md-body h3 { font-size: 15.5px; margin: 16px 0 6px; }
+.md-body h4,
+.md-body h5,
+.md-body h6 { font-size: 14px; margin: 14px 0 6px; }
+.md-body h2 + p,
+.md-body h3 + p { margin-top: 0; }
 .md-body h2:first-child,
 .md-body p:first-child { margin-top: 0; }
 .md-body p { margin: 0 0 8px; }
@@ -753,6 +764,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--bg-panel);
 }
 .ai-panel.is-collapsed { display: none; }
+.workspace.no-ai { grid-template-columns: minmax(0, 1fr); }
 
 .ai-head {
   display: flex;
@@ -2456,7 +2468,8 @@ input[type="range"]::-webkit-slider-thumb {
       }
       if (inCode) { codeBuf.push(line); continue; }
 
-      if (!line.trim()) { closeList(); closeQuote(); continue; }
+      // 空行只结束引用；列表允许「松散写法」（项之间有空行）仍然算同一个列表
+      if (!line.trim()) { closeQuote(); continue; }
 
       const heading = line.match(/^(#{1,6})\s+(.*)$/);
       if (heading) {
@@ -2481,10 +2494,11 @@ input[type="range"]::-webkit-slider-thumb {
       }
       closeQuote();
 
-      const ul = line.match(/^\s*[-*+]\s+(.*)$/);
+      const ul = line.match(/^\s*[-*+]\s*(.*)$/);
       if (ul) {
         if (listType !== 'ul') { closeList(); out.push('<ul>'); listType = 'ul'; }
-        const task = ul[1].match(/^\[([\ xX])\]\s*(.*)$/);
+        if (!ul[1].trim()) continue;
+        const task = ul[1].match(/^\[([ xX])\]\s*(.*)$/);
         if (task) {
           const checked = task[1].toLowerCase() === 'x';
           out.push('<li class="md-task"><span class="md-check' + (checked ? ' is-done' : '') + '">' + (checked ? '✓' : '') + '</span>' + inline(task[2]) + '</li>');
@@ -2493,10 +2507,15 @@ input[type="range"]::-webkit-slider-thumb {
         }
         continue;
       }
-      const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      const ol = line.match(/^\s*(\d+)[.)]\s+(.*)$/);
       if (ol) {
-        if (listType !== 'ol') { closeList(); out.push('<ol>'); listType = 'ol'; }
-        out.push('<li>' + inline(ol[1]) + '</li>');
+        if (listType !== 'ol') {
+          closeList();
+          const startNum = Number(ol[1]);
+          out.push(startNum > 1 ? '<ol start="' + startNum + '">' : '<ol>');
+          listType = 'ol';
+        }
+        out.push('<li>' + inline(ol[2]) + '</li>');
         continue;
       }
       closeList();
@@ -3583,7 +3602,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T03:54:25.800Z
+   生成时间：2026-11-10T04:15:30.018Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -4983,6 +5002,7 @@ input[type="range"]::-webkit-slider-thumb {
 
   function setAiPanel(open) {
     $('#ai-panel').classList.toggle('is-collapsed', !open);
+    document.querySelector('.workspace').classList.toggle('no-ai', !open);
     $('#btn-ai').classList.toggle('is-active', open);
     resize();
     state.dirty = true;

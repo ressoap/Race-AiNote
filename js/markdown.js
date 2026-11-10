@@ -86,7 +86,8 @@
       }
       if (inCode) { codeBuf.push(line); continue; }
 
-      if (!line.trim()) { closeList(); closeQuote(); continue; }
+      // 空行只结束引用；列表允许「松散写法」（项之间有空行）仍然算同一个列表
+      if (!line.trim()) { closeQuote(); continue; }
 
       const heading = line.match(/^(#{1,6})\s+(.*)$/);
       if (heading) {
@@ -111,10 +112,11 @@
       }
       closeQuote();
 
-      const ul = line.match(/^\s*[-*+]\s+(.*)$/);
+      const ul = line.match(/^\s*[-*+]\s*(.*)$/);
       if (ul) {
         if (listType !== 'ul') { closeList(); out.push('<ul>'); listType = 'ul'; }
-        const task = ul[1].match(/^\[([\ xX])\]\s*(.*)$/);
+        if (!ul[1].trim()) continue;
+        const task = ul[1].match(/^\[([ xX])\]\s*(.*)$/);
         if (task) {
           const checked = task[1].toLowerCase() === 'x';
           out.push('<li class="md-task"><span class="md-check' + (checked ? ' is-done' : '') + '">' + (checked ? '✓' : '') + '</span>' + inline(task[2]) + '</li>');
@@ -123,10 +125,15 @@
         }
         continue;
       }
-      const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      const ol = line.match(/^\s*(\d+)[.)]\s+(.*)$/);
       if (ol) {
-        if (listType !== 'ol') { closeList(); out.push('<ol>'); listType = 'ol'; }
-        out.push('<li>' + inline(ol[1]) + '</li>');
+        if (listType !== 'ol') {
+          closeList();
+          const startNum = Number(ol[1]);
+          out.push(startNum > 1 ? '<ol start="' + startNum + '">' : '<ol>');
+          listType = 'ol';
+        }
+        out.push('<li>' + inline(ol[2]) + '</li>');
         continue;
       }
       closeList();

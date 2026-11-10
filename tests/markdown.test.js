@@ -61,3 +61,25 @@ test('toText 去掉标记用于摘要', () => {
   assert.ok(!text.includes('#'));
   assert.ok(text.includes('别名'));
 });
+
+test('松散列表（项之间有空行）仍合并为一个列表', () => {
+  const html = md.render('1. 单调性\n\n1. 极值\n\n1. 最值');
+  assert.equal((html.match(/<ol/g) || []).length, 1, '不应拆成多个有序列表');
+  assert.equal((html.match(/<li>/g) || []).length, 3);
+});
+
+test('有序列表保留起始编号', () => {
+  const html = md.render('3. 三\n4. 四');
+  assert.match(html, /<ol start="3">/);
+});
+
+test('空的列表项不会生成空 bullet', () => {
+  const html = md.render('- 一\n-\n- 二');
+  assert.equal((html.match(/<li>/g) || []).length, 2);
+  assert.ok(!html.includes('<p>-</p>'));
+});
+
+test('标题层级比正文高一级，便于和页面标题区分', () => {
+  assert.match(md.render('# 一级'), /<h2>一级<\/h2>/);
+  assert.match(md.render('## 二级'), /<h3>二级<\/h3>/);
+});

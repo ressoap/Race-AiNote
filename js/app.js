@@ -1386,6 +1386,7 @@
 
   function setAiPanel(open) {
     $('#ai-panel').classList.toggle('is-collapsed', !open);
+    document.querySelector('.workspace').classList.toggle('no-ai', !open);
     $('#btn-ai').classList.toggle('is-active', open);
     resize();
     state.dirty = true;

@@ -610,9 +610,20 @@ input[type="range"]::-webkit-slider-thumb {
   max-height: 320px;
   overflow: auto;
 }
+.md-body h1,
 .md-body h2,
 .md-body h3,
-.md-body h4 { margin: 12px 0 6px; font-size: 14px; }
+.md-body h4,
+.md-body h5,
+.md-body h6 { line-height: 1.4; color: var(--text); font-weight: 650; }
+.md-body h1 { font-size: 22px; margin: 22px 0 10px; }
+.md-body h2 { font-size: 18px; margin: 20px 0 8px; }
+.md-body h3 { font-size: 15.5px; margin: 16px 0 6px; }
+.md-body h4,
+.md-body h5,
+.md-body h6 { font-size: 14px; margin: 14px 0 6px; }
+.md-body h2 + p,
+.md-body h3 + p { margin-top: 0; }
 .md-body h2:first-child,
 .md-body p:first-child { margin-top: 0; }
 .md-body p { margin: 0 0 8px; }
@@ -745,6 +756,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--bg-panel);
 }
 .ai-panel.is-collapsed { display: none; }
+.workspace.no-ai { grid-template-columns: minmax(0, 1fr); }
 
 .ai-head {
   display: flex;
