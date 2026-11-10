@@ -179,6 +179,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.formatWorks = (tidy.text || '').includes('1. 第二点') && (tidy.text || '').includes('- 第一点') && !(tidy.text || '').includes('1、');
   out.formatUsed = tidy.used;
   out.formatKeepsText = w.RG.ai.plainTextOf(tidy.text) === w.RG.ai.plainTextOf(messy);
+  // 云同步：四种云盘、夸克明确不支持、GitHub/Gitee 走官方接口
+  out.cloudProviders = [...w.document.querySelectorAll('#cloud-provider option')].map(o => o.value);
+  out.hasQuark = out.cloudProviders.includes('quark');
+  w.document.querySelector('#cloud-provider').value = 'quark';
+  w.document.querySelector('#cloud-provider').dispatchEvent(new w.Event('change'));
+  out.quarkDisabled = w.document.querySelector('#cloud-backup').disabled;
+  out.quarkHint = w.document.querySelector('#cloud-hint').textContent.includes('官方');
+  w.document.querySelector('#cloud-provider').value = 'github';
+  w.document.querySelector('#cloud-provider').dispatchEvent(new w.Event('change'));
+  out.githubFields = w.document.querySelectorAll('#cloud-fields [data-cloud-key]').length;
+  out.cloudApi = typeof w.RG.cloud.backup === 'function' && typeof w.RG.cloud.restore === 'function';
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

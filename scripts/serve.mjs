@@ -211,6 +211,117 @@ async function handleChat(req, res) {
   }
 }
 
+/* ============================================================
+   百度网盘开放接口代理（官方 xpan API）
+   浏览器直连会被 CORS 拦，所以统一走本地服务中转。
+   文档：https://pan.baidu.com/union/doc
+   ============================================================ */
+const BAIDU = {
+  fileApi: 'https://pan.baidu.com/rest/2.0/xpan/file',
+  uploadApi: 'https://d.pcs.baidu.com/rest/2.0/pcs/superfile2',
+  mediaApi: 'https://pan.baidu.com/rest/2.0/xpan/multimedia'
+};
+
+async function baiduListDir(accessToken, dir) {
+  const url = BAIDU.fileApi + '?method=list&access_token=' + encodeURIComponent(accessToken)
+    + '&dir=' + encodeURIComponent(dir) + '&limit=100';
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.errno && data.errno !== 0) throw new Error('百度网盘 list 失败：errno ' + data.errno);
+  return data.list || [];
+}
+
+async function baiduFindFile(accessToken, path) {
+  const dir = path.slice(0, path.lastIndexOf('/')) || '/';
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const list = await baiduListDir(accessToken, dir);
+  return list.find(function (f) { return f.server_filename === name; }) || null;
+}
+
+async function baiduUpload(accessToken, filePath, content) {
+  const buffer = Buffer.from(content, 'utf8');
+  const md5 = crypto.createHash('md5').update(buffer).digest('hex');
+  const size = buffer.length;
+  const blockList = JSON.stringify([md5]);
+
+  const preUrl = BAIDU.fileApi + '?method=precreate&access_token=' + encodeURIComponent(accessToken);
+  const preBody = new URLSearchParams({
+    path: filePath, size: String(size), isdir: '0', autoinit: '1', rtype: '3', block_list: blockList
+  });
+  const preRes = await fetch(preUrl, { method: 'POST', body: preBody });
+  const pre = await preRes.json();
+  if (pre.errno !== 0) throw new Error('百度网盘 precreate 失败：errno ' + pre.errno);
+  const uploadId = pre.uploadid;
+  const blockList2 = pre.block_list || [];
+
+  if (!blockList2.includes(0)) {
+    const form = new FormData();
+    form.append('file', new Blob([buffer]), 'backup.json');
+    const upUrl = BAIDU.uploadApi + '?method=upload&access_token=' + encodeURIComponent(accessToken)
+      + '&type=tmpfile&path=' + encodeURIComponent(filePath)
+      + '&uploadid=' + encodeURIComponent(uploadId) + '&partseq=0';
+    const upRes = await fetch(upUrl, { method: 'POST', body: form });
+    const up = await upRes.json().catch(function () { return {}; });
+    if (up.errno && up.errno !== 0) throw new Error('百度网盘上传失败：errno ' + up.errno);
+  }
+
+  const createUrl = BAIDU.fileApi + '?method=create&access_token=' + encodeURIComponent(accessToken);
+  const createBody = new URLSearchParams({
+    path: filePath, size: String(size), isdir: '0', rtype: '3',
+    uploadid: uploadId, block_list: JSON.stringify([0])
+  });
+  const createRes = await fetch(createUrl, { method: 'POST', body: createBody });
+  const created = await createRes.json();
+  if (created.errno !== 0) throw new Error('百度网盘 create 失败：errno ' + created.errno);
+  return created;
+}
+
+async function baiduDownload(accessToken, filePath) {
+  const file = await baiduFindFile(accessToken, filePath);
+  if (!file) throw new Error('云端还没有备份文件：' + filePath);
+  const metaUrl = BAIDU.mediaApi + '?method=filemetas&access_token=' + encodeURIComponent(accessToken)
+    + '&dlink=1&fsids=[' + file.fs_id + ']';
+  const metaRes = await fetch(metaUrl);
+  const meta = await metaRes.json();
+  if (meta.errno !== 0 || !meta.list || !meta.list.length) throw new Error('百度网盘 filemetas 失败：errno ' + meta.errno);
+  const dlink = meta.list[0].dlink + '&access_token=' + encodeURIComponent(accessToken);
+  const fileRes = await fetch(dlink, { headers: { 'User-Agent': 'pan.baidu.com' } });
+  if (!fileRes.ok) throw new Error('百度网盘下载失败：HTTP ' + fileRes.status);
+  return await fileRes.text();
+}
+
+async function handleBaidu(req, res) {
+  let raw = '';
+  for await (const chunk of req) raw += chunk;
+  let payload = {};
+  try { payload = JSON.parse(raw || '{}'); } catch { sendJson(res, 400, { error: 'bad json' }); return; }
+  const accessToken = String(payload.accessToken || '');
+  if (!accessToken) { sendJson(res, 400, { error: '缺少百度网盘 access_token' }); return; }
+  const filePath = String(payload.path || '/apps/race-ainote/backup.json');
+
+  try {
+    if (payload.action === 'test') {
+      const dir = filePath.slice(0, filePath.lastIndexOf('/')) || '/';
+      await baiduListDir(accessToken, dir);
+      sendJson(res, 200, { ok: true, message: '已连接百度网盘，目录可访问：' + dir });
+      return;
+    }
+    if (payload.action === 'upload') {
+      await baiduUpload(accessToken, filePath, String(payload.content || ''));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (payload.action === 'download') {
+      const content = await baiduDownload(accessToken, filePath);
+      sendJson(res, 200, { content: content });
+      return;
+    }
+    sendJson(res, 400, { error: '未知 action' });
+  } catch (err) {
+    sendJson(res, 502, { error: String(err && err.message ? err.message : err) });
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost');
   const pathname = decodeURIComponent(url.pathname);
@@ -222,6 +333,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/chat' && req.method === 'POST') return handleChat(req, res);
   if (pathname === '/api/models' && req.method === 'GET') return handleModels(res);
   if (pathname === '/api/format' && req.method === 'POST') return handleFormat(req, res);
+  if (pathname === '/api/cloud/baidu' && req.method === 'POST') return handleBaidu(req, res);
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });

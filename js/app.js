@@ -1367,6 +1367,132 @@
     }
   });
 
+  /* ── 云同步 ─────────────────────────────────────────────── */
+  const cloud = RG.cloud;
+  let cloudConfig = cloud.loadConfig();
+
+  const CLOUD_FIELDS = {
+    github: [
+      { key: 'token', label: 'Token', type: 'password', placeholder: 'ghp_…（需 repo 权限）' },
+      { key: 'owner', label: '用户名', type: 'text', placeholder: 'ressoap' },
+      { key: 'repo', label: '仓库', type: 'text', placeholder: 'Race-AiNote' },
+      { key: 'branch', label: '分支', type: 'text', placeholder: 'main' },
+      { key: 'path', label: '文件路径', type: 'text', placeholder: 'race-ainote-backup.json' }
+    ],
+    gitee: [
+      { key: 'token', label: '私人令牌', type: 'password', placeholder: '需 projects 权限' },
+      { key: 'owner', label: '用户名', type: 'text', placeholder: 'ressoap' },
+      { key: 'repo', label: '仓库', type: 'text', placeholder: 'race-ai-note' },
+      { key: 'branch', label: '分支', type: 'text', placeholder: 'master' },
+      { key: 'path', label: '文件路径', type: 'text', placeholder: 'race-ainote-backup.json' }
+    ],
+    baidu: [
+      { key: 'accessToken', label: 'access_token', type: 'password', placeholder: '百度网盘开放平台授权后获得' },
+      { key: 'path', label: '网盘路径', type: 'text', placeholder: '/apps/race-ainote/backup.json' }
+    ],
+    quark: []
+  };
+
+  const CLOUD_HINTS = {
+    github: '用官方 Contents API：填一个有 repo 权限的 token 即可，备份文件会作为普通提交写进仓库。',
+    gitee: '用官方 OpenAPI v5：私人令牌需要 projects 权限，更新时自动带上文件 sha。',
+    baidu: '用官方 xpan 开放接口：需要先在百度网盘开放平台创建应用并完成 OAuth 授权拿到 access_token；上传经本地服务中转，避开浏览器跨域。',
+    quark: '夸克网盘没有对第三方开放的官方接口（市面上的方案都是逆向 cookie），按「有官方接口才做」的原则这里不做。'
+  };
+
+  function renderCloudFields() {
+    const provider = $('#cloud-provider').value;
+    const box = $('#cloud-fields');
+    box.innerHTML = '';
+    const defs = CLOUD_FIELDS[provider] || [];
+    const values = cloudConfig[provider] || {};
+    for (const def of defs) {
+      const label = document.createElement('label');
+      label.className = 'prefs-row';
+      const name = document.createElement('span');
+      name.textContent = def.label;
+      const input = document.createElement('input');
+      input.type = def.type;
+      input.placeholder = def.placeholder;
+      input.dataset.cloudKey = def.key;
+      input.value = values[def.key] || '';
+      if (def.type === 'password') input.autocomplete = 'off';
+      label.append(name, input);
+      box.appendChild(label);
+    }
+    $('#cloud-hint').textContent = CLOUD_HINTS[provider] || '';
+    const disabled = provider === 'quark';
+    for (const id of ['cloud-test', 'cloud-backup', 'cloud-restore']) {
+      $('#' + id).disabled = disabled;
+      $('#' + id).style.opacity = disabled ? 0.5 : 1;
+    }
+    if (cloudConfig.lastSync) {
+      const when = new Date(cloudConfig.lastSync.at);
+      $('#cloud-status').textContent = '上次备份：' + when.toLocaleString('zh-CN') + '（' + cloudConfig.lastSync.provider + '）';
+    } else {
+      $('#cloud-status').textContent = '';
+    }
+  }
+
+  function collectCloudConfig() {
+    const provider = $('#cloud-provider').value;
+    const values = Object.assign({}, cloudConfig[provider] || {});
+    for (const input of $('#cloud-fields').querySelectorAll('[data-cloud-key]')) {
+      values[input.dataset.cloudKey] = input.value.trim();
+    }
+    cloudConfig.provider = provider;
+    cloudConfig[provider] = values;
+    cloud.saveConfig(cloudConfig);
+    return cloudConfig;
+  }
+
+  $('#cloud-provider').addEventListener('change', () => {
+    cloudConfig.provider = $('#cloud-provider').value;
+    cloud.saveConfig(cloudConfig);
+    renderCloudFields();
+  });
+
+  $('#cloud-test').addEventListener('click', async () => {
+    const status = $('#cloud-status');
+    status.textContent = '测试中…';
+    try {
+      const message = await cloud.testConnection(collectCloudConfig());
+      status.textContent = '✅ ' + message;
+    } catch (err) {
+      status.textContent = '❌ ' + (err && err.message ? err.message : err);
+    }
+  });
+
+  $('#cloud-backup').addEventListener('click', async () => {
+    const status = $('#cloud-status');
+    const cfg = collectCloudConfig();
+    status.textContent = '备份中…';
+    try {
+      const result = await cloud.backup(cfg, state.files, state.vaultLabel);
+      cloudConfig.lastSync = { at: result.at, provider: cfg.provider };
+      cloud.saveConfig(cloudConfig);
+      status.textContent = '✅ 已备份 ' + state.files.length + ' 个文件，' + Math.round(result.bytes / 1024) + ' KB';
+    } catch (err) {
+      status.textContent = '❌ ' + (err && err.message ? err.message : err);
+    }
+  });
+
+  $('#cloud-restore').addEventListener('click', async () => {
+    const status = $('#cloud-status');
+    const cfg = collectCloudConfig();
+    if (!window.confirm('从云端恢复会覆盖当前库（' + state.files.length + ' 个文件），确定继续？')) return;
+    status.textContent = '恢复中…';
+    try {
+      const snapshot = await cloud.restore(cfg);
+      const files = snapshot.files.map(f => ({ path: f.path, content: f.content }));
+      loadFiles(files, (snapshot.vault || '云端备份') + ' · 恢复于 ' + new Date().toLocaleString('zh-CN'));
+      status.textContent = '✅ 已恢复 ' + files.length + ' 篇笔记（备份时间 ' + new Date(snapshot.savedAt).toLocaleString('zh-CN') + '）';
+      closePrefs();
+    } catch (err) {
+      status.textContent = '❌ ' + (err && err.message ? err.message : err);
+    }
+  });
+
   /* ── 视图 / AI 面板 / 笔记按钮 ──────────────────────────── */
   $('#view-note').addEventListener('click', () => showView('note'));
   $('#view-graph').addEventListener('click', () => showView('graph'));
@@ -1404,6 +1530,8 @@
     $('#prefs-ai-format').checked = Boolean(cfg.aiFormatModel);
     $('#prefs-model-status').textContent = '';
     $('#prefs-vault').textContent = state.vaultLabel || '—';
+    $('#cloud-provider').value = cloudConfig.provider || 'github';
+    renderCloudFields();
     const listEl = $('#prefs-model-list');
     if (listEl && !listEl.children.length) {
       const cached = (ai.state.models || []).slice(0, 50);

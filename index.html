@@ -263,6 +263,26 @@
     </section>
 
     <section class="prefs-section">
+      <h3>云同步</h3>
+      <label class="prefs-row"><span>云盘</span>
+        <select id="cloud-provider">
+          <option value="github">GitHub（官方 Contents API）</option>
+          <option value="gitee">Gitee（官方 OpenAPI v5）</option>
+          <option value="baidu">百度网盘（官方 xpan 开放接口）</option>
+          <option value="quark">夸克网盘（官方无开放接口·不支持）</option>
+        </select>
+      </label>
+      <div id="cloud-fields"></div>
+      <p class="prefs-tip" id="cloud-hint"></p>
+      <div class="prefs-actions">
+        <button id="cloud-test" class="ghost-btn">测试连接</button>
+        <button id="cloud-backup" class="primary-btn">备份到云端</button>
+        <button id="cloud-restore" class="ghost-btn">从云端恢复</button>
+      </div>
+      <p id="cloud-status" class="prefs-status"></p>
+    </section>
+
+    <section class="prefs-section">
       <h3>本地数据</h3>
       <div class="prefs-actions">
         <button id="prefs-open-folder" class="ghost-btn">打开本地笔记文件夹</button>
@@ -302,6 +322,7 @@
 <script src="js/render.js"></script>
 <script src="js/markdown.js"></script>
 <script src="js/richtext.js"></script>
+<script src="js/cloud.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/demo-vault.js"></script>
 <script src="js/app.js"></script>
