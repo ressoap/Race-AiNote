@@ -102,7 +102,7 @@
     ctx.save();
     ctx.setTransform(opts.dpr || 1, 0, 0, opts.dpr || 1, 0, 0);
     ctx.clearRect(0, 0, opts.width, opts.height);
-    ctx.fillStyle = colors.bg;
+    ctx.fillStyle = opts.background || colors.bg;
     ctx.fillRect(0, 0, opts.width, opts.height);
     ctx.translate(view.x, view.y);
     ctx.scale(scale, scale);

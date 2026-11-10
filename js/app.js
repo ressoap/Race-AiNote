@@ -16,6 +16,8 @@
   const STORAGE_KEY = 'race-ainote:v1';
 
   const DEFAULT_SETTINGS = {
+    themeMode: 'system',
+    bgPreset: 'default',
     mode: 'global',
     depth: 2,
     showTags: true,
@@ -58,14 +60,15 @@
   function loadTheme() {
     try {
       const t = localStorage.getItem(STORAGE_KEY + ':theme');
-      if (t === 'dark' || t === 'light') return t;
+      if (t === 'dark' || t === 'light' || t === 'system') return t;
     } catch (_) {}
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'system';
   }
 
   const settings = loadSettings();
   const state = {
-    theme: loadTheme(),
+    theme: 'light',
+    themeMode: 'system',
     files: [],
     graph: null,
     nodes: [],
@@ -436,6 +439,7 @@
       links: state.links,
       index: state.index,
       theme: state.theme,
+      background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
       settings: {
         arrows: settings.arrows,
         textFade: settings.textFade,
@@ -1514,12 +1518,7 @@
     rebuild({ fresh: true, fit: true });
     toast('已重新计算布局');
   });
-  $('#btn-theme').addEventListener('click', () => {
-    state.theme = state.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = state.theme;
-    try { localStorage.setItem(STORAGE_KEY + ':theme', state.theme); } catch (_) {}
-    state.dirty = true;
-  });
+  $('#btn-theme').addEventListener('click', cycleTheme);
   $('#btn-settings').addEventListener('click', () => setPanel(settingsPanel.hidden));
   $('#btn-settings-close').addEventListener('click', () => setPanel(false));
 
@@ -1811,6 +1810,73 @@
     }
   });
 
+  /* ── 主题与背景色 ───────────────────────────────────────── */
+  const BG_PRESETS = [
+    { id: 'default', label: '默认', light: '#fbfbfd', dark: '#17181c' },
+    { id: 'paper', label: '米纸', light: '#f7f1e6', dark: '#221f19' },
+    { id: 'mint', label: '护眼', light: '#e8f1e6', dark: '#1b2019' },
+    { id: 'blue', label: '淡蓝', light: '#e9eef9', dark: '#161b26' },
+    { id: 'graphite', label: '石墨', light: '#ececee', dark: '#101114' }
+  ];
+
+  const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function resolveTheme() {
+    const mode = settings.themeMode || 'system';
+    if (mode === 'system') return systemDark && systemDark.matches ? 'dark' : 'light';
+    return mode === 'dark' ? 'dark' : 'light';
+  }
+
+  function applyTheme() {
+    state.theme = resolveTheme();
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.dataset.bg = settings.bgPreset || 'default';
+    state.dirty = true;
+    updateThemeButton();
+    try { localStorage.setItem(STORAGE_KEY + ':theme', settings.themeMode || 'system'); } catch (_) {}
+  }
+
+  function updateThemeButton() {
+    const btn = $('#btn-theme');
+    if (!btn) return;
+    const mode = settings.themeMode || 'system';
+    const label = mode === 'system' ? '跟随系统' : (mode === 'dark' ? '黑夜' : '白日');
+    btn.title = '主题：' + label + '（点击切换）';
+    btn.classList.toggle('is-active', mode !== 'system');
+  }
+
+  function cycleTheme() {
+    const order = ['light', 'dark', 'system'];
+    const idx = order.indexOf(settings.themeMode || 'system');
+    settings.themeMode = order[(idx + 1) % order.length];
+    saveSettings();
+    applyTheme();
+    toast('主题：' + (settings.themeMode === 'system' ? '跟随系统' : settings.themeMode === 'dark' ? '黑夜' : '白日'));
+  }
+
+  function renderBgSwatches() {
+    const box = $('#bg-swatches');
+    if (!box) return;
+    box.innerHTML = '';
+    for (const preset of BG_PRESETS) {
+      const btn = document.createElement('button');
+      btn.className = 'bg-swatch' + ((settings.bgPreset || 'default') === preset.id ? ' is-active' : '');
+      btn.style.background = state.theme === 'dark' ? preset.dark : preset.light;
+      btn.title = preset.label;
+      const label = document.createElement('span');
+      label.textContent = preset.label;
+      btn.appendChild(label);
+      btn.addEventListener('click', () => {
+        settings.bgPreset = preset.id;
+        saveSettings();
+        applyTheme();
+        renderBgSwatches();
+        toast('背景色：' + preset.label);
+      });
+      box.appendChild(btn);
+    }
+  }
+
   /* ── 云同步 ─────────────────────────────────────────────── */
   const cloud = RG.cloud;
   let cloudConfig = cloud.loadConfig();
@@ -1974,6 +2040,8 @@
     $('#prefs-ai-format').checked = Boolean(cfg.aiFormatModel);
     $('#prefs-model-status').textContent = '';
     $('#prefs-vault').textContent = state.vaultLabel || '—';
+    $('#prefs-theme').value = settings.themeMode || 'system';
+    renderBgSwatches();
     $('#cloud-provider').value = cloudConfig.provider || 'github';
     renderCloudFields();
     const listEl = $('#prefs-model-list');
@@ -1997,6 +2065,12 @@
   $('#prefs-close').addEventListener('click', closePrefs);
   prefsModal.addEventListener('pointerdown', e => { if (e.target === prefsModal) closePrefs(); });
   $('#prefs-mode').addEventListener('change', syncKeyRow);
+  $('#prefs-theme').addEventListener('change', e => {
+    settings.themeMode = e.target.value;
+    saveSettings();
+    applyTheme();
+    renderBgSwatches();
+  });
   $('#prefs-open-folder').addEventListener('click', () => { closePrefs(); openViaPicker(); });
 
   $('#prefs-save').addEventListener('click', async () => {
@@ -2446,6 +2520,11 @@
   const ro = new ResizeObserver(() => resize());
   ro.observe(shell);
 
+  settings.themeMode = settings.themeMode || loadTheme();
+  applyTheme();
+  if (systemDark && systemDark.addEventListener) {
+    systemDark.addEventListener('change', () => { if ((settings.themeMode || 'system') === 'system') applyTheme(); });
+  }
   loadMeta();
   const sortSelect = $('#sort-mode');
   if (sortSelect) {
@@ -2472,6 +2551,11 @@
   if (state.graph && state.graph.notes[0]) openNote(state.graph.notes[0].id);
   try {
     const params = new URLSearchParams(location.search);
+    const themeParam = params.get('theme');
+    if (themeParam === 'dark' || themeParam === 'light' || themeParam === 'system') { settings.themeMode = themeParam; }
+    const bgParam = params.get('bg');
+    if (bgParam) { settings.bgPreset = bgParam; }
+    applyTheme();
     if (params.get('view') === 'graph') showView('graph');
     if (params.get('ai') === '0') setAiPanel(false);
     if (params.get('prefs') === '1') openPrefs();
@@ -2486,7 +2570,7 @@
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

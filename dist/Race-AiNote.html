@@ -1276,6 +1276,56 @@ input[type="range"]::-webkit-slider-thumb {
 .record-answer { font-size: 12.5px; line-height: 1.75; }
 .record-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
+/* ============================================================
+   背景色预设：每套都提供明 / 暗两个版本，
+   文字与边框颜色沿用明暗主题变量，保证深色底配浅色字。
+   ============================================================ */
+:root[data-bg="paper"] {
+  --bg: #f7f1e6; --bg-panel: #fffaf1; --bg-hover: rgba(120, 90, 40, 0.07);
+}
+:root[data-theme="dark"][data-bg="paper"] {
+  --bg: #221f19; --bg-panel: #2a2620; --bg-hover: rgba(255, 240, 210, 0.07);
+}
+:root[data-bg="mint"] {
+  --bg: #e8f1e6; --bg-panel: #f5faf3; --bg-hover: rgba(40, 100, 60, 0.07);
+}
+:root[data-theme="dark"][data-bg="mint"] {
+  --bg: #1b2019; --bg-panel: #232a21; --bg-hover: rgba(180, 255, 200, 0.07);
+}
+:root[data-bg="blue"] {
+  --bg: #e9eef9; --bg-panel: #f5f8fd; --bg-hover: rgba(40, 70, 140, 0.07);
+}
+:root[data-theme="dark"][data-bg="blue"] {
+  --bg: #161b26; --bg-panel: #1e2431; --bg-hover: rgba(180, 210, 255, 0.08);
+}
+:root[data-bg="graphite"] {
+  --bg: #ececee; --bg-panel: #f7f7f8; --bg-hover: rgba(30, 32, 38, 0.07);
+}
+:root[data-theme="dark"][data-bg="graphite"] {
+  --bg: #101114; --bg-panel: #181a1f; --bg-hover: rgba(255, 255, 255, 0.07);
+}
+
+/* 背景色选择器 */
+.bg-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.bg-swatch {
+  width: 34px;
+  height: 26px;
+  border-radius: 7px;
+  border: 2px solid var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+.bg-swatch.is-active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.bg-swatch span {
+  position: absolute;
+  inset: auto 0 -16px 0;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.bg-swatches { margin-bottom: 22px; }
+
 </style>
 </head>
 <body>
@@ -1519,6 +1569,20 @@ input[type="range"]::-webkit-slider-thumb {
       </div>
       <button id="prefs-close" class="icon-btn small" title="关闭">×</button>
     </header>
+
+    <section class="prefs-section">
+      <h3>外观</h3>
+      <label class="prefs-row"><span>主题</span>
+        <select id="prefs-theme">
+          <option value="light">白日</option>
+          <option value="dark">黑夜</option>
+          <option value="system">跟随系统</option>
+        </select>
+      </label>
+      <p class="prefs-tip">黑夜模式文字自动转为浅色；跟随系统会随系统明暗实时切换。</p>
+      <div class="bg-swatches" id="bg-swatches"></div>
+      <p class="prefs-tip">换背景色不影响文字对比度。</p>
+    </section>
 
     <section class="prefs-section">
       <h3>AI 模式</h3>
@@ -2506,7 +2570,7 @@ input[type="range"]::-webkit-slider-thumb {
     ctx.save();
     ctx.setTransform(opts.dpr || 1, 0, 0, opts.dpr || 1, 0, 0);
     ctx.clearRect(0, 0, opts.width, opts.height);
-    ctx.fillStyle = colors.bg;
+    ctx.fillStyle = opts.background || colors.bg;
     ctx.fillRect(0, 0, opts.width, opts.height);
     ctx.translate(view.x, view.y);
     ctx.scale(scale, scale);
@@ -4551,7 +4615,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T04:39:15.501Z
+   生成时间：2026-11-10T04:41:25.027Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -4581,6 +4645,8 @@ input[type="range"]::-webkit-slider-thumb {
   const STORAGE_KEY = 'race-ainote:v1';
 
   const DEFAULT_SETTINGS = {
+    themeMode: 'system',
+    bgPreset: 'default',
     mode: 'global',
     depth: 2,
     showTags: true,
@@ -4623,14 +4689,15 @@ input[type="range"]::-webkit-slider-thumb {
   function loadTheme() {
     try {
       const t = localStorage.getItem(STORAGE_KEY + ':theme');
-      if (t === 'dark' || t === 'light') return t;
+      if (t === 'dark' || t === 'light' || t === 'system') return t;
     } catch (_) {}
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'system';
   }
 
   const settings = loadSettings();
   const state = {
-    theme: loadTheme(),
+    theme: 'light',
+    themeMode: 'system',
     files: [],
     graph: null,
     nodes: [],
@@ -5001,6 +5068,7 @@ input[type="range"]::-webkit-slider-thumb {
       links: state.links,
       index: state.index,
       theme: state.theme,
+      background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
       settings: {
         arrows: settings.arrows,
         textFade: settings.textFade,
@@ -6079,12 +6147,7 @@ input[type="range"]::-webkit-slider-thumb {
     rebuild({ fresh: true, fit: true });
     toast('已重新计算布局');
   });
-  $('#btn-theme').addEventListener('click', () => {
-    state.theme = state.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = state.theme;
-    try { localStorage.setItem(STORAGE_KEY + ':theme', state.theme); } catch (_) {}
-    state.dirty = true;
-  });
+  $('#btn-theme').addEventListener('click', cycleTheme);
   $('#btn-settings').addEventListener('click', () => setPanel(settingsPanel.hidden));
   $('#btn-settings-close').addEventListener('click', () => setPanel(false));
 
@@ -6376,6 +6439,73 @@ input[type="range"]::-webkit-slider-thumb {
     }
   });
 
+  /* ── 主题与背景色 ───────────────────────────────────────── */
+  const BG_PRESETS = [
+    { id: 'default', label: '默认', light: '#fbfbfd', dark: '#17181c' },
+    { id: 'paper', label: '米纸', light: '#f7f1e6', dark: '#221f19' },
+    { id: 'mint', label: '护眼', light: '#e8f1e6', dark: '#1b2019' },
+    { id: 'blue', label: '淡蓝', light: '#e9eef9', dark: '#161b26' },
+    { id: 'graphite', label: '石墨', light: '#ececee', dark: '#101114' }
+  ];
+
+  const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function resolveTheme() {
+    const mode = settings.themeMode || 'system';
+    if (mode === 'system') return systemDark && systemDark.matches ? 'dark' : 'light';
+    return mode === 'dark' ? 'dark' : 'light';
+  }
+
+  function applyTheme() {
+    state.theme = resolveTheme();
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.dataset.bg = settings.bgPreset || 'default';
+    state.dirty = true;
+    updateThemeButton();
+    try { localStorage.setItem(STORAGE_KEY + ':theme', settings.themeMode || 'system'); } catch (_) {}
+  }
+
+  function updateThemeButton() {
+    const btn = $('#btn-theme');
+    if (!btn) return;
+    const mode = settings.themeMode || 'system';
+    const label = mode === 'system' ? '跟随系统' : (mode === 'dark' ? '黑夜' : '白日');
+    btn.title = '主题：' + label + '（点击切换）';
+    btn.classList.toggle('is-active', mode !== 'system');
+  }
+
+  function cycleTheme() {
+    const order = ['light', 'dark', 'system'];
+    const idx = order.indexOf(settings.themeMode || 'system');
+    settings.themeMode = order[(idx + 1) % order.length];
+    saveSettings();
+    applyTheme();
+    toast('主题：' + (settings.themeMode === 'system' ? '跟随系统' : settings.themeMode === 'dark' ? '黑夜' : '白日'));
+  }
+
+  function renderBgSwatches() {
+    const box = $('#bg-swatches');
+    if (!box) return;
+    box.innerHTML = '';
+    for (const preset of BG_PRESETS) {
+      const btn = document.createElement('button');
+      btn.className = 'bg-swatch' + ((settings.bgPreset || 'default') === preset.id ? ' is-active' : '');
+      btn.style.background = state.theme === 'dark' ? preset.dark : preset.light;
+      btn.title = preset.label;
+      const label = document.createElement('span');
+      label.textContent = preset.label;
+      btn.appendChild(label);
+      btn.addEventListener('click', () => {
+        settings.bgPreset = preset.id;
+        saveSettings();
+        applyTheme();
+        renderBgSwatches();
+        toast('背景色：' + preset.label);
+      });
+      box.appendChild(btn);
+    }
+  }
+
   /* ── 云同步 ─────────────────────────────────────────────── */
   const cloud = RG.cloud;
   let cloudConfig = cloud.loadConfig();
@@ -6539,6 +6669,8 @@ input[type="range"]::-webkit-slider-thumb {
     $('#prefs-ai-format').checked = Boolean(cfg.aiFormatModel);
     $('#prefs-model-status').textContent = '';
     $('#prefs-vault').textContent = state.vaultLabel || '—';
+    $('#prefs-theme').value = settings.themeMode || 'system';
+    renderBgSwatches();
     $('#cloud-provider').value = cloudConfig.provider || 'github';
     renderCloudFields();
     const listEl = $('#prefs-model-list');
@@ -6562,6 +6694,12 @@ input[type="range"]::-webkit-slider-thumb {
   $('#prefs-close').addEventListener('click', closePrefs);
   prefsModal.addEventListener('pointerdown', e => { if (e.target === prefsModal) closePrefs(); });
   $('#prefs-mode').addEventListener('change', syncKeyRow);
+  $('#prefs-theme').addEventListener('change', e => {
+    settings.themeMode = e.target.value;
+    saveSettings();
+    applyTheme();
+    renderBgSwatches();
+  });
   $('#prefs-open-folder').addEventListener('click', () => { closePrefs(); openViaPicker(); });
 
   $('#prefs-save').addEventListener('click', async () => {
@@ -7011,6 +7149,11 @@ input[type="range"]::-webkit-slider-thumb {
   const ro = new ResizeObserver(() => resize());
   ro.observe(shell);
 
+  settings.themeMode = settings.themeMode || loadTheme();
+  applyTheme();
+  if (systemDark && systemDark.addEventListener) {
+    systemDark.addEventListener('change', () => { if ((settings.themeMode || 'system') === 'system') applyTheme(); });
+  }
   loadMeta();
   const sortSelect = $('#sort-mode');
   if (sortSelect) {
@@ -7037,6 +7180,11 @@ input[type="range"]::-webkit-slider-thumb {
   if (state.graph && state.graph.notes[0]) openNote(state.graph.notes[0].id);
   try {
     const params = new URLSearchParams(location.search);
+    const themeParam = params.get('theme');
+    if (themeParam === 'dark' || themeParam === 'light' || themeParam === 'system') { settings.themeMode = themeParam; }
+    const bgParam = params.get('bg');
+    if (bgParam) { settings.bgPreset = bgParam; }
+    applyTheme();
     if (params.get('view') === 'graph') showView('graph');
     if (params.get('ai') === '0') setAiPanel(false);
     if (params.get('prefs') === '1') openPrefs();
@@ -7051,7 +7199,7 @@ input[type="range"]::-webkit-slider-thumb {
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

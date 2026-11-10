@@ -250,6 +250,20 @@
     </header>
 
     <section class="prefs-section">
+      <h3>外观</h3>
+      <label class="prefs-row"><span>主题</span>
+        <select id="prefs-theme">
+          <option value="light">白日</option>
+          <option value="dark">黑夜</option>
+          <option value="system">跟随系统</option>
+        </select>
+      </label>
+      <p class="prefs-tip">黑夜模式文字自动转为浅色；跟随系统会随系统明暗实时切换。</p>
+      <div class="bg-swatches" id="bg-swatches"></div>
+      <p class="prefs-tip">换背景色不影响文字对比度。</p>
+    </section>
+
+    <section class="prefs-section">
       <h3>AI 模式</h3>
       <p class="prefs-tip">不填 Key 时，问答面板走本地分析（检索 + 规则），功能有限但离线可用。填了之后才是完整 AI。</p>
       <label class="prefs-row">
