@@ -1317,3 +1317,22 @@ input[type="range"]::-webkit-slider-thumb {
   text-align: center;
 }
 .bg-swatches { margin-bottom: 22px; }
+
+/* ── 应用内输入 / 确认对话框 ─────────────────────────────── */
+.dialog-card { width: min(420px, 100%); padding: 18px; }
+.dialog-card h2 { margin: 0 0 6px; font-size: 15px; }
+.dialog-input {
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.dialog-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+#confirm-dialog-ok.is-danger { background: var(--danger); }

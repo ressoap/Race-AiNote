@@ -903,6 +903,57 @@
     toast('已下载 ' + a.download);
   }
 
+  /* ── 应用内输入 / 确认框（替换原生 prompt / confirm） ──── */
+  function askText(options) {
+    const cfg = options || {};
+    return new Promise(resolve => {
+      const modal = $('#input-dialog');
+      const field = $('#input-dialog-field');
+      $('#input-dialog-title').textContent = cfg.title || '输入';
+      $('#input-dialog-desc').textContent = cfg.desc || '';
+      field.value = cfg.value || '';
+      field.placeholder = cfg.placeholder || '';
+      modal.hidden = false;
+      setTimeout(() => { field.focus(); field.select(); }, 20);
+
+      const done = value => {
+        modal.hidden = true;
+        field.onkeydown = null;
+        $('#input-dialog-ok').onclick = null;
+        $('#input-dialog-cancel').onclick = null;
+        resolve(value);
+      };
+      $('#input-dialog-ok').onclick = () => done(field.value);
+      $('#input-dialog-cancel').onclick = () => done(null);
+      field.onkeydown = e => {
+        if (e.key === 'Enter') { e.preventDefault(); done(field.value); }
+        else if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      };
+    });
+  }
+
+  function askConfirm(options) {
+    const cfg = options || {};
+    return new Promise(resolve => {
+      const modal = $('#confirm-dialog');
+      const okBtn = $('#confirm-dialog-ok');
+      $('#confirm-dialog-title').textContent = cfg.title || '确认';
+      $('#confirm-dialog-text').textContent = cfg.message || '';
+      okBtn.textContent = cfg.okText || '确定';
+      okBtn.classList.toggle('is-danger', Boolean(cfg.danger));
+      modal.hidden = false;
+
+      const done = value => {
+        modal.hidden = true;
+        okBtn.onclick = null;
+        $('#confirm-dialog-cancel').onclick = null;
+        resolve(value);
+      };
+      okBtn.onclick = () => done(true);
+      $('#confirm-dialog-cancel').onclick = () => done(false);
+    });
+  }
+
   /* ── 文件树：多级目录 + 增删改查 ───────────────────────── */
   const VAULT_KEY = 'race-ainote:vault';
   let treeMenuTarget = null;
@@ -1220,8 +1271,8 @@
     return candidate;
   }
 
-  function createNote(dir) {
-    const input = window.prompt('新建笔记，输入标题：', '未命名笔记');
+  async function createNote(dir) {
+    const input = await askText({ title: '新建笔记', desc: '输入标题，会在当前文件夹下创建 .md 文件', value: '未命名笔记', placeholder: '例如：导数错题整理' });
     if (input == null) return;
     const title = input.trim();
     if (!title) return;
@@ -1232,8 +1283,8 @@
     showView('note');
   }
 
-  function createFolder(dir) {
-    const input = window.prompt('新建文件夹，输入名称：', '新文件夹');
+  async function createFolder(dir) {
+    const input = await askText({ title: '新建文件夹', desc: '文件夹可以无限嵌套', value: '新文件夹', placeholder: '例如：40-竞赛' });
     if (input == null) return;
     const folder = input.trim().replace(/[\/:*?"<>|]/g, '-');
     if (!folder) return;
@@ -1243,10 +1294,10 @@
     refreshVault('已新建文件夹：' + folder);
   }
 
-  function renameEntry(target) {
+  async function renameEntry(target) {
     const isFolder = target.kind === 'folder';
     const base = target.path.split('/').pop().replace(/\.md$/, '');
-    const input = window.prompt(isFolder ? '重命名文件夹：' : '重命名笔记：', base);
+    const input = await askText({ title: isFolder ? '重命名文件夹' : '重命名笔记', desc: '改名后双链会自动重新解析', value: base });
     if (input == null) return;
     const clean = input.trim().replace(/[\/:*?"<>|]/g, '-');
     if (!clean || clean === base) return;
@@ -1266,10 +1317,11 @@
     refreshVault('已重命名');
   }
 
-  function deleteEntry(target) {
+  async function deleteEntry(target) {
     const isFolder = target.kind === 'folder';
     const label = isFolder ? '文件夹 ' + target.path + ' 及其中所有内容' : target.path;
-    if (!window.confirm('确定删除 ' + label + ' ？')) return;
+    const ok = await askConfirm({ title: '确认删除', message: '将删除 ' + label + '，此操作不可撤销。', okText: '删除', danger: true });
+    if (!ok) return;
     if (isFolder) {
       const prefix = target.path + '/';
       state.files = state.files.filter(f => !f.path.startsWith(prefix));
@@ -2026,7 +2078,8 @@
   $('#cloud-restore').addEventListener('click', async () => {
     const status = $('#cloud-status');
     const cfg = collectCloudConfig();
-    if (!window.confirm('从云端恢复会覆盖当前库（' + state.files.length + ' 个文件），确定继续？')) return;
+    const okRestore = await askConfirm({ title: '从云端恢复', message: '会用云端备份覆盖当前库（' + state.files.length + ' 个文件）。', okText: '覆盖恢复', danger: true });
+    if (!okRestore) return;
     status.textContent = '恢复中…';
     try {
       const snapshot = await cloud.restore(cfg);
@@ -2324,7 +2377,7 @@
     if (!recordMenu.hidden && !e.target.closest('#record-menu')) closeRecordMenu();
   });
 
-  recordMenu.addEventListener('click', e => {
+  recordMenu.addEventListener('click', async e => {
     const btn = e.target.closest('button');
     if (!btn || !recordMenuTarget) return;
     const record = recordMenuTarget;
@@ -2332,7 +2385,8 @@
     if (btn.dataset.act === 'toggle-mistake') toggleRecordMistake(record);
     else if (btn.dataset.act === 'ask-again') continueAsking(record);
     else if (btn.dataset.act === 'delete') {
-      if (!window.confirm('删除这条问题记录？（不会删除错题本里的内容）')) return;
+      const okDel = await askConfirm({ title: '删除记录', message: '只删除这条问题记录，不会删除错题本里的内容。', okText: '删除', danger: true });
+      if (!okDel) return;
       ai.deleteRecord(record.id);
       if (recordOpenId === record.id) closeRecordDetail();
       toast('已删除该条记录');
@@ -2459,8 +2513,9 @@
         const remove = document.createElement('button');
         remove.className = 'ghost-btn tiny';
         remove.textContent = '卸载';
-        remove.addEventListener('click', () => {
-          if (!window.confirm('确定卸载插件「' + plugin.name + '」？')) return;
+        remove.addEventListener('click', async () => {
+          const okRemove = await askConfirm({ title: '卸载插件', message: '确定卸载「' + plugin.name + '」？', okText: '卸载', danger: true });
+          if (!okRemove) return;
           pluginHost.uninstall(plugin.id);
           renderPluginUI();
           refreshNoteWidgets();
@@ -2509,12 +2564,13 @@
     form.hidden = !form.hidden;
   });
 
-  $('#plugin-install').addEventListener('click', () => {
+  $('#plugin-install').addEventListener('click', async () => {
     const status = $('#plugin-status');
     const name = $('#plugin-name').value.trim() || '未命名插件';
     const code = $('#plugin-code').value;
     if (!code.trim()) { status.textContent = '❌ 代码不能为空'; return; }
-    if (!window.confirm('插件代码会以本页面权限运行，确定安装「' + name + '」？')) return;
+    const okInstall = await askConfirm({ title: '安装插件', message: '插件代码会以本页面权限运行，能读写你的笔记。确定安装「' + name + '」？', okText: '安装' });
+    if (!okInstall) return;
     try {
       pluginHost.install({ name: name, version: $('#plugin-version').value.trim() || '1.0.0', code: code });
       status.textContent = '✅ 已安装并启用：' + name;
