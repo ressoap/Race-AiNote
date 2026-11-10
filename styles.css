@@ -1013,3 +1013,86 @@ input[type="range"]::-webkit-slider-thumb {
 .ai-record-badge.is-resolved { background: rgba(63, 156, 109, 0.16); color: #3f9c6d; }
 .ai-record.is-resolved { opacity: 0.72; }
 .ai-records-count.is-open { background: rgba(239, 159, 39, 0.18); color: #b07514; }
+
+/* ── 富文本编辑器 ───────────────────────────────────────── */
+.note-editor {
+  min-height: 420px;
+  margin-top: 16px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.85;
+  outline: none;
+}
+.note-editor:focus { outline: none; }
+.note-editor:empty::before {
+  content: "直接在这里写，选中文字可以加粗、加下划线、链接到别的笔记…";
+  color: var(--text-dim);
+}
+.note-editor u { text-decoration: underline; text-underline-offset: 3px; }
+.note-editor mark { background: rgba(255, 226, 122, 0.75); color: inherit; padding: 0 2px; border-radius: 3px; }
+.note-editor .md-link { color: var(--accent); border-bottom: 1px dashed var(--accent); }
+
+/* ── 选区工具条 ─────────────────────────────────────────── */
+.sel-toolbar {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+.sel-btn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sel-btn:hover { background: var(--accent-soft); color: var(--accent); }
+.sel-btn[hidden] { display: none !important; }
+
+/* ── 链接到笔记选择器 ───────────────────────────────────── */
+.link-picker-card { width: min(440px, 100%); }
+.link-picker-search {
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.link-picker-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.link-picker-list { margin-top: 8px; max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
+.link-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.link-picker-item:hover { background: var(--accent-soft); }
+.link-picker-path { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-picker-empty { margin: 8px 4px; font-size: 12px; color: var(--text-dim); }

@@ -51,6 +51,8 @@
     s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
 
     s = s.replace(/\u0000(\d+)\u0000/g, function (_, i) { return codes[Number(i)]; });
+    // 只允许这几个排版标签从编辑器带进来，其余 HTML 一律保持转义状态
+    s = s.replace(/&lt;(\/?)(u|mark|br)&gt;/gi, function (_, slash, tag) { return "<" + slash + tag + ">"; });
     return s;
   }
 

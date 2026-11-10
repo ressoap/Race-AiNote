@@ -67,6 +67,14 @@ const PROMPTS = {
     '3. 引用到某篇笔记时，用 [[笔记标题]] 的形式标注，方便用户点击跳转。',
     '4. 不要编造不存在的笔记标题。'
   ].join(String.fromCharCode(10)),
+  format: [
+    '你是排版助手，负责把用户随手写的笔记整理成干净的 Markdown。',
+    '规则：',
+    '1. 只调整格式与分段，不增加、不删除、不改写任何事实内容。',
+    '2. 合理使用 ## 小标题、- 列表、**加粗** 关键词；原文有编号的保留编号顺序。',
+    '3. 保留原有的 [[双链]]、#标签、代码块，不要改写它们。',
+    '4. 直接输出整理后的 Markdown 正文，不要解释、不要加代码围栏。'
+  ].join(String.fromCharCode(10)),
   tutor: [
     '你是一位耐心、严谨的学科老师，职责是给学生答疑解惑。',
     '规则：',
@@ -99,6 +107,44 @@ function serveStatic(req, res, pathname) {
 }
 
 /** 拉取可用模型列表（GET /models），密钥只在服务端 */
+/** 把一段文本整理成干净的 Markdown */
+async function handleFormat(req, res) {
+  let raw = '';
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > 200000) { sendJson(res, 413, { error: 'payload too large' }); return; }
+  }
+  let payload = {};
+  try { payload = JSON.parse(raw || '{}'); } catch { sendJson(res, 400, { error: 'bad json' }); return; }
+  const text = String(payload.text || '').slice(0, 12000);
+  if (!text.trim()) { sendJson(res, 400, { error: 'text required' }); return; }
+  if (!API_KEY) { sendJson(res, 503, { error: '服务端未配置 COMMAND_CODE_API_KEY' }); return; }
+  try {
+    const upstream = await fetch(BASE_URL + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + API_KEY },
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.1,
+        messages: [
+          { role: 'system', content: PROMPTS.format },
+          { role: 'user', content: text }
+        ]
+      })
+    });
+    if (!upstream.ok) {
+      const errText = (await upstream.text()).slice(0, 200);
+      return sendJson(res, 502, { error: 'upstream ' + upstream.status + ': ' + errText });
+    }
+    const data = await upstream.json();
+    let markdown = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    markdown = String(markdown).trim().replace(/^```[a-zA-Z]*\s*/m, '').replace(/```\s*$/m, '').trim();
+    sendJson(res, 200, { markdown: markdown });
+  } catch (err) {
+    sendJson(res, 502, { error: String(err && err.message ? err.message : err) });
+  }
+}
+
 async function handleModels(res) {
   if (!API_KEY) return sendJson(res, 503, { error: '服务端未配置 COMMAND_CODE_API_KEY' });
   try {
@@ -174,6 +220,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (pathname === '/api/chat' && req.method === 'POST') return handleChat(req, res);
   if (pathname === '/api/models' && req.method === 'GET') return handleModels(res);
+  if (pathname === '/api/format' && req.method === 'POST') return handleFormat(req, res);
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });

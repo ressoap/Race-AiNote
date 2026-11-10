@@ -156,6 +156,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.recordCountFinal = all.length;
   out.allResolved = all.every(r => r.status === 'resolved');
   out.archivedMsgs = api.ai.threads().tutor.filter(m => m.archived).length;
+  // 富文本编辑：渲染 → 用户排版 → 转回 Markdown
+  api.openNoteByTitle('导数及其应用');
+  w.document.querySelector('#btn-note-edit').click();
+  const editor = w.document.querySelector('#note-editor');
+  out.editorIsRich = !editor.hidden && editor.getAttribute('contenteditable') === 'true';
+  editor.innerHTML = '<h2>T</h2><p>有 <b>粗</b> 与 <u>线</u> 和 <span class="md-link" data-wikilink="磁场">磁场</span></p>';
+  w.document.querySelector('#btn-note-edit').click();
+  await sleep(120);
+  const edited = api.graph.notes.find(n => n.title === '导数及其应用').content;
+  out.editorMarkdown = edited.trim();
+  out.editorKeepsBold = edited.includes('**粗**');
+  out.editorKeepsUnderline = edited.includes('<u>线</u>');
+  out.editorKeepsWikiLink = edited.includes('[[磁场]]');
+  out.selToolbarExists = Boolean(w.document.querySelector('#sel-toolbar'));
+  out.linkPickerExists = Boolean(w.document.querySelector('#link-picker'));
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

@@ -1022,6 +1022,89 @@ input[type="range"]::-webkit-slider-thumb {
 .ai-record.is-resolved { opacity: 0.72; }
 .ai-records-count.is-open { background: rgba(239, 159, 39, 0.18); color: #b07514; }
 
+/* ── 富文本编辑器 ───────────────────────────────────────── */
+.note-editor {
+  min-height: 420px;
+  margin-top: 16px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.85;
+  outline: none;
+}
+.note-editor:focus { outline: none; }
+.note-editor:empty::before {
+  content: "直接在这里写，选中文字可以加粗、加下划线、链接到别的笔记…";
+  color: var(--text-dim);
+}
+.note-editor u { text-decoration: underline; text-underline-offset: 3px; }
+.note-editor mark { background: rgba(255, 226, 122, 0.75); color: inherit; padding: 0 2px; border-radius: 3px; }
+.note-editor .md-link { color: var(--accent); border-bottom: 1px dashed var(--accent); }
+
+/* ── 选区工具条 ─────────────────────────────────────────── */
+.sel-toolbar {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+.sel-btn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sel-btn:hover { background: var(--accent-soft); color: var(--accent); }
+.sel-btn[hidden] { display: none !important; }
+
+/* ── 链接到笔记选择器 ───────────────────────────────────── */
+.link-picker-card { width: min(440px, 100%); }
+.link-picker-search {
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.link-picker-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.link-picker-list { margin-top: 8px; max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
+.link-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.link-picker-item:hover { background: var(--accent-soft); }
+.link-picker-path { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-picker-empty { margin: 8px 4px; font-size: 12px; color: var(--text-dim); }
+
 </style>
 </head>
 <body>
@@ -1113,13 +1196,14 @@ input[type="range"]::-webkit-slider-thumb {
             </div>
             <div class="note-head-actions">
               <button id="btn-note-edit" class="ghost-btn">编辑</button>
+              <button id="btn-note-format" class="ghost-btn" title="让 AI 把格式整理干净">AI 优化格式</button>
               <button id="btn-note-graph" class="ghost-btn">在图谱中定位</button>
               <button id="btn-note-ai" class="ghost-btn">让 AI 分析</button>
             </div>
           </header>
           <div id="note-tags" class="note-tags"></div>
           <div id="note-body" class="md-body note-body"></div>
-          <textarea id="note-editor" class="note-editor" hidden spellcheck="false"></textarea>
+          <div id="note-editor" class="note-editor" contenteditable="true" spellcheck="false" hidden></div>
           <div class="note-footer">
             <div class="note-meta" id="note-meta">—</div>
             <div class="note-links">
@@ -1285,6 +1369,28 @@ input[type="range"]::-webkit-slider-thumb {
     </section>
   </div>
 </div>
+<div id="sel-toolbar" class="sel-toolbar" hidden>
+  <button class="sel-btn" data-fmt="bold" title="加粗（Ctrl+B）"><b>B</b></button>
+  <button class="sel-btn" data-fmt="italic" title="斜体（Ctrl+I）"><i>I</i></button>
+  <button class="sel-btn" data-fmt="underline" title="下划线（Ctrl+U）"><u>U</u></button>
+  <button class="sel-btn" data-fmt="mark" title="高亮">▮</button>
+  <button class="sel-btn" data-fmt="link" title="链接到某篇笔记">／／</button>
+  <button class="sel-btn" data-fmt="ask" title="问 AI" data-readonly="1">?</button>
+  <button class="sel-btn" data-fmt="copy" title="复制" data-readonly="1">⧉</button>
+  <button class="sel-btn" data-fmt="clear" title="清除格式">⌫</button>
+</div>
+
+<div id="link-picker" class="modal" hidden>
+  <div class="modal-card link-picker-card">
+    <header>
+      <div><h2>链接到笔记</h2><p class="modal-path">选一篇笔记，选中的文字会变成双链</p></div>
+      <button id="link-picker-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <input id="link-picker-search" class="link-picker-search" type="search" placeholder="搜索笔记标题…" autocomplete="off">
+    <div id="link-picker-list" class="link-picker-list"></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -2312,6 +2418,8 @@ input[type="range"]::-webkit-slider-thumb {
     s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
 
     s = s.replace(/\u0000(\d+)\u0000/g, function (_, i) { return codes[Number(i)]; });
+    // 只允许这几个排版标签从编辑器带进来，其余 HTML 一律保持转义状态
+    s = s.replace(/&lt;(\/?)(u|mark|br)&gt;/gi, function (_, slash, tag) { return "<" + slash + tag + ">"; });
     return s;
   }
 
@@ -2415,6 +2523,186 @@ input[type="range"]::-webkit-slider-thumb {
 
   return { render: render, inline: inline, escapeHtml: escapeHtml, toText: toText };
 });
+
+</script>
+<script>
+/* ============================================================
+   richtext.js — 所见即所得编辑：HTML ⇄ Markdown 转换与选区工具
+   用户不需要写 Markdown，编辑区是富文本；保存时再转回 Markdown 存储。
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  const BLOCK_TAGS = /^(DIV|P|H1|H2|H3|H4|H5|H6|UL|OL|LI|BLOCKQUOTE|PRE|HR|TABLE|SECTION|ARTICLE)$/;
+
+  function inlineChildren(node) {
+    let out = '';
+    for (const child of node.childNodes) out += inlineNode(child);
+    return out;
+  }
+
+  function inlineNode(node) {
+    if (node.nodeType === 3) return node.nodeValue.replace(/\s+/g, ' ');
+    if (node.nodeType !== 1) return '';
+
+    const tag = node.tagName;
+    const inner = inlineChildren(node);
+
+    if (tag === 'BR') return '\n';
+    if (tag === 'STRONG' || tag === 'B') return inner.trim() ? '**' + inner + '**' : inner;
+    if (tag === 'EM' || tag === 'I') return inner.trim() ? '*' + inner + '*' : inner;
+    if (tag === 'U') return '<u>' + inner + '</u>';
+    if (tag === 'MARK') return '<mark>' + inner + '</mark>';
+    if (tag === 'CODE') return '`' + node.textContent + '`';
+    if (tag === 'A') {
+      const wiki = node.getAttribute('data-wikilink');
+      if (wiki) return '[[' + wiki + ']]';
+      const href = node.getAttribute('href') || '';
+      return href ? '[' + inner + '](' + href + ')' : inner;
+    }
+    if (node.classList && node.classList.contains('md-link')) {
+      return '[[' + (node.getAttribute('data-wikilink') || node.textContent) + ']]';
+    }
+    if (node.classList && node.classList.contains('md-tag')) return node.textContent;
+    return inner;
+  }
+
+  /** 把一段富文本 HTML 转成 Markdown */
+  function htmlToMarkdown(html) {
+    const box = document.createElement('div');
+    box.innerHTML = html;
+    const blocks = [];
+
+    function walk(parent) {
+      let buffer = '';
+      const flush = () => {
+        const text = buffer.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+        if (text) blocks.push(text);
+        buffer = '';
+      };
+      for (const child of parent.childNodes) {
+        if (child.nodeType === 3) {
+          const text = child.nodeValue.replace(/\s+/g, ' ');
+          if (text.trim()) buffer += text;
+          continue;
+        }
+        if (child.nodeType !== 1) continue;
+        const tag = child.tagName;
+        if (BLOCK_TAGS.test(tag)) {
+          flush();
+          blocks.push(blockOf(child));
+        } else {
+          buffer += inlineNode(child);
+        }
+      }
+      flush();
+    }
+
+    function blockOf(el) {
+      const tag = el.tagName;
+      if (/^H[1-6]$/.test(tag)) {
+        return '#'.repeat(Number(tag[1])) + ' ' + inlineChildren(el).trim();
+      }
+      if (tag === 'UL' || tag === 'OL') {
+        const items = [...el.children].filter(c => c.tagName === 'LI');
+        return items.map((li, i) => {
+          const marker = tag === 'OL' ? (i + 1) + '. ' : '- ';
+          const text = inlineChildren(li).trim().replace(/\n+/g, ' ');
+          const task = li.classList && li.classList.contains('md-task');
+          if (task) {
+            const done = li.querySelector('.md-check.is-done');
+            return marker + (done ? '[x] ' : '[ ] ') + text.replace(/^[✓\s]*/, '');
+          }
+          return marker + text;
+        }).join('\n');
+      }
+      if (tag === 'BLOCKQUOTE') {
+        return inlineChildren(el).trim().split('\n').map(l => '> ' + l).join('\n');
+      }
+      if (tag === 'PRE') {
+        return '```\n' + el.textContent.replace(/\n+$/, '') + '\n```';
+      }
+      if (tag === 'HR') return '---';
+      return inlineChildren(el).trim();
+    }
+
+    walk(box);
+    return blocks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  /* ── 选区格式化 ───────────────────────────────────────────── */
+
+  /** 对当前选区执行命令；execCommand 兼容性最好，失败则静默 */
+  function exec(command, value) {
+    try {
+      return document.execCommand(command, false, value === undefined ? null : value);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function bold() { return exec('bold'); }
+  function italic() { return exec('italic'); }
+  function underline() { return exec('underline'); }
+  function highlight() { return exec('hiliteColor', 'rgba(255, 226, 122, 0.75)'); }
+  function clearFormat() { return exec('removeFormat'); }
+
+  /** 把选中的文字包成指向某篇笔记的双链 */
+  function wrapWithWikiLink(container, title) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) return false;
+    if (!container.contains(range.commonAncestorContainer)) return false;
+
+    const span = document.createElement('span');
+    span.className = 'md-link';
+    span.setAttribute('data-wikilink', title);
+    span.textContent = sel.toString();
+    range.deleteContents();
+    range.insertNode(span);
+
+    sel.removeAllRanges();
+    const after = document.createRange();
+    after.setStartAfter(span);
+    after.collapse(true);
+    sel.addRange(after);
+    return true;
+  }
+
+  /** 在选区处插入纯文本 */
+  function insertText(container, text) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !container.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      container.appendChild(document.createTextNode(text));
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  /** 选区是否落在容器内 */
+  function selectionIn(container) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) return null;
+    if (!container.contains(range.commonAncestorContainer)) return null;
+    return range;
+  }
+
+  root.RG = root.RG || {};
+  root.RG.richtext = {
+    htmlToMarkdown, bold, italic, underline, highlight, clearFormat,
+    wrapWithWikiLink, insertText, selectionIn, exec
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
 <script>
@@ -2621,6 +2909,32 @@ input[type="range"]::-webkit-slider-thumb {
     lines.push('');
     lines.push('接入模型后（设置窗口填 Key，或在 .env 里配 COMMAND_CODE_API_KEY）我会直接给完整分步讲解，并能追问。');
     return { text: lines.join(String.fromCharCode(10)), refs: hits.map(function (n) { return n.title; }) };
+  }
+
+  /** 本地格式整理：规范化空行、列表标记、标题间距（不改变内容语义） */
+  function formatLocally(text) {
+    const lines = String(text || '').replace(/@@r\n/g, '\n').split('\n');
+    const out = [];
+    for (const raw of lines) {
+      let line = raw.replace(/[ \t]+$/g, '');
+      if (!line.trim()) {
+        if (out[out.length - 1] !== '') out.push('');
+        continue;
+      }
+      // 常见的非标准列表写法归一：· • ● ※、1、1) （1）
+      const bullet = line.match(/^[·•●※]\s*(.+)$/) || line.match(/^[（(]?\d+[)）.、]\s*(.+)$/);
+      if (bullet) line = '- ' + bullet[1].trim();
+      // 「一、标题」这类中文编号，短行视为小标题
+      if (/^[一二三四五六七八九十]+、\s*\S/.test(line) && line.length <= 24) {
+        line = '## ' + line.replace(/^[一二三四五六七八九十]+、\s*/, '');
+      }
+      out.push(line);
+    }
+    let result = out.join('\n').replace(/\n{3,}/g, '\n\n');
+    // 标题前后各留一个空行
+    result = result.replace(/([^\n])\n(?=## )/g, '$1\n\n');
+    result = result.replace(/\n(## .*)/g, '\n$1');
+    return result.trim();
   }
 
   /* ── 错题本：学科识别与目标推荐 ─────────────────────────── */
@@ -3101,6 +3415,43 @@ input[type="range"]::-webkit-slider-thumb {
       });
     }
 
+    /** AI 优化格式：模型模式交给模型，本地模式走规则整理 */
+    async function optimizeFormat(text) {
+      const source = String(text || '');
+      if (!source.trim()) return source;
+      if (state.mode === 'direct') {
+        try {
+          const r = await callDirect(Object.assign({}, state.config, { askMode: 'format' }), source, '');
+          return cleanFormatAnswer(r.answer) || formatLocally(source);
+        } catch (_) {
+          return formatLocally(source);
+        }
+      }
+      if (state.mode === 'proxy') {
+        try {
+          const res = await fetch('/api/format', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: source })
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          return cleanFormatAnswer(data.markdown) || formatLocally(source);
+        } catch (_) {
+          return formatLocally(source);
+        }
+      }
+      return formatLocally(source);
+    }
+
+    /** 模型可能返回 ```md 包裹，去掉围栏 */
+    function cleanFormatAnswer(text) {
+      const s = String(text || '').trim();
+      const fence = /^```[a-zA-Z]*\s*([\s\S]*?)```$/;
+      const m = s.match(fence);
+      return (m ? m[1] : s).trim();
+    }
+
     /** 拉取可用模型列表：直连模式问服务商，代理模式问本地服务 */
     async function fetchModels(cfg) {
       const conf = Object.assign({}, state.config, cfg || {});
@@ -3179,7 +3530,7 @@ input[type="range"]::-webkit-slider-thumb {
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet, formatLocally };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -3187,7 +3538,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-08T15:18:00.033Z
+   生成时间：2026-11-10T03:41:43.912Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -3208,6 +3559,7 @@ input[type="range"]::-webkit-slider-thumb {
   const vault = RG.vault;
   const query = RG.query;
   const markdown = RG.markdown;
+  const richtext = RG.richtext;
   const physics = RG.physics;
   const render = RG.render;
 
@@ -4009,24 +4361,42 @@ input[type="range"]::-webkit-slider-thumb {
     editing = !editing;
     const editor = $('#note-editor');
     if (editing) {
-      editor.value = node.content || '';
+      // 进编辑：把 Markdown 渲染成富文本直接改，用户不用看语法
+      editor.innerHTML = markdown.render(node.content || '') || '<p><br></p>';
       editor.hidden = false;
       $('#note-body').hidden = true;
       $('#btn-note-edit').textContent = '保存';
       editor.focus();
+      placeCaretAtEnd(editor);
     } else {
-      node.content = editor.value;
-      node.summary = vault.summarize(node.content);
-      node.links = vault.extractLinks(node.content);
-      node.tags = [...new Set([...vault.extractTags(node.content), ...(node.frontmatter && node.frontmatter.tags ? [] : [])])];
-      editor.hidden = true;
-      $('#note-body').hidden = false;
-      $('#btn-note-edit').textContent = '编辑';
-      state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: node.content }) : f)));
-      rebuild({});
-      renderNote();
-      toast('已保存到当前会话（Ctrl+S 可下载 .md）');
+      saveEditing(node, editor);
     }
+  }
+
+  function placeCaretAtEnd(el) {
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (_) {}
+  }
+
+  function saveEditing(node, editor) {
+    const md = richtext.htmlToMarkdown(editor.innerHTML);
+    node.content = md;
+    node.summary = vault.summarize(md);
+    node.links = vault.extractLinks(md);
+    node.tags = [...new Set(vault.extractTags(md))];
+    editor.hidden = true;
+    $('#note-body').hidden = false;
+    $('#btn-note-edit').textContent = '编辑';
+    state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: md }) : f)));
+    rebuild({});
+    renderNote();
+    toast('已保存到当前会话（Ctrl+S 可下载 .md）');
   }
 
   function downloadNote() {
@@ -4387,6 +4757,165 @@ input[type="range"]::-webkit-slider-thumb {
       legend.appendChild(wrap);
     }
   }
+
+  /* ── 选区工具条（选中文字后弹出） ───────────────────────── */
+  const selToolbar = $('#sel-toolbar');
+  let selMode = null;
+
+  function hideSelToolbar() {
+    selToolbar.hidden = true;
+    selMode = null;
+  }
+
+  function updateSelToolbar() {
+    const editor = $('#note-editor');
+    const body = $('#note-body');
+    let range = null;
+    let mode = null;
+    if (!editor.hidden && richtext.selectionIn(editor)) { mode = 'edit'; }
+    else if (!body.hidden && richtext.selectionIn(body)) { mode = 'read'; }
+    if (!mode) { hideSelToolbar(); return; }
+
+    const sel = window.getSelection();
+    range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect || (!rect.width && !rect.height)) { hideSelToolbar(); return; }
+
+    selMode = mode;
+    selToolbar.hidden = false;
+    const tbWidth = selToolbar.offsetWidth || 220;
+    const left = Math.max(8, Math.min(window.innerWidth - tbWidth - 8, rect.left + rect.width / 2 - tbWidth / 2));
+    const top = Math.max(8, rect.top - 42 + window.scrollY);
+    selToolbar.style.left = left + 'px';
+    selToolbar.style.top = top + 'px';
+
+    // 只读视图下隐藏「只对编辑有意义」的按钮
+    for (const btn of selToolbar.querySelectorAll('.sel-btn')) {
+      const fmt = btn.dataset.fmt;
+      const editOnly = ['bold', 'italic', 'underline', 'mark', 'link', 'clear'].includes(fmt);
+      btn.hidden = mode === 'read' && editOnly;
+    }
+  }
+
+  document.addEventListener('mouseup', () => setTimeout(updateSelToolbar, 10));
+  document.addEventListener('keyup', e => { if (e.shiftKey || e.key === 'Escape') setTimeout(updateSelToolbar, 10); });
+  document.addEventListener('mousedown', e => {
+    if (selToolbar.hidden) return;
+    if (e.target.closest('#sel-toolbar')) return;
+    if (e.target.closest('#note-editor, #note-body')) return;
+    hideSelToolbar();
+  });
+
+  selToolbar.addEventListener('mousedown', e => e.preventDefault());
+
+  selToolbar.addEventListener('click', e => {
+    const btn = e.target.closest('.sel-btn');
+    if (!btn) return;
+    const fmt = btn.dataset.fmt;
+    const editor = $('#note-editor');
+
+    if (fmt === 'copy') {
+      const text = window.getSelection().toString();
+      if (text && navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast('已复制'));
+      hideSelToolbar();
+      return;
+    }
+    if (fmt === 'ask') {
+      const text = window.getSelection().toString().trim();
+      if (text) {
+        setAiPanel(true);
+        ai.send('帮我讲讲这段：' + text.slice(0, 400));
+      }
+      hideSelToolbar();
+      return;
+    }
+    if (selMode !== 'edit') return;
+
+    if (fmt === 'bold') richtext.bold();
+    else if (fmt === 'italic') richtext.italic();
+    else if (fmt === 'underline') richtext.underline();
+    else if (fmt === 'mark') richtext.highlight();
+    else if (fmt === 'clear') richtext.clearFormat();
+    else if (fmt === 'link') { openLinkPicker(); return; }
+
+    editor.focus();
+    updateSelToolbar();
+  });
+
+  /* ── 链接到笔记的选择器 ─────────────────────────────────── */
+  const linkPicker = $('#link-picker');
+
+  function openLinkPicker() {
+    linkPicker.hidden = false;
+    $('#link-picker-search').value = '';
+    renderLinkPickerList('');
+    $('#link-picker-search').focus();
+  }
+
+  function closeLinkPicker() { linkPicker.hidden = true; }
+
+  function renderLinkPickerList(keyword) {
+    const list = $('#link-picker-list');
+    list.innerHTML = '';
+    const notes = state.graph ? state.graph.notes.filter(n => n.type === 'note') : [];
+    const kw = keyword.trim().toLowerCase();
+    const shown = notes
+      .filter(n => !kw || n.title.toLowerCase().includes(kw) || n.path.toLowerCase().includes(kw))
+      .slice(0, 40);
+    if (!shown.length) {
+      const p = document.createElement('p');
+      p.className = 'link-picker-empty';
+      p.textContent = '没有匹配的笔记';
+      list.appendChild(p);
+      return;
+    }
+    for (const note of shown) {
+      const item = document.createElement('button');
+      item.className = 'link-picker-item';
+      const title = document.createElement('span');
+      title.textContent = note.title;
+      const path = document.createElement('span');
+      path.className = 'link-picker-path';
+      path.textContent = note.path;
+      item.append(title, path);
+      item.addEventListener('click', () => {
+        richtext.wrapWithWikiLink($('#note-editor'), note.title);
+        closeLinkPicker();
+      });
+      list.appendChild(item);
+    }
+  }
+
+  $('#link-picker-close').addEventListener('click', closeLinkPicker);
+  linkPicker.addEventListener('pointerdown', e => { if (e.target === linkPicker) closeLinkPicker(); });
+  $('#link-picker-search').addEventListener('input', e => renderLinkPickerList(e.target.value));
+
+  /* ── AI 优化格式 ────────────────────────────────────────── */
+  $('#btn-note-format').addEventListener('click', async () => {
+    const node = currentNote();
+    if (!node) return;
+    const editor = $('#note-editor');
+    const source = editing ? richtext.htmlToMarkdown(editor.innerHTML) : String(node.content || '');
+    if (!source.trim()) return toast('这篇还没有正文，没什么可整理的');
+    toast('正在整理格式…');
+    try {
+      const result = await ai.optimizeFormat(source);
+      if (!result || !result.trim()) return toast('AI 没有返回内容');
+      if (editing) {
+        editor.innerHTML = markdown.render(result);
+        toast('格式已优化，确认后点「保存」');
+      } else {
+        node.content = result;
+        node.summary = vault.summarize(result);
+        state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: result }) : f)));
+        rebuild({});
+        renderNote();
+        toast('格式已优化并保存到当前会话');
+      }
+    } catch (err) {
+      toast('优化失败：' + (err && err.message ? err.message : err));
+    }
+  });
 
   /* ── 视图 / AI 面板 / 笔记按钮 ──────────────────────────── */
   $('#view-note').addEventListener('click', () => showView('note'));

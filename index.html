@@ -96,13 +96,14 @@
             </div>
             <div class="note-head-actions">
               <button id="btn-note-edit" class="ghost-btn">编辑</button>
+              <button id="btn-note-format" class="ghost-btn" title="让 AI 把格式整理干净">AI 优化格式</button>
               <button id="btn-note-graph" class="ghost-btn">在图谱中定位</button>
               <button id="btn-note-ai" class="ghost-btn">让 AI 分析</button>
             </div>
           </header>
           <div id="note-tags" class="note-tags"></div>
           <div id="note-body" class="md-body note-body"></div>
-          <textarea id="note-editor" class="note-editor" hidden spellcheck="false"></textarea>
+          <div id="note-editor" class="note-editor" contenteditable="true" spellcheck="false" hidden></div>
           <div class="note-footer">
             <div class="note-meta" id="note-meta">—</div>
             <div class="note-links">
@@ -268,6 +269,28 @@
     </section>
   </div>
 </div>
+<div id="sel-toolbar" class="sel-toolbar" hidden>
+  <button class="sel-btn" data-fmt="bold" title="加粗（Ctrl+B）"><b>B</b></button>
+  <button class="sel-btn" data-fmt="italic" title="斜体（Ctrl+I）"><i>I</i></button>
+  <button class="sel-btn" data-fmt="underline" title="下划线（Ctrl+U）"><u>U</u></button>
+  <button class="sel-btn" data-fmt="mark" title="高亮">▮</button>
+  <button class="sel-btn" data-fmt="link" title="链接到某篇笔记">／／</button>
+  <button class="sel-btn" data-fmt="ask" title="问 AI" data-readonly="1">?</button>
+  <button class="sel-btn" data-fmt="copy" title="复制" data-readonly="1">⧉</button>
+  <button class="sel-btn" data-fmt="clear" title="清除格式">⌫</button>
+</div>
+
+<div id="link-picker" class="modal" hidden>
+  <div class="modal-card link-picker-card">
+    <header>
+      <div><h2>链接到笔记</h2><p class="modal-path">选一篇笔记，选中的文字会变成双链</p></div>
+      <button id="link-picker-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <input id="link-picker-search" class="link-picker-search" type="search" placeholder="搜索笔记标题…" autocomplete="off">
+    <div id="link-picker-list" class="link-picker-list"></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="js/vault.js"></script>
@@ -275,6 +298,7 @@
 <script src="js/physics.js"></script>
 <script src="js/render.js"></script>
 <script src="js/markdown.js"></script>
+<script src="js/richtext.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/demo-vault.js"></script>
 <script src="js/app.js"></script>

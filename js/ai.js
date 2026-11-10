@@ -203,6 +203,32 @@
     return { text: lines.join(String.fromCharCode(10)), refs: hits.map(function (n) { return n.title; }) };
   }
 
+  /** 本地格式整理：规范化空行、列表标记、标题间距（不改变内容语义） */
+  function formatLocally(text) {
+    const lines = String(text || '').replace(/@@r\n/g, '\n').split('\n');
+    const out = [];
+    for (const raw of lines) {
+      let line = raw.replace(/[ \t]+$/g, '');
+      if (!line.trim()) {
+        if (out[out.length - 1] !== '') out.push('');
+        continue;
+      }
+      // 常见的非标准列表写法归一：· • ● ※、1、1) （1）
+      const bullet = line.match(/^[·•●※]\s*(.+)$/) || line.match(/^[（(]?\d+[)）.、]\s*(.+)$/);
+      if (bullet) line = '- ' + bullet[1].trim();
+      // 「一、标题」这类中文编号，短行视为小标题
+      if (/^[一二三四五六七八九十]+、\s*\S/.test(line) && line.length <= 24) {
+        line = '## ' + line.replace(/^[一二三四五六七八九十]+、\s*/, '');
+      }
+      out.push(line);
+    }
+    let result = out.join('\n').replace(/\n{3,}/g, '\n\n');
+    // 标题前后各留一个空行
+    result = result.replace(/([^\n])\n(?=## )/g, '$1\n\n');
+    result = result.replace(/\n(## .*)/g, '\n$1');
+    return result.trim();
+  }
+
   /* ── 错题本：学科识别与目标推荐 ─────────────────────────── */
   const SUBJECT_RULES = [
     { subject: '数学', words: ['导数', '函数', '三角', '数列', '向量', '圆锥', '椭圆', '双曲线', '抛物线', '概率', '复数', '不等式', '方程', '几何', '集合', '对数', '指数'] },
@@ -681,6 +707,43 @@
       });
     }
 
+    /** AI 优化格式：模型模式交给模型，本地模式走规则整理 */
+    async function optimizeFormat(text) {
+      const source = String(text || '');
+      if (!source.trim()) return source;
+      if (state.mode === 'direct') {
+        try {
+          const r = await callDirect(Object.assign({}, state.config, { askMode: 'format' }), source, '');
+          return cleanFormatAnswer(r.answer) || formatLocally(source);
+        } catch (_) {
+          return formatLocally(source);
+        }
+      }
+      if (state.mode === 'proxy') {
+        try {
+          const res = await fetch('/api/format', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: source })
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          return cleanFormatAnswer(data.markdown) || formatLocally(source);
+        } catch (_) {
+          return formatLocally(source);
+        }
+      }
+      return formatLocally(source);
+    }
+
+    /** 模型可能返回 ```md 包裹，去掉围栏 */
+    function cleanFormatAnswer(text) {
+      const s = String(text || '').trim();
+      const fence = /^```[a-zA-Z]*\s*([\s\S]*?)```$/;
+      const m = s.match(fence);
+      return (m ? m[1] : s).trim();
+    }
+
     /** 拉取可用模型列表：直连模式问服务商，代理模式问本地服务 */
     async function fetchModels(cfg) {
       const conf = Object.assign({}, state.config, cfg || {});
@@ -759,5 +822,5 @@
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, recommendMistakeBook, mistakeSnippet, formatLocally };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
