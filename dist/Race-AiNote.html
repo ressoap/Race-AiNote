@@ -4363,7 +4363,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T04:33:51.881Z
+   生成时间：2026-11-10T04:34:42.830Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -5960,6 +5960,13 @@ input[type="range"]::-webkit-slider-thumb {
     } catch (err) {
       toast('读取失败：' + (err && err.message ? err.message : err));
     }
+  });
+
+  /* ── 右键：接管浏览器默认菜单 ───────────────────────────── */
+  document.addEventListener('contextmenu', e => {
+    // 输入框和富文本编辑区保留原生菜单（复制 / 粘贴 / 拼写检查要用）
+    if (e.target.closest('input, textarea, [contenteditable="true"]')) return;
+    e.preventDefault();
   });
 
   /* ── 键盘 ───────────────────────────────────────────────── */

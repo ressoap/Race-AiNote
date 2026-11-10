@@ -1585,6 +1585,13 @@
     }
   });
 
+  /* ── 右键：接管浏览器默认菜单 ───────────────────────────── */
+  document.addEventListener('contextmenu', e => {
+    // 输入框和富文本编辑区保留原生菜单（复制 / 粘贴 / 拼写检查要用）
+    if (e.target.closest('input, textarea, [contenteditable="true"]')) return;
+    e.preventDefault();
+  });
+
   /* ── 键盘 ───────────────────────────────────────────────── */
   document.addEventListener('keydown', e => {
     const inField = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);

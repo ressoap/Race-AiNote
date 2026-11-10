@@ -39,13 +39,24 @@
 | Node.js | ≥ 20（仅开发、测试、构建和 AI 脚本需要；**只是想看图谱可以完全不装**） |
 | 网络 | 只有 AI 问答与云同步需要出网；阅读、编辑、图谱全程离线 |
 
-### 2.2 最快路径（0 分钟，不装任何东西）
+### 2.2 最快路径
+
+**A. 桌面窗口模式（推荐，脱离浏览器）**
+
+```
+双击仓库根目录的：启动Race-AiNote.bat
+```
+
+它会起一个本地服务，并用系统的 Edge / Chrome 以「应用模式」打开独立窗口：
+没有地址栏、没有标签页、任务栏是独立图标，和日常浏览器互不干扰（用独立 profile 目录）。
+
+**B. 单文件模式（完全不启动服务）**
 
 ```
 双击 dist/Race-AiNote.html
 ```
 
-浏览器会加载内置的 50 篇 Markdown 示例库（数学/物理/错题/复习/方法/模板六条主线），直接可以拖节点、搜索、切主题。
+浏览器里打开，加载内置 50 篇示例库。AI 只能走本地分析，云同步与百度网盘代理不可用。
 
 ### 2.3 看自己的笔记（约 1 分钟）
 
@@ -132,7 +143,36 @@ node scripts/ai-organize.mjs --vault ./vault-example --limit 3   # 正式跑
 
 ---
 
-## 3. 目录结构
+## 3. 桌面模式
+
+应用本身是网页技术，但可以当成桌面程序来用。
+
+| 方式 | 命令 | 特点 |
+| --- | --- | --- |
+| 桌面窗口（推荐） | 双击 `启动Race-AiNote.bat` | 独立窗口、无地址栏、独立 profile、右键完全交给应用、AI 与云同步全可用 |
+| 命令行启动 | `npm run desktop` | 同上，可加 `--port 4399` 换端口 |
+| 单文件 | 双击 `dist/Race-AiNote.html` | 零依赖零服务，但 AI 只能本地分析 |
+
+`scripts/desktop.js` 做的事：
+
+1. 起一个本地服务（`scripts/serve.mjs`，默认 4399 端口）；
+2. 等它可用后，用 Edge/Chrome 的 `--app=` 模式打开，窗口独立；
+3. 用 `%LOCALAPPDATA%/Race-AiNote/profile` 作为独立 profile，不污染日常浏览器；
+4. 关掉窗口时顺手把本地服务一起关掉。
+
+找不到浏览器时可以用环境变量指定：
+
+```bash
+set RACE_BROWSER=C:/Program Files/Google/Chrome/Application/chrome.exe
+node scripts/desktop.js
+```
+
+**右键行为**：应用接管了全页右键（输入框和编辑器里保留系统菜单，方便复制粘贴），
+所以文件树、笔记区的右键都能弹出应用自己的菜单，不会被浏览器菜单挡住。
+
+---
+
+## 4. 目录结构
 
 ```
 Race-AiNote/
@@ -153,12 +193,14 @@ Race-AiNote/
 │  └─ app.js                界面装配与交互
 ├─ scripts/
 │  ├─ build.js              内联构建 → dist/Race-AiNote.html
-│  ├─ serve.mjs             本地服务器 + AI 代理（密钥只在服务端）
+│  ├─ serve.mjs             本地服务器 + AI / 网盘代理（密钥只在服务端）
+│  ├─ desktop.js            桌面窗口启动器（Edge/Chrome --app 模式）
 │  ├─ gen-demo.js           vault-example → js/demo-vault.js
 │  └─ ai-organize.mjs       AI 整理脚本（建议稿模式）
 ├─ tests/                   Node 原生 test runner 单元测试
 ├─ vault-example/           可直接打开的示例 Markdown 库
 ├─ dist/Race-AiNote.html    ★ 单文件交付物
+├─ 启动Race-AiNote.bat       双击以桌面窗口方式启动
 ├─ docs/                    技术文档与 Prompt 演进记录
 ├─ PROMPT.md                原始功能规格 Prompt
 ├─ 可行性分析.md             立项论证
@@ -167,7 +209,7 @@ Race-AiNote/
 
 ---
 
-## 4. 功能清单
+## 5. 功能清单
 
 ### 笔记（主视图）
 - 整页阅读：标题、路径、标签、正文（标题/列表/任务列表/引用/代码块/双链/标签）
@@ -208,7 +250,7 @@ Race-AiNote/
 - 搜索语法：普通文本、`path:`、`file:`、`tag:`、`content:`、`-排除`、`OR`、`"带空格"`、`/正则/`
 - 筛选：标签节点、附件节点、仅现有文件、只看孤立节点；颜色分组可增删改
 
-## 5. 快捷键
+## 6. 快捷键
 
 | 键 | 作用 |
 | --- | --- |
@@ -225,7 +267,7 @@ Race-AiNote/
 
 ---
 
-## 6. 安全与隐私
+## 7. 安全与隐私
 
 - 没有配置任何 Key 时，应用**不发任何网络请求**，笔记全程留在本机浏览器内存里。
 - 密钥三种归宿，都可控：
@@ -238,7 +280,7 @@ Race-AiNote/
 
 ---
 
-## 7. 已知限制
+## 8. 已知限制
 
 - 浏览器里新建 / 改名的笔记会存进本机 localStorage 缓存，换机器不同步；要写回磁盘请用 `Ctrl+S` 下载。
 - 不提供多人协作与实时同步；跨设备请用第 9 节的云同步做快照备份。
@@ -250,7 +292,7 @@ Race-AiNote/
 
 ---
 
-## 8. 文档与演进记录
+## 9. 文档与演进记录
 
 - `docs/PROMPT-LOG.md`：Prompt 链快照（需求 → AI 产出 → 人工纠偏 → 验收）
 - `docs/ARCHITECTURE.md`：架构与关键决策说明
@@ -259,7 +301,7 @@ Race-AiNote/
 
 ---
 
-## 9. 云同步
+## 10. 云同步
 
 只对接**官方开放接口**，没有官方接口的一律不做（不碰逆向 cookie 那套）。
 
@@ -297,7 +339,7 @@ Race-AiNote/
 
 ---
 
-## 10. 插件
+## 11. 插件
 
 插件是一段运行在本页面的 JS，通过受限 API 与主程序交互；安装后存在本机 localStorage，
 按启用状态在启动时加载。
@@ -340,7 +382,7 @@ api.registerCommand({
 
 ---
 
-## 11. 仓库托管
+## 12. 仓库托管
 
 | 用途 | 地址 |
 | --- | --- |
@@ -351,6 +393,6 @@ api.registerCommand({
 
 ---
 
-## 12. 许可证
+## 13. 许可证
 
 仅供学习与参赛使用。
