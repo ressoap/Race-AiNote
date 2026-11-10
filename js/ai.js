@@ -529,20 +529,22 @@
 
     /** 写一份到本地服务（serve.mjs），换端口 / 换浏览器也能读回 */
     function pushToServer(records) {
-      if (location.protocol === 'file:') return;
+      if (location.protocol === 'file:' || typeof fetch !== 'function') return;
       clearTimeout(pushTimer);
       pushTimer = setTimeout(() => {
+        try {
         fetch('/api/store/records', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ records: records })
         }).catch(() => {});
+        } catch (_) {}
       }, 400);
     }
 
     /** 启动时把服务端的记录合并进来（按 id 去重，保留更新的那条） */
     async function initRecords() {
-      if (location.protocol === 'file:') return loadRecords().length;
+      if (location.protocol === 'file:' || typeof fetch !== 'function') return loadRecords().length;
       try {
         const res = await fetch('/api/store/records', { cache: 'no-store' });
         if (!res.ok) return loadRecords().length;
