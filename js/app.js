@@ -844,21 +844,51 @@
     } catch (_) {}
   }
 
-  function saveEditing(node, editor) {
+  /** 把编辑器内容写回笔记（不负责退出编辑态） */
+  function commitEditor(node, editor) {
     const md = richtext.htmlToMarkdown(editor.innerHTML);
     touchUsage(node.path, 'edit');
     node.content = md;
     node.summary = vault.summarize(md);
     node.links = vault.extractLinks(md);
     node.tags = [...new Set(vault.extractTags(md))];
+    // 写回数据源（保留原 frontmatter，只替换正文）
+    const file = state.files.find(f => f.path === node.path);
+    if (file) {
+      const fm = String(file.content || '').match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
+      file.content = (fm ? fm[0] : '') + md;
+    }
+    state.graph = vault.buildVault(state.files);
+    rebuild({});
+    renderNote();
+    saveLocalVault();
+    if (typeof pluginHost !== 'undefined') pluginHost.emit('note:save', { note: node });
+    return md;
+  }
+
+  /** 退出编辑态保存（按钮「保存」走这里） */
+  function saveEditing(node, editor) {
+    commitEditor(node, editor);
     editor.hidden = true;
     $('#note-body').hidden = false;
     $('#btn-note-edit').textContent = '编辑';
-    state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: md }) : f)));
-    rebuild({});
-    renderNote();
-    if (typeof pluginHost !== 'undefined') pluginHost.emit('note:save', { note: node });
-    toast('已保存到当前会话（Ctrl+S 可下载 .md）');
+    toast('已保存');
+  }
+
+  /** Ctrl+S：只保存，不退出编辑、不打断光标位置 */
+  function quickSave() {
+    const node = currentNote();
+    if (!node) return false;
+    const editor = $('#note-editor');
+    if (editing && !editor.hidden) {
+      commitEditor(node, editor);
+      toast('已保存（编辑继续，不影响光标）');
+      return true;
+    }
+    // 没在编辑：把当前内容写进本机缓存，避免误以为没保存
+    saveLocalVault();
+    toast('已保存到本机缓存');
+    return true;
   }
 
   function downloadNote() {
@@ -1594,6 +1624,13 @@
   /* ── 键盘 ───────────────────────────────────────────────── */
   document.addEventListener('keydown', e => {
     const inField = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+    const isSaveCombo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's';
+    if (isSaveCombo) {
+      e.preventDefault();
+      if (e.shiftKey) downloadNote();
+      else quickSave();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.key.toLowerCase() === 'f')) {
       e.preventDefault();
       searchInput.focus();
@@ -1612,7 +1649,6 @@
     const k = e.key.toLowerCase();
     if (k === 'p') { openPrefs(); return; }
     if (k === 'a') { setAiPanel($('#ai-panel').classList.contains('is-collapsed')); return; }
-    if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); downloadNote(); return; }
     if (k === 'f') fitView(true);
     else if (k === 'r') $('#btn-relayout').click();
     else if (k === 'g') setMode('global');
@@ -2570,7 +2606,7 @@
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

@@ -305,6 +305,24 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   [...w.document.querySelectorAll('#record-menu button')].find(b => b.dataset.act === 'delete').click();
   await sleep(100);
   out.recordDeleted = api.ai.records().length === countBefore - 1;
+  // Ctrl+S 快捷保存：不打断编辑态（用当前任意一篇笔记，避免依赖具体标题）
+  const anyNote = api.graph.notes[0];
+  api.openNote(anyNote.id);
+  await sleep(40);
+  w.document.querySelector('#btn-note-edit').click();
+  await sleep(60);
+  const ed = w.document.querySelector('#note-editor');
+  ed.innerHTML = '<h2>CtrlS 测试</h2><p>正文</p>';
+  w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+  await sleep(120);
+  out.quickSaveStaysEditing = !ed.hidden;
+  const savedFile = api.state.files.find(f => f.path === anyNote.path);
+  out.quickSaveWroteContent = Boolean(savedFile && String(savedFile.content).includes('CtrlS 测试'));
+  const cached = JSON.parse(w.localStorage.getItem('race-ainote:vault') || '{"files":[]}').files.find(f => f.path === anyNote.path);
+  out.quickSavePersisted = Boolean(cached && String(cached.content).includes('CtrlS 测试'));
+  w.document.querySelector('#btn-note-edit').click();
+  await sleep(100);
+  out.editorClosedAfterToggle = ed.hidden;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));
