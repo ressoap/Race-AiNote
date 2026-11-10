@@ -171,6 +171,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.editorKeepsWikiLink = edited.includes('[[磁场]]');
   out.selToolbarExists = Boolean(w.document.querySelector('#sel-toolbar'));
   out.linkPickerExists = Boolean(w.document.querySelector('#link-picker'));
+  // AI 优化格式：接口存在且按钮可用（本地模式走规则整理）
+  out.hasOptimizeFormat = typeof api.ai.optimizeFormat === 'function';
+  const messy = ['- 第一点', '1、第二点', '一、小标题', '普通段落', '', '', '结尾'].join(String.fromCharCode(10));
+  const tidy = await api.ai.optimizeFormat(messy);
+  out.formatted = tidy;
+  out.formatWorks = tidy.includes('- 第一点') && tidy.includes('## 小标题');
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

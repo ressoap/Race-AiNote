@@ -818,7 +818,7 @@
       greet();
     }
 
-    return { send, clear, reset, setMode, setAskMode, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, findRecord, signatureOf, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
