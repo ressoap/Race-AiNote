@@ -83,6 +83,10 @@
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
         </button>
       </div>
+      <div id="plugin-buttons" class="plugin-buttons"></div>
+      <button id="btn-plugin-menu" class="icon-btn" title="插件命令">
+        <svg viewBox="0 0 24 24"><path d="M9 4.5v3M15 4.5v3"/><rect x="6" y="7.5" width="12" height="9" rx="2"/><path d="M12 16.5v3"/></svg>
+      </button>
       <div class="toolbar-spacer"></div>
       <button id="btn-theme" class="icon-btn" title="切换明暗主题">
         <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
@@ -121,6 +125,7 @@
           <div id="note-editor" class="note-editor" contenteditable="true" spellcheck="false" hidden></div>
           <div class="note-footer">
             <div class="note-meta" id="note-meta">—</div>
+            <div id="plugin-widgets" class="plugin-widgets"></div>
             <div class="note-links">
               <h3>反向链接 <span id="backlink-count"></span></h3>
               <ul id="backlinks"></ul>
@@ -278,6 +283,28 @@
     </section>
 
     <section class="prefs-section">
+      <h3>插件</h3>
+      <p class="prefs-tip">插件是一段运行在本页面的 JS，通过受限 API 注册按钮、命令和挂件。
+        它拥有和本页面相同的权限，只装你信任的代码。</p>
+      <div id="plugin-list" class="plugin-list"></div>
+      <div class="prefs-actions">
+        <button id="plugin-sample" class="ghost-btn">安装示例插件</button>
+        <button id="plugin-toggle-form" class="ghost-btn">手动安装…</button>
+      </div>
+      <div id="plugin-form" class="plugin-form" hidden>
+        <label class="prefs-row"><span>名称</span><input id="plugin-name" type="text" placeholder="例如：我的插件"></label>
+        <label class="prefs-row"><span>版本</span><input id="plugin-version" type="text" placeholder="1.0.0"></label>
+        <label class="prefs-row"><span>代码 URL</span><input id="plugin-url" type="text" placeholder="https://…/plugin.js（可选）"></label>
+        <textarea id="plugin-code" class="plugin-code" rows="8" spellcheck="false" placeholder="// 也可以直接把代码粘进来&#10;api.registerCommand({ id: 'hello', title: '打个招呼', run: function () { api.toast('hi'); } });"></textarea>
+        <div class="prefs-actions">
+          <button id="plugin-fetch" class="ghost-btn">从 URL 拉取</button>
+          <button id="plugin-install" class="primary-btn">安装并启用</button>
+        </div>
+      </div>
+      <p id="plugin-status" class="prefs-status"></p>
+    </section>
+
+    <section class="prefs-section">
       <h3>云同步</h3>
       <label class="prefs-row"><span>云盘</span>
         <select id="cloud-provider">
@@ -307,6 +334,8 @@
     </section>
   </div>
 </div>
+<div id="plugin-menu" class="tree-menu plugin-menu" hidden></div>
+
 <div id="sel-toolbar" class="sel-toolbar" hidden>
   <button class="sel-btn" data-fmt="bold" title="加粗（Ctrl+B）"><b>B</b></button>
   <button class="sel-btn" data-fmt="italic" title="斜体（Ctrl+I）"><i>I</i></button>
@@ -345,6 +374,8 @@
 <script src="js/markdown.js"></script>
 <script src="js/richtext.js"></script>
 <script src="js/cloud.js"></script>
+<script src="js/plugins.js"></script>
+<script src="js/sample-plugins.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/demo-vault.js"></script>
 <script src="js/app.js"></script>

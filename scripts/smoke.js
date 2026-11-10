@@ -230,6 +230,34 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   out.sortAfterDrag = api.state.sortMode;
   out.dragMoved = idxOf('圆周运动与万有引力') < idxOf('磁场');
   out.orderSaved = Boolean(w.localStorage.getItem('race-ainote:order'));
+  // 插件：安装示例 → 工具栏按钮 / 命令菜单 / 笔记挂件
+  w.document.querySelector('#btn-prefs').click();
+  await sleep(60);
+  w.document.querySelector('#plugin-sample').click();
+  await sleep(150);
+  out.pluginCount = api.pluginHost.list().length;
+  out.pluginButtons = w.document.querySelectorAll('#plugin-buttons .plugin-btn').length;
+  out.pluginCommands = api.pluginHost.commands().length;
+  out.pluginWidgets = w.document.querySelectorAll('#plugin-widgets .plugin-widget').length;
+  out.pluginRows = w.document.querySelectorAll('#plugin-list .plugin-row').length;
+
+  // 停用再启用
+  const firstToggle = w.document.querySelector('#plugin-list .plugin-row .ghost-btn');
+  firstToggle.click();
+  await sleep(120);
+  out.afterDisable = api.pluginHost.list().filter(p => p.enabled).length;
+  w.document.querySelector('#plugin-list .plugin-row .ghost-btn').click();
+  await sleep(120);
+  out.afterEnable = api.pluginHost.list().filter(p => p.enabled).length;
+
+  // 卸载全部
+  w.confirm = () => true;
+  for (const row of [...w.document.querySelectorAll('#plugin-list .plugin-row')]) {
+    const btns = [...row.querySelectorAll('.ghost-btn')];
+    btns[btns.length - 1].click();
+    await sleep(60);
+  }
+  out.afterUninstall = api.pluginHost.list().length;
   out.keyNotInDom = !w.document.documentElement.innerHTML.includes('sk-test-1234567890');
 
   console.log(JSON.stringify(out, null, 2));

@@ -1181,6 +1181,56 @@ input[type="range"]::-webkit-slider-thumb {
 .tree-file.is-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
 .tree-folder.is-dragging, .tree-file.is-dragging { opacity: 0.45; }
 
+/* ── 插件 ───────────────────────────────────────────────── */
+.plugin-buttons { display: flex; gap: 6px; align-items: center; }
+.plugin-btn { padding: 4px 10px; font-size: 12px; }
+
+.plugin-menu { min-width: 180px; max-height: 320px; overflow: auto; }
+.plugin-menu-empty { padding: 8px 10px; font-size: 12px; color: var(--text-dim); }
+
+.plugin-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.plugin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.plugin-info { min-width: 0; }
+.plugin-name { font-size: 12.5px; font-weight: 600; }
+.plugin-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+.plugin-actions { display: flex; gap: 6px; flex: none; }
+
+.plugin-form { margin-top: 8px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); }
+.plugin-code {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+}
+.plugin-code:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.plugin-widgets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.plugin-widget {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
 </style>
 </head>
 <body>
@@ -1259,6 +1309,10 @@ input[type="range"]::-webkit-slider-thumb {
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
         </button>
       </div>
+      <div id="plugin-buttons" class="plugin-buttons"></div>
+      <button id="btn-plugin-menu" class="icon-btn" title="插件命令">
+        <svg viewBox="0 0 24 24"><path d="M9 4.5v3M15 4.5v3"/><rect x="6" y="7.5" width="12" height="9" rx="2"/><path d="M12 16.5v3"/></svg>
+      </button>
       <div class="toolbar-spacer"></div>
       <button id="btn-theme" class="icon-btn" title="切换明暗主题">
         <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
@@ -1297,6 +1351,7 @@ input[type="range"]::-webkit-slider-thumb {
           <div id="note-editor" class="note-editor" contenteditable="true" spellcheck="false" hidden></div>
           <div class="note-footer">
             <div class="note-meta" id="note-meta">—</div>
+            <div id="plugin-widgets" class="plugin-widgets"></div>
             <div class="note-links">
               <h3>反向链接 <span id="backlink-count"></span></h3>
               <ul id="backlinks"></ul>
@@ -1454,6 +1509,28 @@ input[type="range"]::-webkit-slider-thumb {
     </section>
 
     <section class="prefs-section">
+      <h3>插件</h3>
+      <p class="prefs-tip">插件是一段运行在本页面的 JS，通过受限 API 注册按钮、命令和挂件。
+        它拥有和本页面相同的权限，只装你信任的代码。</p>
+      <div id="plugin-list" class="plugin-list"></div>
+      <div class="prefs-actions">
+        <button id="plugin-sample" class="ghost-btn">安装示例插件</button>
+        <button id="plugin-toggle-form" class="ghost-btn">手动安装…</button>
+      </div>
+      <div id="plugin-form" class="plugin-form" hidden>
+        <label class="prefs-row"><span>名称</span><input id="plugin-name" type="text" placeholder="例如：我的插件"></label>
+        <label class="prefs-row"><span>版本</span><input id="plugin-version" type="text" placeholder="1.0.0"></label>
+        <label class="prefs-row"><span>代码 URL</span><input id="plugin-url" type="text" placeholder="https://…/plugin.js（可选）"></label>
+        <textarea id="plugin-code" class="plugin-code" rows="8" spellcheck="false" placeholder="// 也可以直接把代码粘进来&#10;api.registerCommand({ id: 'hello', title: '打个招呼', run: function () { api.toast('hi'); } });"></textarea>
+        <div class="prefs-actions">
+          <button id="plugin-fetch" class="ghost-btn">从 URL 拉取</button>
+          <button id="plugin-install" class="primary-btn">安装并启用</button>
+        </div>
+      </div>
+      <p id="plugin-status" class="prefs-status"></p>
+    </section>
+
+    <section class="prefs-section">
       <h3>云同步</h3>
       <label class="prefs-row"><span>云盘</span>
         <select id="cloud-provider">
@@ -1483,6 +1560,8 @@ input[type="range"]::-webkit-slider-thumb {
     </section>
   </div>
 </div>
+<div id="plugin-menu" class="tree-menu plugin-menu" hidden></div>
+
 <div id="sel-toolbar" class="sel-toolbar" hidden>
   <button class="sel-btn" data-fmt="bold" title="加粗（Ctrl+B）"><b>B</b></button>
   <button class="sel-btn" data-fmt="italic" title="斜体（Ctrl+I）"><i>I</i></button>
@@ -3067,6 +3146,350 @@ input[type="range"]::-webkit-slider-thumb {
 </script>
 <script>
 /* ============================================================
+   plugins.js — 插件宿主
+   插件 = 一段 JS 代码 + 元信息，安装后存在本机 localStorage，
+   启动时按启用状态加载。插件只能通过受控 API 与主程序交互。
+
+   ⚠ 安全提示：插件代码在你的浏览器里运行，权限等同本页面，
+   只安装你信任的插件。安装前会二次确认。
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  const STORAGE_KEY = 'race-ainote:plugins';
+  const API_VERSION = 1;
+
+  function loadAll() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      return Array.isArray(raw) ? raw : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveAll(list) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (_) {}
+  }
+
+  function normalizeId(input) {
+    return String(input || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 40);
+  }
+
+  function createHost(options) {
+    const opts = options || {};
+    const events = new Map();      // eventName -> [ {pluginId, cb} ]
+    const commands = new Map();    // id -> { id, title, run, pluginId }
+    const toolbarButtons = [];     // { id, label, title, onClick, pluginId }
+    const footerWidgets = [];      // { id, render, pluginId }
+    const loaded = new Map();      // pluginId -> { api, meta }
+
+    function emit(name, payload) {
+      const list = events.get(name) || [];
+      for (const entry of list) {
+        try {
+          entry.cb(payload);
+        } catch (err) {
+          report(entry.pluginId, '事件 ' + name + ' 出错：' + (err && err.message ? err.message : err));
+        }
+      }
+    }
+
+    function report(pluginId, message) {
+      if (opts.onError) opts.onError(pluginId, message);
+      else console.warn('[plugin:' + pluginId + '] ' + message);
+    }
+
+    function makeApi(record) {
+      const pid = record.id;
+      return {
+        apiVersion: API_VERSION,
+        meta: { id: pid, name: record.name, version: record.version },
+        log: (...args) => console.log('[plugin:' + pid + ']', ...args),
+        toast: message => { if (opts.onToast) opts.onToast(String(message)); },
+        on(eventName, cb) {
+          if (typeof cb !== 'function') return;
+          if (!events.has(eventName)) events.set(eventName, []);
+          events.get(eventName).push({ pluginId: pid, cb: cb });
+        },
+        registerCommand(cmd) {
+          if (!cmd || !cmd.id || typeof cmd.run !== 'function') return report(pid, '命令缺少 id 或 run');
+          commands.set(pid + ':' + cmd.id, {
+            id: pid + ':' + cmd.id,
+            title: cmd.title || cmd.id,
+            run: cmd.run,
+            pluginId: pid
+          });
+          if (opts.onRegistryChange) opts.onRegistryChange();
+        },
+        addToolbarButton(btn) {
+          if (!btn || typeof btn.onClick !== 'function') return report(pid, '按钮缺少 onClick');
+          toolbarButtons.push({
+            id: pid + ':' + (btn.id || Math.random().toString(36).slice(2)),
+            label: btn.label || '插件',
+            title: btn.title || '',
+            onClick: btn.onClick,
+            pluginId: pid
+          });
+          if (opts.onRegistryChange) opts.onRegistryChange();
+        },
+        addNoteFooterWidget(widget) {
+          if (!widget || typeof widget.render !== 'function') return report(pid, '小组件缺少 render');
+          footerWidgets.push({
+            id: pid + ':' + (widget.id || Math.random().toString(36).slice(2)),
+            render: widget.render,
+            pluginId: pid
+          });
+          if (opts.onRegistryChange) opts.onRegistryChange();
+        },
+        notes: {
+          list: () => (opts.getNotes ? opts.getNotes() : []),
+          current: () => (opts.getCurrentNote ? opts.getCurrentNote() : null),
+          open: id => { if (opts.openNote) opts.openNote(id); }
+        },
+        ai: {
+          ask: text => { if (opts.askAi) opts.askAi(String(text || '')); }
+        },
+        storage: {
+          get(key) {
+            try {
+              const raw = JSON.parse(localStorage.getItem('race-ainote:plugin:' + pid) || '{}');
+              return raw[key];
+            } catch (_) { return undefined; }
+          },
+          set(key, value) {
+            try {
+              const raw = JSON.parse(localStorage.getItem('race-ainote:plugin:' + pid) || '{}');
+              raw[key] = value;
+              localStorage.setItem('race-ainote:plugin:' + pid, JSON.stringify(raw));
+            } catch (_) {}
+          }
+        }
+      };
+    }
+
+    /** 执行插件代码 */
+    function run(record) {
+      const api = makeApi(record);
+      try {
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('api', '"use strict";\n' + record.code + '\n//# sourceURL=plugin:' + record.id);
+        fn(api);
+        loaded.set(record.id, { api: api, meta: record });
+        return { ok: true };
+      } catch (err) {
+        report(record.id, '加载失败：' + (err && err.message ? err.message : err));
+        return { ok: false, error: String(err && err.message ? err.message : err) };
+      }
+    }
+
+    function unload(pluginId) {
+      for (const map of [events]) {
+        for (const [name, list] of map) {
+          map.set(name, list.filter(entry => entry.pluginId !== pluginId));
+        }
+      }
+      for (const id of [...commands.keys()]) {
+        if (id.startsWith(pluginId + ':')) commands.delete(id);
+      }
+      for (let i = toolbarButtons.length - 1; i >= 0; i--) {
+        if (toolbarButtons[i].pluginId === pluginId) toolbarButtons.splice(i, 1);
+      }
+      for (let i = footerWidgets.length - 1; i >= 0; i--) {
+        if (footerWidgets[i].pluginId === pluginId) footerWidgets.splice(i, 1);
+      }
+      loaded.delete(pluginId);
+      if (opts.onRegistryChange) opts.onRegistryChange();
+    }
+
+    const host = {
+      apiVersion: API_VERSION,
+      list: loadAll,
+      loadedIds: () => [...loaded.keys()],
+      commands: () => [...commands.values()],
+      toolbarButtons: () => toolbarButtons.slice(),
+      footerWidgets: () => footerWidgets.slice(),
+      emit: emit,
+
+      /** 安装（或覆盖）一个插件并立即启用 */
+      install(input) {
+        const id = normalizeId(input.id || input.name);
+        if (!id) throw new Error('插件需要 id 或 name');
+        if (!input.code || !String(input.code).trim()) throw new Error('插件代码不能为空');
+        const list = loadAll();
+        const record = {
+          id: id,
+          name: input.name || id,
+          version: input.version || '1.0.0',
+          description: input.description || '',
+          author: input.author || '',
+          code: String(input.code),
+          enabled: true,
+          installedAt: Date.now()
+        };
+        const idx = list.findIndex(p => p.id === id);
+        if (idx >= 0) list[idx] = Object.assign({}, list[idx], record);
+        else list.push(record);
+        saveAll(list);
+        unload(id);
+        const result = run(record);
+        if (!result.ok) {
+          // 加载失败就保持禁用，避免每次启动都报错
+          const after = loadAll();
+          const item = after.find(p => p.id === id);
+          if (item) { item.enabled = false; saveAll(after); }
+          throw new Error('插件加载失败：' + result.error);
+        }
+        return record;
+      },
+
+      uninstall(id) {
+        unload(id);
+        saveAll(loadAll().filter(p => p.id !== id));
+        if (opts.onRegistryChange) opts.onRegistryChange();
+      },
+
+      setEnabled(id, enabled) {
+        const list = loadAll();
+        const record = list.find(p => p.id === id);
+        if (!record) return false;
+        record.enabled = Boolean(enabled);
+        saveAll(list);
+        if (record.enabled) {
+          const result = run(record);
+          if (!result.ok) { record.enabled = false; saveAll(list); return false; }
+        } else {
+          unload(id);
+        }
+        if (opts.onRegistryChange) opts.onRegistryChange();
+        return true;
+      },
+
+      /** 启动时加载所有已启用插件 */
+      boot() {
+        const results = [];
+        for (const record of loadAll()) {
+          if (!record.enabled) continue;
+          results.push({ id: record.id, result: run(record) });
+        }
+        if (opts.onRegistryChange) opts.onRegistryChange();
+        return results;
+      },
+
+      /** 从 URL 拉取插件代码（插件作者可以把 .js 放任意静态地址） */
+      async fetchCode(url) {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.text();
+      }
+    };
+
+    return host;
+  }
+
+  root.RG = root.RG || {};
+  root.RG.plugins = { createHost, API_VERSION, STORAGE_KEY };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* ============================================================
+   sample-plugins.js — 内置示例插件（安装后可在设置里启用/卸载）
+   每个插件的 code 都是字符串，宿主用 new Function 执行，
+   只拿到受控的 api 对象。
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  const readingStats = [
+    "// 阅读统计：在笔记底部显示字数、预计阅读时间、出链数",
+    "api.addNoteFooterWidget({",
+    "  id: 'reading-stats',",
+    "  render: function (el, note) {",
+    "    if (!note) return;",
+    "    var text = String(note.content || '').replace(/\s+/g, '');",
+    "    var words = text.length;",
+    "    var minutes = Math.max(1, Math.round(words / 400));",
+    "    var links = (note.links || []).length;",
+    "    el.innerHTML = '';",
+    "    var box = document.createElement('div');",
+    "    box.className = 'plugin-widget';",
+    "    box.textContent = '📖 ' + words + ' 字 · 约 ' + minutes + ' 分钟读完 · ' + links + ' 条出链';",
+    "    el.appendChild(box);",
+    "  }",
+    "});",
+    "api.registerCommand({",
+    "  id: 'count-all',",
+    "  title: '统计整个库的字数',",
+    "  run: function () {",
+    "    var notes = api.notes.list();",
+    "    var total = notes.reduce(function (sum, n) { return sum + String(n.content || '').replace(/\s+/g, '').length; }, 0);",
+    "    api.toast('全库 ' + notes.length + ' 篇，共 ' + total + ' 字');",
+    "  }",
+    "});"
+  ].join('\n');
+
+  const quickSummary = [
+    "// 一键摘要：工具栏按钮，把当前笔记丢给 AI 总结",
+    "api.addToolbarButton({",
+    "  id: 'summary',",
+    "  label: '摘要',",
+    "  title: '让 AI 总结当前笔记',",
+    "  onClick: function () {",
+    "    var note = api.notes.current();",
+    "    if (!note) return api.toast('先打开一篇笔记');",
+    "    api.ai.ask('用三句话总结这篇笔记，并指出它还缺什么：' + note.title);",
+    "  }",
+    "});",
+    "api.on('note:open', function (payload) {",
+    "  if (payload && payload.note) api.log('打开笔记：' + payload.note.title);",
+    "});"
+  ].join('\n');
+
+  const pomodoro = [
+    "// 番茄钟：工具栏按钮，25 分钟后提醒你休息",
+    "var timer = null;",
+    "api.addToolbarButton({",
+    "  id: 'pomodoro',",
+    "  label: '番茄钟',",
+    "  title: '开始 / 停止 25 分钟专注',",
+    "  onClick: function () {",
+    "    if (timer) { clearTimeout(timer); timer = null; api.toast('已停止计时'); return; }",
+    "    api.toast('开始专注，25 分钟后提醒');",
+    "    timer = setTimeout(function () { timer = null; api.toast('⏰ 25 分钟到，起来活动一下'); }, 25 * 60 * 1000);",
+    "  }",
+    "});"
+  ].join('\n');
+
+  root.RG = root.RG || {};
+  root.RG.samplePlugins = [
+    {
+      id: 'reading-stats',
+      name: '阅读统计',
+      version: '1.0.0',
+      description: '在笔记底部显示字数、预计阅读时间、出链数，并支持统计全库字数。',
+      code: readingStats
+    },
+    {
+      id: 'quick-summary',
+      name: '一键摘要',
+      version: '1.0.0',
+      description: '工具栏加一个「摘要」按钮，点一下让 AI 总结当前笔记。',
+      code: quickSummary
+    },
+    {
+      id: 'pomodoro',
+      name: '番茄钟',
+      version: '1.0.0',
+      description: '工具栏加一个 25 分钟专注计时器，结束提醒你休息。',
+      code: pomodoro
+    }
+  ];
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* ============================================================
    ai.js — AI 问答面板
    两种模式：
    1) 本地分析模式（默认，纯前端规则，离线可用）
@@ -3940,7 +4363,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T04:30:47.011Z
+   生成时间：2026-11-10T04:33:51.881Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
@@ -4725,6 +5148,8 @@ input[type="range"]::-webkit-slider-thumb {
     const node = state.graph && state.graph.nodes.find(n => n.id === id);
     if (!node) return;
     if (node.type === 'note') touchUsage(node.path, 'open');
+    if (typeof pluginHost !== 'undefined') pluginHost.emit('note:open', { note: node });
+    if (typeof refreshNoteWidgets === 'function') refreshNoteWidgets();
     currentNoteId = id;
     state.selectedId = id;
     editing = false;
@@ -4805,6 +5230,7 @@ input[type="range"]::-webkit-slider-thumb {
     state.graph = vault.buildVault(state.files.map(f => (f.path === node.path ? Object.assign({}, f, { content: md }) : f)));
     rebuild({});
     renderNote();
+    if (typeof pluginHost !== 'undefined') pluginHost.emit('note:save', { note: node });
     toast('已保存到当前会话（Ctrl+S 可下载 .md）');
   }
 
@@ -6061,6 +6487,187 @@ input[type="range"]::-webkit-slider-thumb {
       toast(record.duplicate ? '这条之前记过，《' + record.targetTitle + '》未重复写入' : '已记入《' + record.targetTitle + '》并标记为已解决');
     }  });
 
+  /* ── 插件宿主 ───────────────────────────────────────────── */
+  const pluginHost = RG.plugins.createHost({
+    onToast: message => toast(message),
+    getNotes: () => (state.graph ? state.graph.notes : []),
+    getCurrentNote: () => currentNote(),
+    openNote: id => { openNote(id); showView('note'); },
+    askAi: text => { setAiPanel(true); ai.send(text); },
+    onError: (id, message) => toast('插件 ' + id + '：' + message),
+    onRegistryChange: () => renderPluginUI()
+  });
+
+  function renderPluginUI() {
+    // 1) 工具栏按钮
+    const bar = $('#plugin-buttons');
+    if (bar) {
+      bar.innerHTML = '';
+      for (const btn of pluginHost.toolbarButtons()) {
+        const el = document.createElement('button');
+        el.className = 'ghost-btn plugin-btn';
+        el.textContent = btn.label;
+        el.title = btn.title || btn.label;
+        el.addEventListener('click', () => {
+          try { btn.onClick(); } catch (err) { toast('插件出错：' + err.message); }
+        });
+        bar.appendChild(el);
+      }
+    }
+
+    // 2) 命令菜单
+    const menu = $('#plugin-menu');
+    if (menu && menu.hidden) {
+      menu.innerHTML = '';
+      const cmds = pluginHost.commands();
+      if (!cmds.length) {
+        const empty = document.createElement('div');
+        empty.className = 'plugin-menu-empty';
+        empty.textContent = '还没有插件命令';
+        menu.appendChild(empty);
+      }
+      for (const cmd of cmds) {
+        const b = document.createElement('button');
+        b.textContent = cmd.title;
+        b.addEventListener('click', () => {
+          menu.hidden = true;
+          try { cmd.run(); } catch (err) { toast('插件出错：' + err.message); }
+        });
+        menu.appendChild(b);
+      }
+    }
+
+    // 3) 设置里的插件列表
+    const list = $('#plugin-list');
+    if (list) {
+      list.innerHTML = '';
+      const plugins = pluginHost.list();
+      if (!plugins.length) {
+        const p = document.createElement('p');
+        p.className = 'prefs-tip';
+        p.textContent = '还没有安装插件。可以先点「安装示例插件」看看效果。';
+        list.appendChild(p);
+      }
+      for (const plugin of plugins) {
+        const row = document.createElement('div');
+        row.className = 'plugin-row';
+        const info = document.createElement('div');
+        info.className = 'plugin-info';
+        const name = document.createElement('div');
+        name.className = 'plugin-name';
+        name.textContent = plugin.name + ' v' + plugin.version;
+        const desc = document.createElement('div');
+        desc.className = 'plugin-desc';
+        desc.textContent = plugin.description || '（无说明）';
+        info.append(name, desc);
+
+        const actions = document.createElement('div');
+        actions.className = 'plugin-actions';
+        const toggle = document.createElement('button');
+        toggle.className = 'ghost-btn tiny';
+        toggle.textContent = plugin.enabled ? '停用' : '启用';
+        toggle.addEventListener('click', () => {
+          const ok = pluginHost.setEnabled(plugin.id, !plugin.enabled);
+          if (!ok) toast('插件启用失败，已回退为停用');
+          renderPluginUI();
+          refreshNoteWidgets();
+        });
+        const remove = document.createElement('button');
+        remove.className = 'ghost-btn tiny';
+        remove.textContent = '卸载';
+        remove.addEventListener('click', () => {
+          if (!window.confirm('确定卸载插件「' + plugin.name + '」？')) return;
+          pluginHost.uninstall(plugin.id);
+          renderPluginUI();
+          refreshNoteWidgets();
+          toast('已卸载 ' + plugin.name);
+        });
+        actions.append(toggle, remove);
+        row.append(info, actions);
+        list.appendChild(row);
+      }
+    }
+  }
+
+  /** 笔记底部的插件挂件 */
+  function refreshNoteWidgets() {
+    const box = $('#plugin-widgets');
+    if (!box) return;
+    box.innerHTML = '';
+    const note = currentNote();
+    for (const widget of pluginHost.footerWidgets()) {
+      const slot = document.createElement('div');
+      slot.className = 'plugin-widget-slot';
+      box.appendChild(slot);
+      try { widget.render(slot, note); } catch (err) { toast('插件挂件出错：' + err.message); }
+    }
+  }
+
+  $('#btn-plugin-menu').addEventListener('click', e => {
+    e.stopPropagation();
+    const menu = $('#plugin-menu');
+    const rect = e.currentTarget.getBoundingClientRect();
+    menu.hidden = !menu.hidden;
+    if (!menu.hidden) {
+      menu.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+      menu.style.top = (rect.bottom + 6) + 'px';
+      renderPluginUI();
+    }
+  });
+  document.addEventListener('mousedown', e => {
+    const menu = $('#plugin-menu');
+    if (menu && !menu.hidden && !e.target.closest('#plugin-menu') && !e.target.closest('#btn-plugin-menu')) menu.hidden = true;
+  });
+
+  /* 安装 / 卸载 / 示例 */
+  $('#plugin-toggle-form').addEventListener('click', () => {
+    const form = $('#plugin-form');
+    form.hidden = !form.hidden;
+  });
+
+  $('#plugin-install').addEventListener('click', () => {
+    const status = $('#plugin-status');
+    const name = $('#plugin-name').value.trim() || '未命名插件';
+    const code = $('#plugin-code').value;
+    if (!code.trim()) { status.textContent = '❌ 代码不能为空'; return; }
+    if (!window.confirm('插件代码会以本页面权限运行，确定安装「' + name + '」？')) return;
+    try {
+      pluginHost.install({ name: name, version: $('#plugin-version').value.trim() || '1.0.0', code: code });
+      status.textContent = '✅ 已安装并启用：' + name;
+      $('#plugin-code').value = '';
+      $('#plugin-name').value = '';
+      renderPluginUI();
+      refreshNoteWidgets();
+    } catch (err) {
+      status.textContent = '❌ ' + (err && err.message ? err.message : err);
+    }
+  });
+
+  $('#plugin-fetch').addEventListener('click', async () => {
+    const status = $('#plugin-status');
+    const url = $('#plugin-url').value.trim();
+    if (!url) { status.textContent = '请先填代码 URL'; return; }
+    status.textContent = '拉取中…';
+    try {
+      const code = await pluginHost.fetchCode(url);
+      $('#plugin-code').value = code;
+      status.textContent = '✅ 已拉取 ' + code.length + ' 字符，确认后点「安装并启用」';
+    } catch (err) {
+      status.textContent = '❌ 拉取失败：' + (err && err.message ? err.message : err);
+    }
+  });
+
+  $('#plugin-sample').addEventListener('click', () => {
+    const samples = RG.samplePlugins || [];
+    if (!samples.length) return toast('没有内置示例插件');
+    for (const sample of samples) {
+      try { pluginHost.install(sample); } catch (err) { toast('示例插件安装失败：' + err.message); }
+    }
+    renderPluginUI();
+    refreshNoteWidgets();
+    toast('已安装 ' + samples.length + ' 个示例插件');
+  });
+
   /* ── 启动 ───────────────────────────────────────────────── */
   const ro = new ResizeObserver(() => resize());
   ro.observe(shell);
@@ -6098,10 +6705,14 @@ input[type="range"]::-webkit-slider-thumb {
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
   applyAskMode('tutor');
+  pluginHost.boot();
+  renderPluginUI();
+  refreshNoteWidgets();
+  pluginHost.emit('app:ready', { notes: state.graph ? state.graph.notes.length : 0 });
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
