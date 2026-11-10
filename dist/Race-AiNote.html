@@ -175,7 +175,18 @@ svg {
   user-select: none;
 }
 .tree-folder:hover { background: var(--bg-hover); }
-.tree-folder .chevron { transition: transform 0.16s; font-size: 9px; color: var(--text-dim); }
+.tree-folder .chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text);
+  transition: transform 0.16s, color 0.14s;
+}
+.tree-folder:hover .chevron { color: var(--accent); }
 .tree-folder.is-collapsed .chevron { transform: rotate(-90deg); }
 
 .tree-file {
@@ -1121,7 +1132,6 @@ input[type="range"]::-webkit-slider-thumb {
 .tree-children { display: block; }
 .tree-group { display: block; }
 .tree-folder.is-drop { background: var(--accent-soft); outline: 1px dashed var(--accent); }
-.tree-folder .chevron { transition: transform 0.16s; }
 .tree-folder.is-collapsed .chevron { transform: rotate(-90deg); }
 
 /* ── 右键菜单 ───────────────────────────────────────────── */
@@ -4702,7 +4712,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T11:10:40.055Z
+   生成时间：2026-11-10T11:13:45.545Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {

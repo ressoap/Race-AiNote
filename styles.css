@@ -167,7 +167,18 @@ svg {
   user-select: none;
 }
 .tree-folder:hover { background: var(--bg-hover); }
-.tree-folder .chevron { transition: transform 0.16s; font-size: 9px; color: var(--text-dim); }
+.tree-folder .chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text);
+  transition: transform 0.16s, color 0.14s;
+}
+.tree-folder:hover .chevron { color: var(--accent); }
 .tree-folder.is-collapsed .chevron { transform: rotate(-90deg); }
 
 .tree-file {
@@ -1113,7 +1124,6 @@ input[type="range"]::-webkit-slider-thumb {
 .tree-children { display: block; }
 .tree-group { display: block; }
 .tree-folder.is-drop { background: var(--accent-soft); outline: 1px dashed var(--accent); }
-.tree-folder .chevron { transition: transform 0.16s; }
 .tree-folder.is-collapsed .chevron { transform: rotate(-90deg); }
 
 /* ── 右键菜单 ───────────────────────────────────────────── */
