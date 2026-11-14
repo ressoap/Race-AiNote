@@ -11,7 +11,8 @@
     "demo": "node scripts/gen-demo.js",
     "serve": "node scripts/serve.mjs",
     "desktop": "node scripts/desktop.js",
-    "build:exe": "node scripts/build-exe.js"
+    "build:exe": "node scripts/build-exe.js",
+    "build:electron": "node scripts/build-electron.js"
   },
   "engines": {
     "node": ">=20"

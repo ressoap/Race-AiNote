@@ -64,6 +64,23 @@ npm run build:exe        # 生成 dist/Race-AiNote.exe
 - 端口被占用会自动往后找空闲端口；
 - 想换浏览器：`set RACE_BROWSER=C:/.../chrome.exe` 再运行。
 
+**B2. Electron 桌面版（Obsidian 同款技术栈）**
+
+Obsidian 本身是闭源商业应用，它的内核拿不到也用不了；但 Obsidian 用的底层就是 **Electron（Chromium + Node）**，
+本项目提供同款架构的打包方式：
+
+```bash
+# 1) 先把 Electron 运行时放到 _tmp/electron（约 110MB，只需一次）
+curl -L -o electron.zip https://registry.npmmirror.com/-/binary/electron/33.2.1/electron-v33.2.1-win32-x64.zip
+unzip electron.zip -d _tmp/electron
+
+# 2) 打包
+npm run build:electron
+```
+
+产物 `dist/Race-AiNote-Electron/Race-AiNote.exe`：真正的桌面窗口（无浏览器外壳、无地址栏），
+内置 Node 主进程托管本地服务，数据写在 `resources/app/app-data/`。整包约 268MB（Electron 本身就有 180MB）。
+
 **C. 单文件 HTML（完全不启动服务）**
 
 ```
@@ -165,7 +182,8 @@ node scripts/ai-organize.mjs --vault ./vault-example --limit 3   # 正式跑
 | --- | --- | --- |
 | 桌面窗口（推荐） | 双击 `启动Race-AiNote.bat` | 独立窗口、无地址栏、独立 profile、右键完全交给应用、AI 与云同步全可用 |
 | 命令行启动 | `npm run desktop` | 同上，可加 `--port 4399` 换端口 |
-| Windows exe | 双击 `dist/Race-AiNote.exe` | 内置 Node，双击即用，适合分发给别人 |
+| Electron 桌面版 | 双击 `dist/Race-AiNote-Electron/Race-AiNote.exe` | Obsidian 同款技术栈，真桌面窗口，整包 ~268MB |
+| Windows exe（SEA） | 双击 `dist/Race-AiNote.exe` | 内置 Node，双击即用，体积 ~89MB |
 | 单文件 HTML | 双击 `dist/Race-AiNote.html` | 零依赖零服务，但 AI 只能本地分析 |
 
 `scripts/desktop.js` 做的事：
@@ -211,6 +229,7 @@ Race-AiNote/
 │  ├─ serve.mjs             本地服务器 + AI / 网盘代理（密钥只在服务端）
 │  ├─ desktop.js            桌面窗口启动器（Edge/Chrome --app 模式）
 │  ├─ build-exe.js          用 Node SEA 打包成单文件 exe
+│  ├─ build-electron.js     打包 Electron 桌面版（Obsidian 同款技术栈）
 │  ├─ gen-demo.js           vault-example → js/demo-vault.js
 │  └─ ai-organize.mjs       AI 整理脚本（建议稿模式）
 ├─ tests/                   Node 原生 test runner 单元测试

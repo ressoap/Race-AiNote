@@ -25,3 +25,6 @@ data/
 dist/*.exe
 dist/profile/
 dist/data/
+
+# Electron 打包产物（体积大，按需构建）
+dist/Race-AiNote-Electron/
