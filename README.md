@@ -11,7 +11,7 @@
 
 ## 1. 是什么
 
-一个可以直接读写你 Obsidian 库的笔记工作台：
+一个可以直接读写你本地 Markdown 笔记库的工作台：
 
 - **笔记是主体**：左侧多级文件树，中间整页阅读 / 编辑，反向链接一目了然。
 - **AI 答疑是特色**：右侧常驻面板，两个独立会话：
@@ -75,7 +75,7 @@ npm run build:exe        # 生成 dist/Race-AiNote.exe
 ### 2.3 看自己的笔记（约 1 分钟）
 
 1. 双击 `dist/Race-AiNote.html`；
-2. 点左上角 **文件夹图标** → 选中你的 Obsidian 库目录（或任意装着 `.md` 的目录）；
+2. 点左上角 **文件夹图标** → 选中你的 Markdown 笔记库目录（任何装着 `.md` 的目录都行）；
 3. 浏览器授权后立即出图。
 
 > 不支持 File System Access API 的浏览器：把整个笔记文件夹**拖进页面**，或点文件夹图标走 `<input webkitdirectory>` 兜底方案。
@@ -195,7 +195,7 @@ Race-AiNote/
 ├─ styles.css               明暗双主题样式
 ├─ js/
 │  ├─ vault.js              Markdown 库解析：frontmatter / 双链 / 标签 / 附件
-│  ├─ query.js              Obsidian 风格查询语法
+│  ├─ query.js              双链笔记风格的查询语法
 │  ├─ markdown.js           轻量 Markdown 渲染（正文/问答共用）
 │  ├─ ai.js                 AI 问答面板：本地规则分析 + 模型代理适配
 │  ├─ richtext.js           富文本 ⇄ Markdown 转换与选区格式化
@@ -316,7 +316,7 @@ Race-AiNote/
 - 浏览器里新建 / 改名的笔记会存进本机 localStorage 缓存，换机器不同步；要写回磁盘请用 `Ctrl+S` 下载。
 - 不提供多人协作与实时同步；跨设备请用第 9 节的云同步做快照备份。
 - 浏览器不保证文件读取性能，超大库（>5000 篇）建议先用脚本预生成 JSON。
-- 未实现正则以外的 Obsidian 高级搜索（`section:`、`line:`、`task:`）。
+- 高级搜索只做到正则为止，尚未支持 `section:`、`line:`、`task:` 这类字段查询。
 - 全局排斥力仍是 O(n²)，中大型库建议关闭标签节点以获得更好帧率。
 - 浏览器里改的笔记只存在当前会话（可 Ctrl+S 下载 .md 覆盖原文件），不会直接写回磁盘。
 - 浏览器直连模式受服务商 CORS 限制，被拦时请改用本地代理模式。
