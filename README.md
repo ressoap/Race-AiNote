@@ -50,7 +50,21 @@
 它会起一个本地服务，并用系统的 Edge / Chrome 以「应用模式」打开独立窗口：
 没有地址栏、没有标签页、任务栏是独立图标，和日常浏览器互不干扰（用独立 profile 目录）。
 
-**B. 单文件模式（完全不启动服务）**
+**B. Windows 单文件 exe（推荐分发用）**
+
+```bash
+npm run build:exe        # 生成 dist/Race-AiNote.exe
+```
+
+双击 `dist/Race-AiNote.exe` 即可：内置 Node 运行时，**目标机器不需要装 Node、也不需要浏览器命令行**。
+它会起本地服务并自动打开 Edge/Chrome 应用窗口（找不到浏览器时打印地址）。
+
+- 用 Node 官方 SEA（Single Executable Application）打包，不依赖 Electron；
+- 页面本体内嵌在 exe 里，记录写在 exe 同级的 `data/records.json`，浏览器 profile 在 `dist/profile/`；
+- 端口被占用会自动往后找空闲端口；
+- 想换浏览器：`set RACE_BROWSER=C:/.../chrome.exe` 再运行。
+
+**C. 单文件 HTML（完全不启动服务）**
 
 ```
 双击 dist/Race-AiNote.html
@@ -151,7 +165,8 @@ node scripts/ai-organize.mjs --vault ./vault-example --limit 3   # 正式跑
 | --- | --- | --- |
 | 桌面窗口（推荐） | 双击 `启动Race-AiNote.bat` | 独立窗口、无地址栏、独立 profile、右键完全交给应用、AI 与云同步全可用 |
 | 命令行启动 | `npm run desktop` | 同上，可加 `--port 4399` 换端口 |
-| 单文件 | 双击 `dist/Race-AiNote.html` | 零依赖零服务，但 AI 只能本地分析 |
+| Windows exe | 双击 `dist/Race-AiNote.exe` | 内置 Node，双击即用，适合分发给别人 |
+| 单文件 HTML | 双击 `dist/Race-AiNote.html` | 零依赖零服务，但 AI 只能本地分析 |
 
 `scripts/desktop.js` 做的事：
 
@@ -195,6 +210,7 @@ Race-AiNote/
 │  ├─ build.js              内联构建 → dist/Race-AiNote.html
 │  ├─ serve.mjs             本地服务器 + AI / 网盘代理（密钥只在服务端）
 │  ├─ desktop.js            桌面窗口启动器（Edge/Chrome --app 模式）
+│  ├─ build-exe.js          用 Node SEA 打包成单文件 exe
 │  ├─ gen-demo.js           vault-example → js/demo-vault.js
 │  └─ ai-organize.mjs       AI 整理脚本（建议稿模式）
 ├─ tests/                   Node 原生 test runner 单元测试

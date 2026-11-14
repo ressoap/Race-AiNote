@@ -20,3 +20,8 @@ Thumbs.db
 
 # 本地数据（问题记录等）
 data/
+
+# 本地构建产物（体积大，按需自行生成）
+dist/*.exe
+dist/profile/
+dist/data/

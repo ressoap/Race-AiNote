@@ -10,7 +10,8 @@
     "smoke": "node scripts/smoke.js && node scripts/smoke-dist.js",
     "demo": "node scripts/gen-demo.js",
     "serve": "node scripts/serve.mjs",
-    "desktop": "node scripts/desktop.js"
+    "desktop": "node scripts/desktop.js",
+    "build:exe": "node scripts/build-exe.js"
   },
   "engines": {
     "node": ">=20"
