@@ -79,3 +79,63 @@ test('describe 输出结构化摘要', () => {
   assert.equal(d[0][1].negated, true);
   assert.equal(d[1][0].value, '导数');
 });
+
+/* ── 高级语法：任务 / 属性 / 小节 / 行 / 块 / 正则 flags ── */
+
+const taskNote = {
+  title: '复习计划',
+  path: '40-复习/复习计划.md',
+  content: '# 复习计划\n\n## 本周\n- [ ] 导数二轮\n- [x] 磁场错题\n\n本周重点：导数。\n',
+  tags: ['复习'],
+  frontmatter: { priority: 3, due: '2026-11-18', status: '' }
+};
+
+const plainNote = {
+  title: '导数',
+  path: '20-数学/导数.md',
+  content: '导数定义就是切线斜率。\n没有任务。^welcome\n',
+  tags: [],
+  frontmatter: {}
+};
+
+test('任务查询：task: / task-todo: / task-done:', () => {
+  assert.ok(q.matches(taskNote, 'task:'));
+  assert.ok(q.matches(taskNote, 'task-todo:'));
+  assert.ok(q.matches(taskNote, 'task-done:'));
+  assert.ok(!q.matches(plainNote, 'task:'));
+  assert.ok(!q.matches(plainNote, 'task-todo:'));
+  assert.ok(!q.matches(taskNote, 'task-todo: -section:本周'), '排除当前小节后应无结果');
+});
+
+test('属性查询：存在 / 等于 / null / 比较', () => {
+  assert.ok(q.matches(taskNote, '[priority]'));
+  assert.ok(q.matches(taskNote, '[priority:3]'));
+  assert.ok(q.matches(taskNote, '[priority:>2]'));
+  assert.ok(!q.matches(taskNote, '[priority:<2]'));
+  assert.ok(q.matches(taskNote, '[due:>=2026-11-01]'));
+  assert.ok(q.matches(taskNote, '[status:null]'), '空字符串视为空值');
+  assert.ok(!q.matches(plainNote, '[priority]'));
+});
+
+test('小节查询：标题或该小节正文', () => {
+  assert.ok(q.matches(taskNote, 'section:本周'), '标题命中');
+  assert.ok(q.matches(taskNote, 'section:磁场'), '小节正文命中');
+  assert.ok(!q.matches(plainNote, 'section:本周'));
+});
+
+test('按行查询：同一行内出现所有词', () => {
+  assert.ok(q.matches(taskNote, 'line:导数 二轮'));
+  assert.ok(!q.matches(taskNote, 'line:导数 不存在'));
+});
+
+test('块引用查询：^blockid', () => {
+  assert.ok(q.matches(plainNote, 'block:welcome'));
+  assert.ok(!q.matches(plainNote, 'block:nope'));
+});
+
+test('正则支持 flags，且默认忽略大小写', () => {
+  assert.ok(q.matches(plainNote, '/切线斜率/i'));
+  assert.ok(q.matches(plainNote, '/切线斜./'));
+  assert.ok(!q.matches(plainNote, '/^切线/'), '带 ^ 的正则不应命中中间位置');
+  assert.ok(!q.matches(plainNote, '/[unclosed/'), '非法正则安全降级');
+});

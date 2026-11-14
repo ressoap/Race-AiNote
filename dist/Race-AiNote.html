@@ -1488,7 +1488,7 @@ input[type="range"]::-webkit-slider-thumb {
       <section id="pane-graph" class="pane pane-graph" hidden>
         <div class="search-bar">
           <svg class="search-ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.25"/><path d="m15 15 4.5 4.5"/></svg>
-          <input id="search-input" type="search" placeholder="搜索：导数   path:20-数学   tag:错题   -草稿   OR   /正则/" autocomplete="off" spellcheck="false">
+          <input id="search-input" type="search" placeholder="搜索：导数  path:20-数学  tag:错题  section:本周  task-todo:  [priority:>2]  -排除  OR  /正则/i" autocomplete="off" spellcheck="false">
           <button id="search-clear" class="icon-btn small" title="清除">×</button>
         </div>
         <div id="graph-shell" class="graph-shell">
@@ -2116,9 +2116,12 @@ input[type="range"]::-webkit-slider-thumb {
 </script>
 <script>
 /* ============================================================
-   query.js — Obsidian 风格查询语法解析与匹配
-   支持：普通文本、path: file: tag: content: 、-排除、OR、
-        "带空格的引号"、/正则/、#tag 简写
+   query.js — 双链笔记风格的查询语法解析与匹配
+   支持：
+   · 普通文本、"带空格的引号"、-排除、OR、/正则/（可带 i、g 等 flags）
+   · 字段：path: file: tag: content: section: line: block:
+   · 任务：task: task-todo: task-done:
+   · 属性： [键] 存在、[键:值] 等于、[键:null] 为空、[键:>2] 比较
    ============================================================ */
 (function (root, factory) {
   const api = factory();
@@ -2128,8 +2131,9 @@ input[type="range"]::-webkit-slider-thumb {
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const OPERATORS = ['path', 'file', 'tag', 'content'];
-  const OP_RE = /^(path|file|tag|content):/i;
+  const OPERATORS = ['path', 'file', 'tag', 'content', 'section', 'line', 'block', 'task', 'task-todo', 'task-done'];
+  // 长的放前面，避免 task-todo: 被 task: 抢先匹配
+  const OP_RE = /^(task-todo|task-done|section|content|block|path|file|line|tag|task):/i;
 
   function lower(v) { return String(v == null ? '' : v).toLowerCase(); }
 
@@ -2182,11 +2186,34 @@ input[type="range"]::-webkit-slider-thumb {
         while (i < group.length && group[i] !== '/') value += group[i++];
         if (group[i] === '/') i++;
         isRegex = true;
+        // 紧跟的字母是正则 flags，如 /导数/i
+        let flags = '';
+        while (i < group.length && /[gimsuy]/.test(group[i])) flags += group[i++];
+        if (flags) value = value + '@@FLAGS@@' + flags;
       } else {
         while (i < group.length && !/\s/.test(group[i])) value += group[i++];
       }
 
-      if (!value) continue;
+      const bareTask = !value && /^task(-todo|-done)?$/.test(operator || '');
+      if (!value && !bareTask) continue;
+
+      // 属性查询：[键] / [键:值] / [键:null] / [键:>2]
+      const propMatch = !operator && value.match(/^\[([^\]:]+)(?::([^\]]*))?\]$/);
+      if (propMatch) {
+        const rawVal = propMatch[2] == null ? '' : propMatch[2].trim();
+        const cmp = rawVal.match(/^(>=|<=|>|<|=)?(.*)$/);
+        tokens.push({
+          negated: negated,
+          operator: 'property',
+          propKey: lower(propMatch[1]).trim(),
+          propOp: (cmp && cmp[1]) || '=',
+          propValue: lower(cmp ? cmp[2] : rawVal),
+          value: value,
+          needle: lower(value)
+        });
+        continue;
+      }
+
       tokens.push({ negated, operator, value, isRegex, needle: lower(value) });
     }
     return tokens;
@@ -2202,8 +2229,11 @@ input[type="range"]::-webkit-slider-thumb {
   function regexOf(token) {
     if (!token.isRegex) return null;
     if (token._re !== undefined) return token._re;
+    const parts = String(token.value).split('@@FLAGS@@');
+    const pattern = parts[0];
+    const flags = (parts[1] || '') + (parts[1] && parts[1].includes('i') ? '' : 'i');
     try {
-      token._re = new RegExp(token.value, 'i');
+      token._re = new RegExp(pattern, flags);
     } catch (_) {
       token._re = null;
     }
@@ -2224,12 +2254,116 @@ input[type="range"]::-webkit-slider-thumb {
     return haystack.includes(token.needle);
   }
 
+  /** 把正文按标题切成小节 */
+  function sectionsOf(content) {
+    const out = [];
+    const lines = String(content || '').split('\n');
+    let cur = { title: '', body: [] };
+    for (const line of lines) {
+      const h = line.match(/^#{1,6}\s+(.+)$/);
+      if (h) {
+        out.push(cur);
+        cur = { title: h[1].trim(), body: [] };
+      } else {
+        cur.body.push(line);
+      }
+    }
+    out.push(cur);
+    return out.map(function (s) { return { title: s.title, body: s.body.join('\n') }; });
+  }
+
+  /** 读取 frontmatter 属性值 */
+  function propValuesOf(node, key) {
+    const fm = node && node.frontmatter;
+    if (!fm) return [];
+    const raw = fm[key];
+    if (raw == null) return [];
+    if (Array.isArray(raw)) return raw.map(function (v) { return lower(v); });
+    return [lower(raw)];
+  }
+
+  function compareProp(values, op, target) {
+    if (!values.length) return op === '=' && target === 'null';
+    if (op === '=' && target === 'null') return values.every(function (v) { return !v; });
+    return values.some(function (v) {
+      if (op === '=') return v === target || v.includes(target);
+      const a = Number(v);
+      const b = Number(target);
+      if (isNaN(a) || isNaN(b)) {
+        if (op === '>') return v > target;
+        if (op === '<') return v < target;
+        if (op === '>=') return v >= target;
+        if (op === '<=') return v <= target;
+        return false;
+      }
+      if (op === '>') return a > b;
+      if (op === '<') return a < b;
+      if (op === '>=') return a >= b;
+      if (op === '<=') return a <= b;
+      return false;
+    });
+  }
+
+  /** 任务查询：是否有任务项 / 未完成 / 已完成 */
+  function hasTask(content, kind) {
+    const lines = String(content || '').split('\n');
+    return lines.some(function (line) {
+      const m = line.match(/^\s*[-*+]\s+\[([ xX])\]/);
+      if (!m) return false;
+      if (kind === 'task') return true;
+      const done = m[1].toLowerCase() === 'x';
+      return kind === 'task-done' ? done : !done;
+    });
+  }
+
   function matchToken(node, token) {
     const title = lower(node.title);
     const path = lower(node.path);
     const content = lower(node.content || '');
     const tags = (node.tags || []).map(lower);
     let matched;
+
+    // 属性查询：[键] / [键:值] / [键:null] / [键:>2]
+    if (token.operator === 'property') {
+      const values = propValuesOf(node, token.propKey);
+      const hitProp = (token.propOp === '=' && !token.propValue)
+        ? values.length > 0
+        : compareProp(values, token.propOp, token.propValue);
+      return token.negated ? !hitProp : hitProp;
+    }
+
+    // 任务查询：task: / task-todo: / task-done:
+    if (token.operator === 'task' || token.operator === 'task-todo' || token.operator === 'task-done') {
+      const hitTask = hasTask(node.content, token.operator);
+      return token.negated ? !hitTask : hitTask;
+    }
+
+    // 小节查询：标题或该小节正文命中
+    if (token.operator === 'section') {
+      const needle = token.needle;
+      const hitSection = sectionsOf(node.content).some(function (sec) {
+        const t = lower(sec.title);
+        if (t.includes(needle)) return true;
+        return t.length > 0 && lower(sec.body).includes(needle);
+      });
+      return token.negated ? !hitSection : hitSection;
+    }
+
+    // 按行查询：同一行内出现所有词
+    if (token.operator === 'line') {
+      const words = token.needle.split(/\s+/).filter(Boolean);
+      const hitLine = String(node.content || '').split('\n').some(function (line) {
+        const l = lower(line);
+        return words.every(function (w) { return l.includes(w); });
+      });
+      return token.negated ? !hitLine : hitLine;
+    }
+
+    // 块引用 ^blockid
+    if (token.operator === 'block') {
+      const hitBlock = lower(node.content).includes('^' + token.needle);
+      return token.negated ? !hitBlock : hitBlock;
+    }
 
     if (token.isRegex) {
       const re = regexOf(token);
@@ -4712,7 +4846,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ============================================================
    demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。
    数据源：vault-example/（真实 Markdown 文件）
-   生成时间：2026-11-10T11:13:45.545Z
+   生成时间：2026-11-14T03:14:21.139Z
    内容：50 篇笔记 + 3 个附件
    ============================================================ */
 (function (root) {
