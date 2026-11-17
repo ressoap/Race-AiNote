@@ -227,6 +227,8 @@ function serveStatic(req, res, root, pathname) {
 function normalizeSubjectLabel(value) {
   const s = String(value || '').trim();
   if (!s) return '其他';
+  const exact = /^(数学|物理|化学|生物|英语|语文|数据结构|信号与系统|其他)$/.exec(s);
+  if (exact) return exact[1];
   if (/数据结构|计算机|算法/.test(s)) return '数据结构';
   if (/信号|通信/.test(s)) return '信号与系统';
   if (/英文|英语/.test(s)) return '英语';

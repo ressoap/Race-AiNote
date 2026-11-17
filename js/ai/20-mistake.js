@@ -1,10 +1,10 @@
   /* ── 错题本：学科识别、知识点与目标推荐 ─────────────────── */
   const SUBJECT_RULES = [
-    { subject: '数学', words: ['导数', '函数', '三角', '数列', '向量', '圆锥', '椭圆', '双曲线', '抛物线', '概率', '复数', '不等式', '方程', '几何', '集合', '对数', '指数', '极值', '最值'] },
+    { subject: '数学', words: ['导数', '函数', '三角', '正弦', '余弦', '数列', '极限', '收敛', '发散', '连续', '积分', '微分', '洛必达', '无穷小', '有界', '单调', '反例', '向量', '圆锥', '椭圆', '双曲线', '抛物线', '概率', '复数', '不等式', '方程', '几何', '集合', '对数', '指数', '极值', '最值', '级数', '矩阵', '行列式'] },
     { subject: '物理', words: ['力', '加速度', '速度', '电', '磁', '电路', '感应', '动量', '能量', '光学', '折射', '压强', '浮力', '万有引力', '洛伦兹', '自由落体', '并联', '串联'] },
     { subject: '化学', words: ['化学', '氧化', '还原', '摩尔', '溶液', '元素', '有机', '反应', '电解', '沉淀', '离子', '化学键'] },
     { subject: '生物', words: ['细胞', '遗传', '基因', '生态', '酶', '光合', '呼吸作用', '免疫', '蛋白质'] },
-    { subject: '数据结构', words: ['数据结构', '数组', '链表', '栈', '队列', '哈希', '散列', '排序', '归并', '快速排序', '堆', '二叉树', '红黑树', '图', '最短路径', '深度优先', '广度优先', '递归', '动态规划', '时间复杂度', '空间复杂度', '线性探测', '插入排序', '选择排序', '算法'] },
+    { subject: '数据结构', words: ['数据结构', '数组', '链表', '栈', '队列', '哈希', '散列', '排序', '归并', '快速排序', '堆', '二叉树', '红黑树', '图论', '邻接表', '邻接矩阵', '并查集', '拓扑排序', '最短路径', '深度优先', '广度优先', '递归', '动态规划', '时间复杂度', '空间复杂度', '线性探测', '插入排序', '选择排序', '算法'] },
     { subject: '信号与系统', words: ['信号与系统', '拉普拉斯', '傅里叶', '收敛域', '卷积', '冲激', '阶跃', '时不变', '因果', '稳定', '采样', 'z变换', 'Z变换', '频谱', '系统函数', '零极点'] },
     { subject: '英语', words: ['英语', '语法', '时态', '从句', '完形', '阅读', '作文', '单词', '虚拟语气', '被动语态', '将来完成', '非谓语', '介词', '冠词', '主谓一致', '固定搭配'] },
     { subject: '语文', words: ['语文', '文言', '诗歌', '鉴赏', '病句', '成语'] }
@@ -14,6 +14,7 @@
     数学: [
       { label: '导数与函数单调性', words: ['导数', '切线', '单调', '极值', '最值'] },
       { label: '数列递推', words: ['数列', '递推', '通项', '等差', '等比'] },
+      { label: '数列极限', words: ['极限', '收敛', '发散', '无穷小', '有界'] },
       { label: '三角函数', words: ['三角', '正弦', '余弦', '诱导公式'] },
       { label: '圆锥曲线', words: ['圆锥曲线', '椭圆', '双曲线', '抛物线'] },
       { label: '概率统计', words: ['概率', '分布列', '期望', '方差'] },
@@ -71,12 +72,15 @@
     ]
   };
 
+  const ENGLISH_FUNCTION_WORDS = ['the', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'on', 'for', 'with', 'which', 'what', 'who', 'should', 'would', 'can', 'could', 'has', 'have', 'not', 'and', 'but', 'that', 'this', 'from', 'by', 'at', 'as'];
+
   function looksLikeEnglish(text) {
     const s = String(text || '');
     if (!s) return false;
-    const words = s.match(/\b[A-Za-z]{2,}\b/g) || [];
-    if (words.length < 3) return false;
-    return /\b[A-Za-z]{2,}\b[\s\S]{0,80}\b[A-Za-z]{2,}\b/.test(s);
+    const words = s.match(/[A-Za-z]{2,}/g) || [];
+    if (words.length < 4) return false;
+    const lower = words.map(w => w.toLowerCase());
+    return lower.some(w => ENGLISH_FUNCTION_WORDS.indexOf(w) >= 0);
   }
 
   /** 粗判题目学科（API 不可用时的本地兜底） */
@@ -86,16 +90,28 @@
     let bestScore = 0;
     for (const rule of SUBJECT_RULES) {
       let score = 0;
-      for (const w of rule.words) if (q.includes(w)) score += 1;
+      for (const w of rule.words) {
+        let from = 0;
+        let hits = 0;
+        while (hits < 3) {
+          const idx = q.indexOf(w, from);
+          if (idx < 0) break;
+          hits += 1;
+          from = idx + w.length;
+        }
+        score += hits;
+      }
       if (score > bestScore) { bestScore = score; best = rule.subject; }
     }
-    if (looksLikeEnglish(q) && (!best || bestScore < 2)) return { subject: '英语', score: bestScore + 1 };
+    if (!best && looksLikeEnglish(q)) return { subject: '英语', score: 1 };
     return { subject: best, score: bestScore };
   }
 
   function normalizeSubject(subject) {
     const s = String(subject || '').trim();
     if (!s) return '其他';
+    const exact = /^(数学|物理|化学|生物|英语|语文|数据结构|信号与系统|其他)$/.exec(s);
+    if (exact) return exact[1];
     if (/数据结构|计算机|算法/.test(s)) return '数据结构';
     if (/信号|通信/.test(s)) return '信号与系统';
     if (/英文|英语/.test(s)) return '英语';

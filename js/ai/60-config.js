@@ -119,6 +119,32 @@
       const onOuterAbort = () => { try { if (controller) controller.abort(); } catch (_) {} };
       if (signal) signal.addEventListener('abort', onOuterAbort, { once: true });
       const timer = controller ? setTimeout(() => controller.abort(), 6000) : 0;
+      // 直连模式没有本地服务，直接用同一个 Key 再问一次模型做定位分析
+      if (state.mode === 'direct' && hasKey(state.config)) {
+        const nl = String.fromCharCode(10);
+        try {
+          const r = await callDirect(
+            Object.assign({}, state.config, { askMode: 'analyze' }),
+            '【问题】' + nl + String(question || '') + nl + nl + '【回答】' + nl + String(answer || '').slice(0, 4000),
+            '',
+            [],
+            controller ? controller.signal : signal
+          );
+          const parsed = parseLooseJson(r && r.answer);
+          if (parsed && parsed.subject) {
+            const subject = normalizeSubject(parsed.subject);
+            const points = sanitizeKnowledgePoints(parsed.knowledgePoints);
+            return {
+              subject: subject === '其他' ? local.subject : subject,
+              knowledgePoints: points.length ? points : local.knowledgePoints,
+              mistakeType: normalizeMistakeType(parsed.mistakeType) || local.mistakeType || '',
+              source: 'api'
+            };
+          }
+        } catch (_) {}
+        return local;
+      }
+
       try {
         const res = await fetch('/api/analyze', {
           method: 'POST',

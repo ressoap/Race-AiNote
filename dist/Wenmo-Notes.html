@@ -5716,6 +5716,15 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     try { storageRemove(CONFIG_KEY, LEGACY_CONFIG_KEY); } catch (_) {}
   }
 
+  /** 从模型回复里抠出第一段 JSON（允许带代码围栏或解释文字） */
+  function parseLooseJson(text) {
+    const src = String(text || '').split('```').join('').trim();
+    const start = src.indexOf('{');
+    const end = src.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try { return JSON.parse(src.slice(start, end + 1)); } catch (_) { return null; }
+  }
+
   function hasKey(cfg) { return Boolean(cfg && cfg.key && cfg.key.trim().length > 8); }
 
   const RE_TRAILING_SLASH = /\/+$/;
@@ -5730,14 +5739,21 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       ? '【图片】用户附带了 ' + imageList.length + ' 张图片，请先识别图片中的内容，再结合笔记和问题回答；不要忽略图片。' + nl + nl
       : '';
     const userText = imageHint + '【笔记内容】' + nl + context + nl + nl + '【问题】' + nl + question;
+    const analyzePrompt = '你是错题归档助手。只输出 JSON，不要 Markdown，不要解释。'
+      + '格式：{"subject":"数学","knowledgePoints":["导数与函数单调性","数列递推"],"mistakeType":"方法不会"}。'
+      + '学科只能从这些里选一个：数学、物理、化学、生物、英语、语文、数据结构、信号与系统、其他。'
+      + 'knowledgePoints 给 1-4 个，每个 2-12 个字；一道题可以有多个知识点。'
+      + 'mistakeType 只能从：概念不清、计算失误、审题偏差、方法不会、公式记错、步骤遗漏、其他 里选一个。';
     const baseSystem = cfg.askMode === 'format'
       ? '你是排版助手。只允许插入 Markdown 标记（##、-、**、空行）来整理格式，严禁增加、删除或改动任何文字内容；原样保留 [[双链]]、#标签、代码块。直接输出整理后的正文，不要解释，不要加代码围栏。'
+      : cfg.askMode === 'analyze'
+      ? analyzePrompt
       : cfg.askMode === 'tutor'
       ? '你是一位耐心的学科老师。按「①考点定位 ②解题思路 ③分步推导 ④易错提醒 ⑤一句话拓展」作答；条件不足先追问；可以超出笔记范围，但要用 [[笔记标题]] 指出相关复习材料；不要编造标题。'
       : '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。';
     const formatRule = '公式用纯文本 / Unicode（如 √、²、≤），不要输出 LaTeX 标记；列表用 -，不要用 • 或单独 *。';
     const systemPrompt = baseSystem
-      + (cfg.askMode === 'format' ? '' : nl + formatRule)
+      + (cfg.askMode === 'format' || cfg.askMode === 'analyze' ? '' : nl + formatRule)
       + (cfg.askMode === 'tutor' && teacherPrompt ? nl + nl + teacherPrompt : '')
       + (imageList.length ? nl + '用户消息包含图片，必须优先识别图片内容；笔记只作为辅助。' : '');
     const requestModel = imageList.length && cfg.visionModel ? cfg.visionModel : cfg.model;
@@ -5870,11 +5886,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   /* ── 错题本：学科识别、知识点与目标推荐 ─────────────────── */
   const SUBJECT_RULES = [
-    { subject: '数学', words: ['导数', '函数', '三角', '数列', '向量', '圆锥', '椭圆', '双曲线', '抛物线', '概率', '复数', '不等式', '方程', '几何', '集合', '对数', '指数', '极值', '最值'] },
+    { subject: '数学', words: ['导数', '函数', '三角', '正弦', '余弦', '数列', '极限', '收敛', '发散', '连续', '积分', '微分', '洛必达', '无穷小', '有界', '单调', '反例', '向量', '圆锥', '椭圆', '双曲线', '抛物线', '概率', '复数', '不等式', '方程', '几何', '集合', '对数', '指数', '极值', '最值', '级数', '矩阵', '行列式'] },
     { subject: '物理', words: ['力', '加速度', '速度', '电', '磁', '电路', '感应', '动量', '能量', '光学', '折射', '压强', '浮力', '万有引力', '洛伦兹', '自由落体', '并联', '串联'] },
     { subject: '化学', words: ['化学', '氧化', '还原', '摩尔', '溶液', '元素', '有机', '反应', '电解', '沉淀', '离子', '化学键'] },
     { subject: '生物', words: ['细胞', '遗传', '基因', '生态', '酶', '光合', '呼吸作用', '免疫', '蛋白质'] },
-    { subject: '数据结构', words: ['数据结构', '数组', '链表', '栈', '队列', '哈希', '散列', '排序', '归并', '快速排序', '堆', '二叉树', '红黑树', '图', '最短路径', '深度优先', '广度优先', '递归', '动态规划', '时间复杂度', '空间复杂度', '线性探测', '插入排序', '选择排序', '算法'] },
+    { subject: '数据结构', words: ['数据结构', '数组', '链表', '栈', '队列', '哈希', '散列', '排序', '归并', '快速排序', '堆', '二叉树', '红黑树', '图论', '邻接表', '邻接矩阵', '并查集', '拓扑排序', '最短路径', '深度优先', '广度优先', '递归', '动态规划', '时间复杂度', '空间复杂度', '线性探测', '插入排序', '选择排序', '算法'] },
     { subject: '信号与系统', words: ['信号与系统', '拉普拉斯', '傅里叶', '收敛域', '卷积', '冲激', '阶跃', '时不变', '因果', '稳定', '采样', 'z变换', 'Z变换', '频谱', '系统函数', '零极点'] },
     { subject: '英语', words: ['英语', '语法', '时态', '从句', '完形', '阅读', '作文', '单词', '虚拟语气', '被动语态', '将来完成', '非谓语', '介词', '冠词', '主谓一致', '固定搭配'] },
     { subject: '语文', words: ['语文', '文言', '诗歌', '鉴赏', '病句', '成语'] }
@@ -5884,6 +5900,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     数学: [
       { label: '导数与函数单调性', words: ['导数', '切线', '单调', '极值', '最值'] },
       { label: '数列递推', words: ['数列', '递推', '通项', '等差', '等比'] },
+      { label: '数列极限', words: ['极限', '收敛', '发散', '无穷小', '有界'] },
       { label: '三角函数', words: ['三角', '正弦', '余弦', '诱导公式'] },
       { label: '圆锥曲线', words: ['圆锥曲线', '椭圆', '双曲线', '抛物线'] },
       { label: '概率统计', words: ['概率', '分布列', '期望', '方差'] },
@@ -5941,12 +5958,15 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     ]
   };
 
+  const ENGLISH_FUNCTION_WORDS = ['the', 'is', 'are', 'was', 'were', 'of', 'to', 'in', 'on', 'for', 'with', 'which', 'what', 'who', 'should', 'would', 'can', 'could', 'has', 'have', 'not', 'and', 'but', 'that', 'this', 'from', 'by', 'at', 'as'];
+
   function looksLikeEnglish(text) {
     const s = String(text || '');
     if (!s) return false;
-    const words = s.match(/\b[A-Za-z]{2,}\b/g) || [];
-    if (words.length < 3) return false;
-    return /\b[A-Za-z]{2,}\b[\s\S]{0,80}\b[A-Za-z]{2,}\b/.test(s);
+    const words = s.match(/[A-Za-z]{2,}/g) || [];
+    if (words.length < 4) return false;
+    const lower = words.map(w => w.toLowerCase());
+    return lower.some(w => ENGLISH_FUNCTION_WORDS.indexOf(w) >= 0);
   }
 
   /** 粗判题目学科（API 不可用时的本地兜底） */
@@ -5956,16 +5976,28 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     let bestScore = 0;
     for (const rule of SUBJECT_RULES) {
       let score = 0;
-      for (const w of rule.words) if (q.includes(w)) score += 1;
+      for (const w of rule.words) {
+        let from = 0;
+        let hits = 0;
+        while (hits < 3) {
+          const idx = q.indexOf(w, from);
+          if (idx < 0) break;
+          hits += 1;
+          from = idx + w.length;
+        }
+        score += hits;
+      }
       if (score > bestScore) { bestScore = score; best = rule.subject; }
     }
-    if (looksLikeEnglish(q) && (!best || bestScore < 2)) return { subject: '英语', score: bestScore + 1 };
+    if (!best && looksLikeEnglish(q)) return { subject: '英语', score: 1 };
     return { subject: best, score: bestScore };
   }
 
   function normalizeSubject(subject) {
     const s = String(subject || '').trim();
     if (!s) return '其他';
+    const exact = /^(数学|物理|化学|生物|英语|语文|数据结构|信号与系统|其他)$/.exec(s);
+    if (exact) return exact[1];
     if (/数据结构|计算机|算法/.test(s)) return '数据结构';
     if (/信号|通信/.test(s)) return '信号与系统';
     if (/英文|英语/.test(s)) return '英语';
@@ -7247,6 +7279,32 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       const onOuterAbort = () => { try { if (controller) controller.abort(); } catch (_) {} };
       if (signal) signal.addEventListener('abort', onOuterAbort, { once: true });
       const timer = controller ? setTimeout(() => controller.abort(), 6000) : 0;
+      // 直连模式没有本地服务，直接用同一个 Key 再问一次模型做定位分析
+      if (state.mode === 'direct' && hasKey(state.config)) {
+        const nl = String.fromCharCode(10);
+        try {
+          const r = await callDirect(
+            Object.assign({}, state.config, { askMode: 'analyze' }),
+            '【问题】' + nl + String(question || '') + nl + nl + '【回答】' + nl + String(answer || '').slice(0, 4000),
+            '',
+            [],
+            controller ? controller.signal : signal
+          );
+          const parsed = parseLooseJson(r && r.answer);
+          if (parsed && parsed.subject) {
+            const subject = normalizeSubject(parsed.subject);
+            const points = sanitizeKnowledgePoints(parsed.knowledgePoints);
+            return {
+              subject: subject === '其他' ? local.subject : subject,
+              knowledgePoints: points.length ? points : local.knowledgePoints,
+              mistakeType: normalizeMistakeType(parsed.mistakeType) || local.mistakeType || '',
+              source: 'api'
+            };
+          }
+        } catch (_) {}
+        return local;
+      }
+
       try {
         const res = await fetch('/api/analyze', {
           method: 'POST',

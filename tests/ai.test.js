@@ -215,3 +215,18 @@ test('错题片段带上错题类型', () => {
   assert.match(snippet, /^\*\*错题类型\*\*：方法不会$/m);
   assert.match(snippet, /^\*\*知识点\*\*：#导数与函数单调性$/m);
 });
+
+test('数学极限题不会被判成英语/数据结构', () => {
+  const q = '设数列 {x_n} 满足 x_n ∈ [0, π]，下列极限一定存在的是（ ）A. lim sin x_n  B. lim cos x_n  C. lim x_n  D. lim (x_n + 1/x_n)';
+  const a = '①考点定位 本题考查数列极限与三角函数的有界性。②解题思路 取反例 x_n = (-1)^n π/3，则 sin x_n 取 ±√3/2，极限不存在。③分步推导 若 x_n 收敛于 a，则 sin x_n 收敛于 sin a。答案：D。';
+  const c = ai.classifyLocally(q, a);
+  assert.equal(c.subject, '数学');
+  assert.ok(c.knowledgePoints.some(x => /极限|数列|三角/.test(x)), JSON.stringify(c.knowledgePoints));
+});
+
+test('学科归一：标准名直接返回，不误判', () => {
+  assert.equal(ai.normalizeSubject('数学'), '数学');
+  assert.equal(ai.normalizeSubject('数据结构'), '数据结构');
+  assert.equal(ai.normalizeSubject('信号与系统'), '信号与系统');
+  assert.equal(ai.normalizeSubject('数学（含算法思想）'), '数据结构');
+});

@@ -93,6 +93,15 @@
     try { storageRemove(CONFIG_KEY, LEGACY_CONFIG_KEY); } catch (_) {}
   }
 
+  /** 从模型回复里抠出第一段 JSON（允许带代码围栏或解释文字） */
+  function parseLooseJson(text) {
+    const src = String(text || '').split('```').join('').trim();
+    const start = src.indexOf('{');
+    const end = src.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try { return JSON.parse(src.slice(start, end + 1)); } catch (_) { return null; }
+  }
+
   function hasKey(cfg) { return Boolean(cfg && cfg.key && cfg.key.trim().length > 8); }
 
   const RE_TRAILING_SLASH = /\/+$/;
@@ -107,14 +116,21 @@
       ? '【图片】用户附带了 ' + imageList.length + ' 张图片，请先识别图片中的内容，再结合笔记和问题回答；不要忽略图片。' + nl + nl
       : '';
     const userText = imageHint + '【笔记内容】' + nl + context + nl + nl + '【问题】' + nl + question;
+    const analyzePrompt = '你是错题归档助手。只输出 JSON，不要 Markdown，不要解释。'
+      + '格式：{"subject":"数学","knowledgePoints":["导数与函数单调性","数列递推"],"mistakeType":"方法不会"}。'
+      + '学科只能从这些里选一个：数学、物理、化学、生物、英语、语文、数据结构、信号与系统、其他。'
+      + 'knowledgePoints 给 1-4 个，每个 2-12 个字；一道题可以有多个知识点。'
+      + 'mistakeType 只能从：概念不清、计算失误、审题偏差、方法不会、公式记错、步骤遗漏、其他 里选一个。';
     const baseSystem = cfg.askMode === 'format'
       ? '你是排版助手。只允许插入 Markdown 标记（##、-、**、空行）来整理格式，严禁增加、删除或改动任何文字内容；原样保留 [[双链]]、#标签、代码块。直接输出整理后的正文，不要解释，不要加代码围栏。'
+      : cfg.askMode === 'analyze'
+      ? analyzePrompt
       : cfg.askMode === 'tutor'
       ? '你是一位耐心的学科老师。按「①考点定位 ②解题思路 ③分步推导 ④易错提醒 ⑤一句话拓展」作答；条件不足先追问；可以超出笔记范围，但要用 [[笔记标题]] 指出相关复习材料；不要编造标题。'
       : '你是学习笔记助手。只依据给出的笔记回答，用中文分点作答，引用笔记时用 [[标题]] 的形式，不要编造标题。';
     const formatRule = '公式用纯文本 / Unicode（如 √、²、≤），不要输出 LaTeX 标记；列表用 -，不要用 • 或单独 *。';
     const systemPrompt = baseSystem
-      + (cfg.askMode === 'format' ? '' : nl + formatRule)
+      + (cfg.askMode === 'format' || cfg.askMode === 'analyze' ? '' : nl + formatRule)
       + (cfg.askMode === 'tutor' && teacherPrompt ? nl + nl + teacherPrompt : '')
       + (imageList.length ? nl + '用户消息包含图片，必须优先识别图片内容；笔记只作为辅助。' : '');
     const requestModel = imageList.length && cfg.visionModel ? cfg.visionModel : cfg.model;
