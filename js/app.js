@@ -1191,13 +1191,70 @@
 
   const STATS_PALETTE = ['#4a6ef5', '#e2725b', '#3f9c6d', '#ef9f27', '#9a6ef5', '#2fa5b8', '#d9534f', '#7a9eff'];
 
+  /** 只看当前笔记库自己的记录，别的库的错题不混进来 */
   function launcherRecordList() {
     try {
       const list = store.getJSON('records', []);
-      return Array.isArray(list) ? list.filter(r => r && typeof r === 'object') : [];
+      if (!Array.isArray(list)) return [];
+      const id = state.vaultId ? String(state.vaultId) : 'demo';
+      return list.filter(r => r && typeof r === 'object' && r.vaultId === id);
     } catch (_) {
       return [];
     }
+  }
+
+  /** 分析范围：'' 表示整库总分析，否则只统计这一篇错题本笔记 */
+  let statsScopePath = '';
+
+  function statsScopeLabel(record) {
+    const title = String((record && record.targetTitle) || '').trim();
+    if (title) return title;
+    const full = String((record && record.targetPath) || '').trim();
+    if (!full) return '未归档错题';
+    const name = full.split('/').pop() || full;
+    return name.replace(/.md$/i, '');
+  }
+
+  /** 按 targetPath 归组，给下拉框列出「可以单独分析的那几篇笔记」 */
+  function statsScopeOptions(records) {
+    const map = new Map();
+    for (const rec of records) {
+      const path = String((rec && rec.targetPath) || '').trim();
+      if (!path) continue;
+      if (!map.has(path)) map.set(path, { path: path, label: statsScopeLabel(rec), count: 0 });
+      map.get(path).count += 1;
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh-Hans-CN'));
+  }
+
+  function renderStatsScopeSelect(records, totalRecords) {
+    const select = $('#stats-scope-select');
+    if (!select) return;
+    const options = statsScopeOptions(records);
+    if (statsScopePath && !options.some(o => o.path === statsScopePath)) statsScopePath = '';
+    select.innerHTML = '';
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = '全部错题（总分析） · ' + totalRecords + ' 道';
+    select.appendChild(all);
+    for (const item of options) {
+      const opt = document.createElement('option');
+      opt.value = item.path;
+      opt.textContent = item.label + ' · ' + item.count + ' 道';
+      select.appendChild(opt);
+    }
+    select.value = statsScopePath;
+    select.disabled = options.length === 0;
+  }
+
+  function initStatsScope() {
+    const select = $('#stats-scope-select');
+    if (!select || select.dataset.bound === '1') return;
+    select.dataset.bound = '1';
+    select.addEventListener('change', () => {
+      statsScopePath = select.value || '';
+      renderLauncherStats();
+    });
   }
 
   function statsSubjectOf(record) {
@@ -1274,13 +1331,24 @@
     const scopeEl = $('#stats-scope');
     const solvedEl = $('#stats-solved');
 
-    if (scopeEl) scopeEl.textContent = state.vaultLabel || '当前笔记库';
+    if (scopeEl) {
+      scopeEl.textContent = statsScopePath
+        ? (statsScopeLabel({ targetPath: statsScopePath, targetTitle: '' }) + ' · ' + (state.vaultLabel || '当前笔记库'))
+        : (state.vaultLabel || '当前笔记库');
+    }
     pie.innerHTML = '';
     if (legend) legend.innerHTML = '';
     if (pointsEl) pointsEl.innerHTML = '';
 
-    const records = launcherRecordList();
-    if (!records.length) {
+    const allRecords = launcherRecordList();
+    const filterEl = $('#stats-scope-select');
+    if (filterEl && filterEl.parentElement) filterEl.parentElement.hidden = allRecords.length === 0;
+    initStatsScope();
+    renderStatsScopeSelect(allRecords, allRecords.length);
+    const records = statsScopePath
+      ? allRecords.filter(r => String((r && r.targetPath) || '') === statsScopePath)
+      : allRecords;
+    if (!allRecords.length) {
       if (chart) chart.hidden = true;
       if (legend) legend.hidden = true;
       if (pointsEl) pointsEl.hidden = true;
@@ -1416,6 +1484,8 @@
     if (typeof resetDiskBinding === 'function') resetDiskBinding();
     state.files = files;
     state.vaultLabel = label || '本地库';
+    if (typeof adoptVault === 'function') adoptVault(state.vaultLabel, files, prevLabel);
+    if (typeof reloadVaultScope === 'function') reloadVaultScope();
     state.graph = vault.buildVault(files);
     state.positions.clear();
     state.selectedId = null;
@@ -1430,13 +1500,13 @@
     renderTree();
     rebuild({ fresh: true, fit: true });
     if (typeof ai !== "undefined" && ai && ai.reset) ai.reset();
+    if (typeof ai !== "undefined" && ai && ai.renderRecords) ai.renderRecords();
     currentNoteId = null;
     const wantedTab = state.activeTab;
     if (typeof renderNoteTabs === 'function') renderNoteTabs();
     if (wantedTab && state.graph.notes.some(n => n.id === wantedTab)) openNote(wantedTab);
     else if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
-    if (typeof adoptVault === 'function') adoptVault(label || '本地库', files, prevLabel);
     if (typeof saveLocalVault === 'function') saveLocalVault();
   }
 
@@ -2095,8 +2165,10 @@
   let graphPickerNode = null;
 
   function loadFavorites() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    store.adoptLegacy('favorites', id);
     try {
-      const saved = store.getJSON('favorites', []);
+      const saved = store.getScopedJSON('favorites', id, []);
       state.favorites = new Set(Array.isArray(saved) ? saved.filter(x => typeof x === 'string' && x) : []);
     } catch (_) {
       state.favorites = new Set();
@@ -2105,7 +2177,8 @@
   loadFavorites();
 
   function saveFavorites() {
-    try { store.setJSON('favorites', [...state.favorites].slice(0, 500)); } catch (_) {}
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    try { store.setScopedJSON('favorites', id, [...state.favorites].slice(0, 500)); } catch (_) {}
   }
 
   function closeGraphMenu() {
@@ -2736,8 +2809,9 @@
   }
 
   function persistNoteTabs() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
     try {
-      store.setJSON('noteTabs', {
+      store.setScopedJSON('noteTabs', id, {
         tabs: state.openTabs.slice(0, NOTE_TABS_MAX),
         active: state.activeTab || null
       });
@@ -2745,8 +2819,10 @@
   }
 
   function restoreNoteTabs() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    store.adoptLegacy('noteTabs', id);
     try {
-      const saved = store.getJSON('noteTabs', null);
+      const saved = store.getScopedJSON('noteTabs', id, null);
       if (!saved) return;
       const tabs = Array.isArray(saved.tabs) ? saved.tabs : [];
       state.openTabs = tabs
@@ -3017,18 +3093,36 @@
   const ORDER_KEY = 'order';
   const SORT_KEY = 'sort';
 
+  /** 当前笔记库的存储作用域：每个库的 UI 状态各存一份，互不串味 */
+  function vaultScopeId() {
+    return (state && state.vaultId) ? String(state.vaultId) : 'demo';
+  }
+
   function loadMeta() {
-    try { state.usage = store.getJSON(USAGE_KEY, {}) || {}; } catch (_) { state.usage = {}; }
-    try { state.manualOrder = store.getJSON(ORDER_KEY, {}) || {}; } catch (_) { state.manualOrder = {}; }
+    const id = vaultScopeId();
+    store.adoptLegacy(USAGE_KEY, id);
+    store.adoptLegacy(ORDER_KEY, id);
+    try { state.usage = store.getScopedJSON(USAGE_KEY, id, {}) || {}; } catch (_) { state.usage = {}; }
+    try { state.manualOrder = store.getScopedJSON(ORDER_KEY, id, {}) || {}; } catch (_) { state.manualOrder = {}; }
     try { state.sortMode = store.get(SORT_KEY, 'usage') || 'usage'; } catch (_) { state.sortMode = 'usage'; }
   }
 
   function saveUsage() {
-    try { store.setJSON(USAGE_KEY, state.usage); } catch (_) {}
+    try { store.setScopedJSON(USAGE_KEY, vaultScopeId(), state.usage); } catch (_) {}
   }
 
   function saveOrder() {
-    try { store.setJSON(ORDER_KEY, state.manualOrder); } catch (_) {}
+    try { store.setScopedJSON(ORDER_KEY, vaultScopeId(), state.manualOrder); } catch (_) {}
+  }
+
+  /** 切换笔记库后，重新载入这个库自己的使用频率 / 手排顺序 / 收藏 / 标签页 */
+  function reloadVaultScope() {
+    state.collapsedFolders.clear();
+    loadMeta();
+    if (typeof loadFavorites === 'function') loadFavorites();
+    state.openTabs = [];
+    state.activeTab = null;
+    if (typeof restoreNoteTabs === 'function') restoreNoteTabs();
   }
 
   /** 记录一次使用：打开/编辑都会累加，用于「使用频率」和「更新日期」排序 */
@@ -5014,6 +5108,7 @@
 
   const ai = RG.ai.create({
     getGraph: () => state.graph,
+    getVaultId: () => state.vaultId,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
     onToast: message => toast(message),

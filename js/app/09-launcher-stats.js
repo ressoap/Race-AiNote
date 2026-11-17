@@ -16,6 +16,60 @@
     }
   }
 
+  /** 分析范围：'' 表示整库总分析，否则只统计这一篇错题本笔记 */
+  let statsScopePath = '';
+
+  function statsScopeLabel(record) {
+    const title = String((record && record.targetTitle) || '').trim();
+    if (title) return title;
+    const full = String((record && record.targetPath) || '').trim();
+    if (!full) return '未归档错题';
+    const name = full.split('/').pop() || full;
+    return name.replace(/.md$/i, '');
+  }
+
+  /** 按 targetPath 归组，给下拉框列出「可以单独分析的那几篇笔记」 */
+  function statsScopeOptions(records) {
+    const map = new Map();
+    for (const rec of records) {
+      const path = String((rec && rec.targetPath) || '').trim();
+      if (!path) continue;
+      if (!map.has(path)) map.set(path, { path: path, label: statsScopeLabel(rec), count: 0 });
+      map.get(path).count += 1;
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh-Hans-CN'));
+  }
+
+  function renderStatsScopeSelect(records, totalRecords) {
+    const select = $('#stats-scope-select');
+    if (!select) return;
+    const options = statsScopeOptions(records);
+    if (statsScopePath && !options.some(o => o.path === statsScopePath)) statsScopePath = '';
+    select.innerHTML = '';
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = '全部错题（总分析） · ' + totalRecords + ' 道';
+    select.appendChild(all);
+    for (const item of options) {
+      const opt = document.createElement('option');
+      opt.value = item.path;
+      opt.textContent = item.label + ' · ' + item.count + ' 道';
+      select.appendChild(opt);
+    }
+    select.value = statsScopePath;
+    select.disabled = options.length === 0;
+  }
+
+  function initStatsScope() {
+    const select = $('#stats-scope-select');
+    if (!select || select.dataset.bound === '1') return;
+    select.dataset.bound = '1';
+    select.addEventListener('change', () => {
+      statsScopePath = select.value || '';
+      renderLauncherStats();
+    });
+  }
+
   function statsSubjectOf(record) {
     const raw = String((record && record.subject) || '').trim();
     if (!raw) return '其他';
@@ -90,13 +144,24 @@
     const scopeEl = $('#stats-scope');
     const solvedEl = $('#stats-solved');
 
-    if (scopeEl) scopeEl.textContent = state.vaultLabel || '当前笔记库';
+    if (scopeEl) {
+      scopeEl.textContent = statsScopePath
+        ? (statsScopeLabel({ targetPath: statsScopePath, targetTitle: '' }) + ' · ' + (state.vaultLabel || '当前笔记库'))
+        : (state.vaultLabel || '当前笔记库');
+    }
     pie.innerHTML = '';
     if (legend) legend.innerHTML = '';
     if (pointsEl) pointsEl.innerHTML = '';
 
-    const records = launcherRecordList();
-    if (!records.length) {
+    const allRecords = launcherRecordList();
+    const filterEl = $('#stats-scope-select');
+    if (filterEl && filterEl.parentElement) filterEl.parentElement.hidden = allRecords.length === 0;
+    initStatsScope();
+    renderStatsScopeSelect(allRecords, allRecords.length);
+    const records = statsScopePath
+      ? allRecords.filter(r => String((r && r.targetPath) || '') === statsScopePath)
+      : allRecords;
+    if (!allRecords.length) {
       if (chart) chart.hidden = true;
       if (legend) legend.hidden = true;
       if (pointsEl) pointsEl.hidden = true;
