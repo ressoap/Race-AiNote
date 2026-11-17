@@ -8,6 +8,16 @@ const root = path.resolve(__dirname, '..');
 const srcDir = path.join(root, 'vault-example');
 const outFile = path.join(root, 'js', 'demo-vault.js');
 
+function latestMtime(dir) {
+  let max = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) max = Math.max(max, latestMtime(full));
+    else max = Math.max(max, fs.statSync(full).mtimeMs);
+  }
+  return max;
+}
+
 const MD = /\.(md|markdown)$/i;
 const ATTACH = /\.(png|jpe?g|gif|webp|svg|bmp|pdf|canvas|excalidraw)$/i;
 
@@ -31,7 +41,7 @@ const header = [
   '/* ============================================================',
   '   demo-vault.js — 由 scripts/gen-demo.js 自动生成，请勿手工编辑。',
   '   数据源：vault-example/（真实 Markdown 文件）',
-  '   生成时间：' + new Date().toISOString(),
+  '   数据版本：' + new Date(latestMtime(srcDir) || 0).toISOString(),
   '   内容：' + noteCount + ' 篇笔记 + ' + attachmentCount + ' 个附件',
   '   ============================================================ */'
 ].join('\n');

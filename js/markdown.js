@@ -161,5 +161,59 @@
       .trim();
   }
 
-  return { render: render, inline: inline, escapeHtml: escapeHtml, toText: toText };
+
+  /** AI 输出清洗：把常见 LaTeX 改成可读纯文本，并把 • / 单 * 项目符号转成 Markdown 列表 */
+  function normalizeAiText(text) {
+    const src = String(text == null ? '' : text).replace(/\r\n/g, '\n');
+    const parts = src.split(/(```[\s\S]*?```)/g);
+    return parts.map((part, idx) => idx % 2 ? part : normalizeMathSegment(part)).join('');
+  }
+
+  function normalizeMathSegment(segment) {
+    let s = String(segment || '');
+    const bs = String.fromCharCode(92);
+    const nl = String.fromCharCode(10);
+    s = s.split(bs + '[').join(nl).split(bs + ']').join(nl);
+    s = s.split(bs + '(').join('').split(bs + ')').join('');
+    s = s.replace(/\$\$([\s\S]*?)\$\$/g, function (_, body) { return nl + body.trim() + nl; });
+    s = s.replace(/\$([^$\n]+)\$/g, function (_, body) { return body.trim(); });
+
+    for (let i = 0; i < 3; i++) {
+      s = s.replace(new RegExp(bs + bs + 'frac' + bs + 's*' + bs + '{([^{}]+)' + bs + '}' + bs + 's*' + bs + '{([^{}]+)' + bs + '}', 'g'), '($1)/($2)');
+      s = s.replace(new RegExp(bs + bs + 'sqrt' + bs + 's*' + bs + '{([^{}]+)' + bs + '}', 'g'), '√($1)');
+    }
+    s = s.replace(new RegExp(bs + bs + '(?:text|mathrm|mathbf|operatorname)' + bs + 's*' + bs + '{([^{}]*)' + bs + '}', 'g'), '$1');
+    s = s.replace(new RegExp(bs + bs + '(?:left|right)' + bs + 's*', 'g'), '');
+    s = s.replace(new RegExp(bs + bs + '(?:begin|end)' + bs + 's*' + bs + '{[^{}]*' + bs + '}', 'g'), '');
+
+    const cmd = name => bs + name;
+    const commands = {
+      [cmd('cdot')]: '·', [cmd('times')]: '×', [cmd('div')]: '÷', [cmd('pm')]: '±',
+      [cmd('le')]: '≤', [cmd('leq')]: '≤', [cmd('ge')]: '≥', [cmd('geq')]: '≥', [cmd('neq')]: '≠', [cmd('ne')]: '≠',
+      [cmd('approx')]: '≈', [cmd('infty')]: '∞', [cmd('pi')]: 'π', [cmd('alpha')]: 'α', [cmd('beta')]: 'β',
+      [cmd('gamma')]: 'γ', [cmd('theta')]: 'θ', [cmd('lambda')]: 'λ', [cmd('mu')]: 'μ', [cmd('sigma')]: 'σ',
+      [cmd('omega')]: 'ω', [cmd('Delta')]: 'Δ', [cmd('sum')]: 'Σ', [cmd('int')]: '∫', [cmd('partial')]: '∂',
+      [cmd('to')]: '→', [cmd('rightarrow')]: '→', [cmd('Rightarrow')]: '⇒', [cmd('in')]: '∈', [cmd('notin')]: '∉'
+    };
+    for (const key of Object.keys(commands)) s = s.split(key).join(commands[key]);
+    s = s.replace(new RegExp(bs + bs + '(sin|cos|tan|log|ln|lim|max|min|exp)' + bs + 'b', 'g'), '$1');
+    s = s.replace(new RegExp(bs + bs + '[a-zA-Z]+', 'g'), '');
+    s = s.replace(new RegExp(bs + bs, 'g'), '');
+
+    const sup = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', 'n': 'ⁿ' };
+    s = s.replace(/\^\{([0-9+\-n]+)\}/g, function (_, p) {
+      return [...p].map(ch => sup[ch] || ch).join('');
+    });
+    s = s.replace(/\^([0-9+\-n])/g, function (_, p) { return sup[p] || p; });
+
+    s = s.replace(/^(\s*)[•●▪◦·]\s+/gm, '$1- ');
+    s = s.replace(/^(\s*)\*\s+/gm, '$1- ');
+    return s;
+  }
+
+  function renderAi(text) {
+    return render(normalizeAiText(text));
+  }
+
+  return { render: render, renderAi: renderAi, normalizeAiText: normalizeAiText, inline: inline, escapeHtml: escapeHtml, toText: toText };
 });

@@ -53,7 +53,7 @@ test('备份包：构建与解析往返，中文无损', () => {
   assert.equal(parsed.files.length, 1, '只备份有正文的文件');
   assert.equal(parsed.vault, '示例库');
   assert.equal(parsed.files[0].content, '# 导数\n\n切线斜率。');
-  assert.ok(snapshot.includes('Race-AiNote'));
+  assert.ok(snapshot.includes('问墨笔记'));
 });
 
 test('备份包：非法内容给出明确报错', () => {

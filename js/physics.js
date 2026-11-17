@@ -122,25 +122,79 @@
       const nodeSize = cfg('nodeSize');
       const bounds = cfg('bounds');
 
-      // 1) 两两排斥（带软化项，避免近距离爆炸）
-      for (let i = 0; i < nodes.length; i++) {
-        const a = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-          const b = nodes[j];
-          let dx = a.x - b.x;
-          let dy = a.y - b.y;
-          let d2 = dx * dx + dy * dy;
-          if (d2 < 0.01) {
-            dx = hash01(a.id + b.id) - 0.5;
-            dy = hash01(b.id + a.id) - 0.5;
-            d2 = dx * dx + dy * dy + 0.01;
+      // 1) 排斥力：小图精确两两；大图用 3×3 网格近似 + 远端质心近似
+      if (nodes.length > 360) {
+        const cellSize = Math.max(96, Math.sqrt(repel) * 3.4);
+        const { grid } = buildGrid(nodes, cellSize);
+        let gx = 0;
+        let gy = 0;
+        for (const n of nodes) { gx += n.x; gy += n.y; }
+        gx /= nodes.length;
+        gy /= nodes.length;
+        for (const a of nodes) {
+          const cx = Math.floor(a.x / cellSize);
+          const cy = Math.floor(a.y / cellSize);
+          let nearCount = 0;
+          for (let ox = -1; ox <= 1; ox++) {
+            for (let oy = -1; oy <= 1; oy++) {
+              const cell = grid.get((cx + ox) + ',' + (cy + oy));
+              if (!cell) continue;
+              for (const b of cell) {
+                if (b === a) continue;
+                let dx = a.x - b.x;
+                let dy = a.y - b.y;
+                let d2 = dx * dx + dy * dy;
+                if (d2 < 0.01) {
+                  dx = hash01(a.id + b.id) - 0.5;
+                  dy = hash01(b.id + a.id) - 0.5;
+                  d2 = dx * dx + dy * dy + 0.01;
+                }
+                const d = Math.sqrt(d2);
+                const f = (repel * alpha) / (d2 + 240) * 0.5;
+                const ux = dx / d;
+                const uy = dy / d;
+                a.vx += ux * f; a.vy += uy * f;
+                b.vx -= ux * f; b.vy -= uy * f;
+                nearCount += 1;
+              }
+            }
           }
-          const d = Math.sqrt(d2);
-          const f = (repel * alpha) / (d2 + 240);
-          const ux = dx / d;
-          const uy = dy / d;
-          a.vx += ux * f; a.vy += uy * f;
-          b.vx -= ux * f; b.vy -= uy * f;
+          const farCount = nodes.length - 1 - nearCount;
+          if (farCount > 0) {
+            let dx = a.x - gx;
+            let dy = a.y - gy;
+            let d2 = dx * dx + dy * dy;
+            if (d2 < 0.01) {
+              dx = hash01(a.id + ':far') - 0.5;
+              dy = hash01('far:' + a.id) - 0.5;
+              d2 = dx * dx + dy * dy + 0.01;
+            }
+            const d = Math.sqrt(d2);
+            const f = (repel * alpha * farCount) / (d2 + 240);
+            a.vx += (dx / d) * f;
+            a.vy += (dy / d) * f;
+          }
+        }
+      } else {
+        for (let i = 0; i < nodes.length; i++) {
+          const a = nodes[i];
+          for (let j = i + 1; j < nodes.length; j++) {
+            const b = nodes[j];
+            let dx = a.x - b.x;
+            let dy = a.y - b.y;
+            let d2 = dx * dx + dy * dy;
+            if (d2 < 0.01) {
+              dx = hash01(a.id + b.id) - 0.5;
+              dy = hash01(b.id + a.id) - 0.5;
+              d2 = dx * dx + dy * dy + 0.01;
+            }
+            const d = Math.sqrt(d2);
+            const f = (repel * alpha) / (d2 + 240);
+            const ux = dx / d;
+            const uy = dy / d;
+            a.vx += ux * f; a.vy += uy * f;
+            b.vx -= ux * f; b.vy -= uy * f;
+          }
         }
       }
 

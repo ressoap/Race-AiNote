@@ -83,3 +83,29 @@ test('标题层级比正文高一级，便于和页面标题区分', () => {
   assert.match(md.render('# 一级'), /<h2>一级<\/h2>/);
   assert.match(md.render('## 二级'), /<h3>二级<\/h3>/);
 });
+
+test('AI 输出：LaTeX 定界符、frac、sqrt 变成可读文本', () => {
+  const display = md.renderAi(String.raw`\[ f'(-x)=f'(x) \]`);
+  assert.ok(!display.includes(String.raw`\[`), '不应保留 LaTeX 定界符');
+  assert.ok(!display.includes(String.raw`\]`), '不应保留 LaTeX 定界符');
+  assert.match(display, /f'\(-x\)=f'\(x\)/);
+
+  const inline = md.renderAi(String.raw`若 \(f(-x)=f(x)\)，两边对 \(x\) 求导。`);
+  assert.ok(!inline.includes(String.raw`\(`), '不应保留 LaTeX 行内定界符');
+  assert.match(inline, /f\(-x\)=f\(x\)/);
+
+  const frac = md.renderAi(String.raw`\frac{1}{2} 与 \sqrt{x}`);
+  assert.match(frac, /\(1\)\/\(2\)/);
+  assert.match(frac, /√\(x\)/);
+});
+
+test('AI 输出：• 和单星号项目符号转成 Markdown 列表', () => {
+  const html = md.renderAi('• 第一点\n• 第二点\n\n* 第三点');
+  assert.equal((html.match(/<li>/g) || []).length, 3);
+  assert.ok(!html.includes('•'));
+});
+
+test('AI 输出清洗不破坏代码块里的原始反斜杠', () => {
+  const html = md.renderAi('```' + String.fromCharCode(10) + String.raw`\[` + String.fromCharCode(10) + String.raw`\]` + String.fromCharCode(10) + '```');
+  assert.ok(html.includes(String.raw`\[`), '代码块里应原样保留');
+});

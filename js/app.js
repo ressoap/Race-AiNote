@@ -1,6 +1,5 @@
-/* ============================================================
-   app.js — 界面装配：载入真实 Markdown 库、筛选、交互、持久化
-   ============================================================ */
+/* 自动生成：源文件在 js/app/*.js，由 scripts/build-app.js 按文件名顺序拼接。 */
+/* 不要直接改本文件；改完片段后运行 npm run build:app。 */
 (function () {
   'use strict';
 
@@ -13,7 +12,7 @@
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => [...document.querySelectorAll(sel)];
-  const STORAGE_KEY = 'race-ainote:v1';
+  const store = RG.store;
 
   const DEFAULT_SETTINGS = {
     themeMode: 'system',
@@ -41,7 +40,7 @@
 
   function loadSettings() {
     try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const raw = store.getJSON('settings', {});
       const merged = Object.assign({}, DEFAULT_SETTINGS, raw);
       if (!Array.isArray(merged.groups)) merged.groups = DEFAULT_SETTINGS.groups.map(g => Object.assign({}, g));
       merged.groups = merged.groups
@@ -54,12 +53,12 @@
   }
 
   function saveSettings() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (_) {}
+    try { store.setJSON('settings', settings); } catch (_) {}
   }
 
   function loadTheme() {
     try {
-      const t = localStorage.getItem(STORAGE_KEY + ':theme');
+      const t = store.get('theme');
       if (t === 'dark' || t === 'light' || t === 'system') return t;
     } catch (_) {}
     return 'system';
@@ -84,6 +83,12 @@
     hoveredId: null,
     selectedId: null,
     localRoot: null,
+    openTabs: [],
+    activeTab: null,
+    favorites: new Set(),
+    rootHandle: null,
+    diskContents: new Map(),
+    diskReadOnly: false,
     drag: null,
     pan: null,
     pointerDown: null,
@@ -118,6 +123,203 @@
   let toastTimer = 0;
   let fitPending = false;
   let settleTimer = 0;
+
+  /* ── 左侧栏：拖动右边缘调整宽度 ─────────────────────────── */
+  const sidebarEl = $('.sidebar');
+  const sidebarResizer = $('#sidebar-resizer');
+  const DEFAULT_SIDEBAR_W = 268;
+  const MIN_SIDEBAR_W = 190;
+  const MAX_SIDEBAR_W = 520;
+  let sidebarW = Number(store.get('sidebarWidth')) || DEFAULT_SIDEBAR_W;
+
+  function sidebarMaxWidth() {
+    const ai = $('#ai-panel');
+    const aiOpen = ai && !ai.classList.contains('is-collapsed');
+    const reserve = aiOpen ? 720 : 320;
+    return Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, window.innerWidth - reserve));
+  }
+
+  function clampSidebarWidth(w) {
+    return Math.max(MIN_SIDEBAR_W, Math.min(sidebarMaxWidth(), Math.round(Number(w) || DEFAULT_SIDEBAR_W)));
+  }
+
+  function sidebarAria(w) {
+    if (!sidebarResizer) return;
+    sidebarResizer.setAttribute('aria-valuenow', String(Math.round(w)));
+    sidebarResizer.setAttribute('aria-valuemin', String(MIN_SIDEBAR_W));
+    sidebarResizer.setAttribute('aria-valuemax', String(Math.round(sidebarMaxWidth())));
+  }
+
+  function applySidebarWidth(w, persist) {
+    const next = clampSidebarWidth(w);
+    document.documentElement.style.setProperty('--sidebar-w', next + 'px');
+    sidebarW = next;
+    sidebarAria(next);
+    if (persist) store.set('sidebarWidth', next);
+    return next;
+  }
+
+  /** 窗口变窄或打开 AI 面板后按当前可用空间收缩；不改用户记住的目标宽度。 */
+  function syncSidebarWidth() {
+    const next = clampSidebarWidth(sidebarW);
+    document.documentElement.style.setProperty('--sidebar-w', next + 'px');
+    sidebarAria(next);
+  }
+
+  function currentSidebarWidth() {
+    const measured = sidebarEl && (sidebarEl.getBoundingClientRect().width || sidebarEl.offsetWidth);
+    return measured || Math.min(sidebarW, sidebarMaxWidth());
+  }
+
+  if (sidebarEl && sidebarResizer) {
+    let dragX = 0;
+    let dragW = 0;
+    let dragging = false;
+
+    sidebarResizer.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      dragging = true;
+      dragX = e.clientX;
+      dragW = currentSidebarWidth();
+      try { sidebarResizer.setPointerCapture(e.pointerId); } catch (_) {}
+      document.body.classList.add('is-resizing-sidebar');
+      e.preventDefault();
+    });
+    sidebarResizer.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      applySidebarWidth(dragW + (e.clientX - dragX), false);
+    });
+    const stopSidebarDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('is-resizing-sidebar');
+      store.set('sidebarWidth', sidebarW);
+    };
+    sidebarResizer.addEventListener('pointerup', stopSidebarDrag);
+    sidebarResizer.addEventListener('pointercancel', stopSidebarDrag);
+    sidebarResizer.addEventListener('lostpointercapture', stopSidebarDrag);
+    sidebarResizer.addEventListener('dblclick', () => applySidebarWidth(DEFAULT_SIDEBAR_W, true));
+    sidebarResizer.addEventListener('keydown', e => {
+      if (e.key === 'Home') {
+        e.preventDefault();
+        applySidebarWidth(DEFAULT_SIDEBAR_W, true);
+        return;
+      }
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const delta = e.key === 'ArrowLeft' ? -24 : 24;
+      applySidebarWidth(currentSidebarWidth() + delta, true);
+    });
+
+    syncSidebarWidth();
+    window.addEventListener('resize', syncSidebarWidth);
+  }
+
+  /* ── 本地文件夹读写同步（File System Access API） ───────── */
+  let diskSyncTimer = 0;
+  let diskSyncBusy = false;
+  let diskSyncPending = false;
+
+  function resetDiskBinding() {
+    state.rootHandle = null;
+    state.diskContents = new Map();
+    state.diskReadOnly = false;
+    clearTimeout(diskSyncTimer);
+    diskSyncTimer = 0;
+  }
+
+  function bindDiskRoot(handle, files) {
+    state.rootHandle = handle || null;
+    state.diskReadOnly = false;
+    state.diskContents = new Map();
+    for (const file of files || []) {
+      if (vault.MD_EXT.test(String(file.path || ''))) {
+        state.diskContents.set(file.path, String(file.content || ''));
+      }
+    }
+    return Boolean(handle);
+  }
+
+  async function diskDirForPath(root, path, create) {
+    const parts = String(path || '').split('/').filter(Boolean);
+    const name = parts.pop();
+    if (!name) throw new Error('空文件路径');
+    let dir = root;
+    for (const part of parts) {
+      dir = await dir.getDirectoryHandle(part, { create: Boolean(create) });
+    }
+    return { dir, name };
+  }
+
+  async function writeDiskFile(root, path, content) {
+    const target = await diskDirForPath(root, path, true);
+    const fileHandle = await target.dir.getFileHandle(target.name, { create: true });
+    const writable = await fileHandle.createWritable();
+    try {
+      await writable.write(String(content == null ? '' : content));
+    } finally {
+      await writable.close();
+    }
+  }
+
+  async function removeDiskFile(root, path) {
+    const target = await diskDirForPath(root, path, false);
+    await target.dir.removeEntry(target.name);
+  }
+
+  async function syncDiskNow() {
+    if (!state.rootHandle || state.diskReadOnly) return { wrote: 0, removed: 0, skipped: true };
+    if (diskSyncBusy) {
+      diskSyncPending = true;
+      return { wrote: 0, removed: 0, pending: true };
+    }
+    diskSyncBusy = true;
+    diskSyncPending = false;
+    const root = state.rootHandle;
+    const next = new Map();
+    for (const file of state.files) {
+      if (vault.MD_EXT.test(String(file.path || ''))) next.set(file.path, String(file.content || ''));
+    }
+    let wrote = 0;
+    let removed = 0;
+    let failed = false;
+    try {
+      for (const [path, content] of next) {
+        if (state.diskContents.get(path) === content) continue;
+        try {
+          await writeDiskFile(root, path, content);
+          wrote += 1;
+        } catch (err) {
+          failed = true;
+        }
+      }
+      for (const path of [...state.diskContents.keys()]) {
+        if (next.has(path)) continue;
+        try {
+          await removeDiskFile(root, path);
+          removed += 1;
+        } catch (err) {
+          failed = true;
+        }
+      }
+      if (!failed) state.diskContents = next;
+      if (wrote || removed) toast('已写回磁盘：' + wrote + ' 个修改，' + removed + ' 个删除');
+      return { wrote, removed, failed };
+    } finally {
+      diskSyncBusy = false;
+      if (diskSyncPending) {
+        diskSyncPending = false;
+        setTimeout(() => { syncDiskNow(); }, 0);
+      }
+    }
+  }
+
+  function scheduleDiskSync() {
+    if (!state.rootHandle || state.diskReadOnly) return;
+    clearTimeout(diskSyncTimer);
+    diskSyncTimer = setTimeout(() => { diskSyncNow(); }, 350);
+  }
+
   function toast(message) {
     const el = $('#toast');
     el.textContent = message;
@@ -139,6 +341,7 @@
 
   /* ── 载入数据 ───────────────────────────────────────────── */
   function loadFiles(files, label) {
+    if (typeof resetDiskBinding === 'function') resetDiskBinding();
     state.files = files;
     state.vaultLabel = label || '本地库';
     state.graph = vault.buildVault(files);
@@ -156,7 +359,10 @@
     rebuild({ fresh: true, fit: true });
     if (typeof ai !== "undefined" && ai && ai.reset) ai.reset();
     currentNoteId = null;
-    if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
+    const wantedTab = state.activeTab;
+    if (typeof renderNoteTabs === 'function') renderNoteTabs();
+    if (wantedTab && state.graph.notes.some(n => n.id === wantedTab)) openNote(wantedTab);
+    else if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
     if (typeof saveLocalVault === 'function') saveLocalVault();
   }
@@ -187,12 +393,27 @@
   async function openViaPicker() {
     if (!window.showDirectoryPicker) return openViaInput();
     try {
-      const dir = await window.showDirectoryPicker({ mode: 'read' });
+      let dir = null;
+      let writable = false;
+      try {
+        dir = await window.showDirectoryPicker({ mode: 'readwrite' });
+        writable = true;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        dir = await window.showDirectoryPicker({ mode: 'read' });
+      }
+      if (writable && dir.queryPermission) {
+        try {
+          const permission = await dir.queryPermission({ mode: 'readwrite' });
+          writable = permission === 'granted';
+        } catch (_) {}
+      }
       const files = [];
       await walkDirectory(dir, '', files);
       if (!files.length) return toast('这个文件夹里没有 Markdown 笔记');
       loadFiles(files, dir.name);
-      toast('已读取 ' + dir.name + '：' + files.length + ' 个文件');
+      if (writable && typeof bindDiskRoot === 'function') bindDiskRoot(dir, files);
+      toast('已读取 ' + dir.name + '：' + files.length + ' 个文件' + (writable ? '，修改会写回磁盘' : '（只读）'));
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       toast('读取失败：' + (err && err.message ? err.message : err));
@@ -448,6 +669,7 @@
       },
       hoveredId: state.hoveredId,
       selectedId: state.selectedId,
+      favoritePaths: state.favorites,
       highlight,
       radiusOf,
       colorOf,
@@ -684,6 +906,466 @@
   let currentNoteId = null;
   let editing = false;
 
+  /* ── 拍题入库：图片识别成题目笔记 ───────────────────────── */
+  const photoBtn = $('#btn-photo');
+  const photoInput = $('#photo-input');
+  let photoBusy = false;
+
+  function photoStamp(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate())
+      + '-' + pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds());
+  }
+
+  async function importPhoto(file) {
+    if (photoBusy || !file) return;
+    if (!/^image\//i.test(file.type || '') && !/\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name || '')) {
+      return toast('请选择图片文件');
+    }
+    photoBusy = true;
+    if (photoBtn) photoBtn.disabled = true;
+    try {
+      toast('正在识别题目…');
+      const result = await ai.recognizeImage(file);
+      if (!result || !result.ok) {
+        toast(result && result.error ? result.error : '识别失败');
+        return;
+      }
+      const text = String(result.text || '').trim();
+      if (!text) {
+        toast('没有识别到题目，换一张更清晰的图片试试');
+        return;
+      }
+      const analysis = RG.ai.classifyLocally(text, '');
+      const subject = RG.ai.normalizeSubject(analysis.subject || '其他');
+      const points = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+      const now = new Date();
+      const title = subject + '拍题-' + photoStamp(now);
+      const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';
+      const path = uniquePath('10-错题本/' + safeSubject, title);
+      const quoted = text.replace(/\r\n/g, '\n').split('\n').map(line => line ? '> ' + line : '>').join('\n');
+      const content = [
+        '---',
+        'title: ' + title,
+        'tags: [错题, 拍题, ' + subject + ']',
+        '---',
+        '',
+        '# ' + title,
+        '',
+        '## 原题目',
+        '',
+        quoted,
+        '',
+        '## 学科与知识点',
+        '',
+        '- 学科：' + subject,
+        '- 知识点：' + (points.length ? points.join('、') : '待整理'),
+        '',
+        '## 我的错因',
+        '',
+        '（待补充）',
+        '',
+        '## 正确思路',
+        '',
+        '（待补充）',
+        ''
+      ].join('\n');
+      state.files.push({ path: path, content: content });
+      refreshVault('已拍题入库：' + title);
+      const node = state.graph && state.graph.notes.find(n => n.path === path);
+      if (node) openNote(node.id);
+      showView('note');
+      toast('已拍题入库，可继续向 AI 追问');
+    } catch (err) {
+      toast('拍题失败：' + (err && err.message ? err.message : err));
+    } finally {
+      photoBusy = false;
+      if (photoBtn) photoBtn.disabled = false;
+    }
+  }
+
+  if (photoBtn && photoInput) {
+    photoBtn.addEventListener('click', () => {
+      if (!photoBusy) photoInput.click();
+    });
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files && photoInput.files[0];
+      photoInput.value = '';
+      if (file) await importPhoto(file);
+    });
+  }
+
+  /* ── 关系图谱右键菜单 ───────────────────────────────────── */
+  const graphMenu = $('#graph-menu');
+  const graphMenuTitle = $('#graph-menu-title');
+  const graphMenuFavLabel = $('#graph-menu-fav-label');
+  const graphPicker = $('#graph-picker');
+  const graphPickerTitle = $('#graph-picker-title');
+  const graphPickerDesc = $('#graph-picker-desc');
+  const graphPickerSearch = $('#graph-picker-search');
+  const graphPickerList = $('#graph-picker-list');
+  let graphMenuNode = null;
+  let graphPickerMode = '';
+  let graphPickerNode = null;
+
+  function loadFavorites() {
+    try {
+      const saved = store.getJSON('favorites', []);
+      state.favorites = new Set(Array.isArray(saved) ? saved.filter(x => typeof x === 'string' && x) : []);
+    } catch (_) {
+      state.favorites = new Set();
+    }
+  }
+  loadFavorites();
+
+  function saveFavorites() {
+    try { store.setJSON('favorites', [...state.favorites].slice(0, 500)); } catch (_) {}
+  }
+
+  function closeGraphMenu() {
+    if (graphMenu) graphMenu.hidden = true;
+    if (graphMenu) {
+      graphMenu.classList.remove('align-left');
+      graphMenu.querySelectorAll('.graph-menu-subwrap.is-open').forEach(el => el.classList.remove('is-open'));
+    }
+    graphMenuNode = null;
+  }
+
+  function openGraphMenu(event, node) {
+    if (!graphMenu || !node) return;
+    graphMenuNode = node;
+    if (graphMenuTitle) graphMenuTitle.textContent = node.title || node.path || '未命名节点';
+    if (graphMenuFavLabel) {
+      graphMenuFavLabel.textContent = state.favorites.has(node.path) ? '取消收藏' : '收藏';
+    }
+    graphMenu.hidden = false;
+    graphMenu.classList.remove('align-left');
+    graphMenu.querySelectorAll('.graph-menu-subwrap.is-open').forEach(el => el.classList.remove('is-open'));
+    const rect = graphMenu.getBoundingClientRect();
+    const width = rect.width || 270;
+    const height = rect.height || 420;
+    let left = Math.min(event.clientX, window.innerWidth - width - 10);
+    let top = Math.min(event.clientY, window.innerHeight - height - 10);
+    left = Math.max(8, left);
+    top = Math.max(8, top);
+    graphMenu.style.left = left + 'px';
+    graphMenu.style.top = top + 'px';
+    if (left + width + 196 > window.innerWidth) graphMenu.classList.add('align-left');
+  }
+
+  function copyText(text) {
+    const value = String(text == null ? '' : text);
+    const done = () => toast('已复制：' + value.slice(0, 46));
+    const fallback = () => {
+      try {
+        const area = document.createElement('textarea');
+        area.value = value;
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
+        done();
+      } catch (_) {
+        toast('复制失败，请手动复制');
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(done).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function noteFile(node) {
+    return state.files.find(f => f.path === node.path) || null;
+  }
+
+  function downloadNoteFile(node) {
+    const file = noteFile(node);
+    const blob = new Blob([String((file && file.content) || node.content || '')], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = String(node.path || node.title || 'note.md').split('/').pop() || 'note.md';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('已导出 ' + a.download + '，可用系统默认应用打开');
+  }
+
+  function revealInTree(node) {
+    const parts = String(node.path || '').split('/');
+    parts.pop();
+    let acc = '';
+    for (const part of parts) {
+      acc = acc ? acc + '/' + part : part;
+      state.collapsedFolders.delete(acc);
+    }
+    state.selectedId = node.id;
+    renderTree();
+    updateTreeSelection();
+    const row = [...document.querySelectorAll('#file-tree .tree-file')].find(el => el.dataset.id === node.id);
+    if (row) {
+      if (row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+      row.classList.add('is-active');
+      toast('已在文件列表中定位');
+    }
+  }
+
+  function focusGraphNode(node) {
+    showView('graph');
+    if (state.index.has(node.id)) focusNode(node.id);
+  }
+
+  function showBacklinks(node) {
+    openNote(node.id);
+    showView('note');
+    setTimeout(() => {
+      const links = document.querySelector('.note-links');
+      if (!links) return;
+      if (links.scrollIntoView) links.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      links.classList.add('record-locate-flash');
+      setTimeout(() => links.classList.remove('record-locate-flash'), 2400);
+    }, 60);
+  }
+
+  function openNoteInNewWindow(node) {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('note', node.title);
+      url.searchParams.set('view', 'note');
+      const win = window.open(url.href, '_blank', 'noopener');
+      if (!win) toast('浏览器拦截了新窗口，请允许弹窗后重试');
+    } catch (_) {
+      toast('当前环境无法打开新窗口');
+    }
+  }
+
+  function toggleFavorite(node) {
+    if (state.favorites.has(node.path)) {
+      state.favorites.delete(node.path);
+      toast('已取消收藏：' + node.title);
+    } else {
+      state.favorites.add(node.path);
+      toast('已收藏：' + node.title);
+    }
+    saveFavorites();
+    renderTree();
+    updateTreeSelection();
+    state.dirty = true;
+    if (graphMenuFavLabel) graphMenuFavLabel.textContent = state.favorites.has(node.path) ? '取消收藏' : '收藏';
+  }
+
+  async function deleteGraphNote(node) {
+    const ok = await askConfirm({
+      title: '确认删除',
+      message: '将删除 ' + node.path + '，此操作不可撤销。',
+      okText: '删除',
+      danger: true
+    });
+    if (!ok) return;
+    state.files = state.files.filter(f => f.path !== node.path);
+    if (state.favorites.delete(node.path)) saveFavorites();
+    refreshVault('已删除');
+  }
+
+  /* ── 文件夹 / 目标笔记选择器 ─────────────────────────────── */
+  function closeGraphPicker() {
+    if (graphPicker) graphPicker.hidden = true;
+    graphPickerMode = '';
+    graphPickerNode = null;
+  }
+
+  function openGraphPicker(mode, node) {
+    if (!graphPicker) return;
+    graphPickerMode = mode;
+    graphPickerNode = node;
+    if (graphPickerTitle) graphPickerTitle.textContent = mode === 'move' ? '移动文件到…' : '合并到笔记…';
+    if (graphPickerDesc) {
+      graphPickerDesc.textContent = mode === 'move'
+        ? '为《' + node.title + '》选择一个目标文件夹'
+        : '选择要接收《' + node.title + '》内容的笔记';
+    }
+    if (graphPickerSearch) {
+      graphPickerSearch.value = '';
+      graphPickerSearch.placeholder = mode === 'move' ? '搜索文件夹…' : '搜索笔记标题…';
+    }
+    graphPicker.hidden = false;
+    renderGraphPickerList('');
+    if (graphPickerSearch) graphPickerSearch.focus();
+  }
+
+  function renderGraphPickerList(keyword) {
+    if (!graphPickerList) return;
+    graphPickerList.innerHTML = '';
+    const kw = String(keyword || '').trim().toLowerCase();
+    let items = [];
+    if (graphPickerMode === 'move') {
+      const currentDir = String(graphPickerNode.path || '').split('/').slice(0, -1).join('/');
+      items = [{ value: '', title: '根目录', path: '库根目录' }];
+      for (const path of allFolderPaths()) {
+        if (path === currentDir) continue;
+        items.push({ value: path, title: path.split('/').pop(), path: path });
+      }
+    } else {
+      const notes = state.graph ? state.graph.notes.filter(n => n.id !== graphPickerNode.id) : [];
+      items = notes.map(n => ({ value: n.path, title: n.title, path: n.path, node: n }));
+    }
+    items = items.filter(item => !kw || (item.title + ' ' + item.path).toLowerCase().includes(kw)).slice(0, 80);
+    if (!items.length) {
+      const p = document.createElement('p');
+      p.className = 'link-picker-empty';
+      p.textContent = graphPickerMode === 'move' ? '没有可用文件夹' : '没有可合并的笔记';
+      graphPickerList.appendChild(p);
+      return;
+    }
+    for (const item of items) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'link-picker-item';
+      const title = document.createElement('span');
+      title.textContent = item.title;
+      const path = document.createElement('span');
+      path.className = 'link-picker-path';
+      path.textContent = item.path;
+      btn.append(title, path);
+      btn.addEventListener('click', () => {
+        const source = graphPickerNode;
+        const mode = graphPickerMode;
+        closeGraphPicker();
+        if (!source) return;
+        if (mode === 'move') moveGraphNote(source, item.value);
+        else mergeGraphNote(source, item.node);
+      });
+      graphPickerList.appendChild(btn);
+    }
+  }
+
+  function moveGraphNote(node, targetDir) {
+    moveNote(node.path, targetDir);
+    const moved = state.graph && state.graph.notes.find(n => n.title === node.title);
+    if (moved) openNote(moved.id);
+    toast('已移动到 ' + (targetDir || '根目录'));
+  }
+
+  function escapeRegExp(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  async function mergeGraphNote(source, target) {
+    if (!source || !target || source.id === target.id) return;
+    const ok = await askConfirm({
+      title: '合并笔记',
+      message: '将《' + source.title + '》的正文合并到《' + target.title + '》，然后删除源文件；指向源文件的 Wiki 链接会改指向目标。此操作不可撤销。',
+      okText: '合并',
+      danger: true
+    });
+    if (!ok) return;
+    const sourceFile = state.files.find(f => f.path === source.path);
+    const targetFile = state.files.find(f => f.path === target.path);
+    if (!sourceFile || !targetFile) return;
+    const parsed = vault.parseFrontmatter(sourceFile.content || '');
+    const body = String(parsed.body || sourceFile.content || '').trim();
+    targetFile.content = String(targetFile.content || '').replace(/\s*$/, '')
+      + '\n\n---\n\n## 来自《' + source.title + '》\n\n' + body + '\n';
+    state.files = state.files.filter(f => f.path !== source.path);
+    if (state.favorites.delete(source.path)) saveFavorites();
+    const names = [source.title, String(source.path || '').replace(/\.md$/i, ''), source.path];
+    for (const file of state.files) {
+      if (typeof file.content !== 'string') continue;
+      let content = file.content;
+      for (const name of names) {
+        if (!name) continue;
+        const re = new RegExp('\\[\\[(' + escapeRegExp(name) + ')(\\|[^\\]]*)?\\]\\]', 'g');
+        content = content.replace(re, function (_, _name, alias) {
+          return '[[' + target.title + (alias || '') + ']]';
+        });
+      }
+      file.content = content;
+    }
+    refreshVault('已合并到《' + target.title + '》');
+    const targetNode = state.graph && state.graph.notes.find(n => n.path === target.path);
+    if (targetNode) openNote(targetNode.id);
+  }
+
+  /* ── 菜单动作 ───────────────────────────────────────────── */
+  function runGraphAction(action, node) {
+    if (!node) return;
+    if (action === 'open-tab') { openNote(node.id); showView('note'); return; }
+    if (action === 'open-window') { openNoteInNewWindow(node); return; }
+    if (action === 'move') { openGraphPicker('move', node); return; }
+    if (action === 'favorite') { toggleFavorite(node); return; }
+    if (action === 'merge') { openGraphPicker('merge', node); return; }
+    if (action === 'copy-relative') { copyText(node.path); return; }
+    if (action === 'copy-wikilink') { copyText('[[' + node.title + ']]'); return; }
+    if (action === 'copy-title') { copyText(node.title); return; }
+    if (action === 'reveal-folder') { revealInTree(node); return; }
+    if (action === 'show-backlinks') { showBacklinks(node); return; }
+    if (action === 'focus-graph') { focusGraphNode(node); return; }
+    if (action === 'default-app') { downloadNoteFile(node); return; }
+    if (action === 'explorer') { copyText(node.path); toast('浏览器版已复制相对路径；可在系统资源管理器中定位'); return; }
+    if (action === 'show-tree') { revealInTree(node); return; }
+    if (action === 'delete') { deleteGraphNote(node); return; }
+  }
+
+  if (graphMenu) {
+    graphMenu.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      if (btn.dataset.submenu) {
+        const wrap = btn.closest('.graph-menu-subwrap');
+        const open = wrap.classList.contains('is-open');
+        graphMenu.querySelectorAll('.graph-menu-subwrap.is-open').forEach(el => el.classList.remove('is-open'));
+        if (!open) wrap.classList.add('is-open');
+        return;
+      }
+      if (!btn.dataset.act) return;
+      const node = graphMenuNode;
+      closeGraphMenu();
+      runGraphAction(btn.dataset.act, node);
+    });
+  }
+
+  const graphCanvasEl = $('#graph-canvas');
+  if (graphCanvasEl) {
+    graphCanvasEl.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const point = localPoint(e);
+      const hit = hitTest(point.x, point.y);
+      if (!hit || hit.type !== 'note') {
+        closeGraphMenu();
+        return;
+      }
+      state.selectedId = hit.id;
+      state.dirty = true;
+      openGraphMenu(e, hit);
+    });
+  }
+
+  document.addEventListener('mousedown', e => {
+    if (graphMenu && !graphMenu.hidden && !e.target.closest('#graph-menu')) closeGraphMenu();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeGraphMenu();
+      closeGraphPicker();
+    }
+  });
+  window.addEventListener('resize', closeGraphMenu);
+  window.addEventListener('blur', closeGraphMenu);
+
+  if (graphPicker) {
+    const closeBtn = $('#graph-picker-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeGraphPicker);
+    graphPicker.addEventListener('pointerdown', e => { if (e.target === graphPicker) closeGraphPicker(); });
+    if (graphPickerSearch) {
+      graphPickerSearch.addEventListener('input', e => renderGraphPickerList(e.target.value));
+    }
+  }
+
   function currentNote() {
     if (!state.graph || !currentNoteId) return null;
     return state.graph.nodes.find(n => n.id === currentNoteId) || null;
@@ -783,6 +1465,8 @@
     $('#note-editor').hidden = true;
     $('#note-body').hidden = false;
     $('#btn-note-edit').textContent = '编辑';
+    if (node.type === 'note') rememberNoteTab(id);
+    else renderNoteTabs();
     renderNote();
   }
 
@@ -954,26 +1638,311 @@
     });
   }
 
+  /* ── 浏览器式笔记标签页 ─────────────────────────────────── */
+  const NOTE_TABS_MAX = 24;
+  const noteTabStrip = $('#note-tab-strip');
+  const noteTabsEl = $('#note-tabs');
+  let noteTabDragId = null;
+
+  function noteTabNode(id) {
+    if (!state.graph) return null;
+    return state.graph.nodes.find(n => n.id === id && n.type === 'note') || null;
+  }
+
+  function persistNoteTabs() {
+    try {
+      store.setJSON('noteTabs', {
+        tabs: state.openTabs.slice(0, NOTE_TABS_MAX),
+        active: state.activeTab || null
+      });
+    } catch (_) {}
+  }
+
+  function restoreNoteTabs() {
+    try {
+      const saved = store.getJSON('noteTabs', null);
+      if (!saved) return;
+      const tabs = Array.isArray(saved.tabs) ? saved.tabs : [];
+      state.openTabs = tabs
+        .filter((id, i) => typeof id === 'string' && id && tabs.indexOf(id) === i)
+        .slice(0, NOTE_TABS_MAX);
+      if (typeof saved.active === 'string' && saved.active) state.activeTab = saved.active;
+    } catch (_) {}
+  }
+
+  /** 库重建、切换库、删除笔记后，剔除已经不存在的标签。 */
+  function pruneNoteTabs() {
+    if (!state.graph) {
+      state.openTabs = [];
+      state.activeTab = null;
+      return;
+    }
+    const valid = new Set(state.graph.notes.map(n => n.id));
+    state.openTabs = state.openTabs.filter(id => valid.has(id));
+    if (state.activeTab && !valid.has(state.activeTab)) {
+      state.activeTab = valid.has(currentNoteId) ? currentNoteId : null;
+    }
+  }
+
+  function clearNoteTabDropMarks() {
+    $$('#note-tabs .note-tab').forEach(el => {
+      el.classList.remove('is-drop-before', 'is-drop-after');
+    });
+  }
+
+  function focusNoteTab(id) {
+    requestAnimationFrame(() => {
+      const tab = [...noteTabsEl.querySelectorAll('.note-tab')].find(el => el.dataset.id === id);
+      if (tab) tab.focus();
+    });
+  }
+
+  function moveNoteTab(fromId, targetId, after) {
+    const from = state.openTabs.indexOf(fromId);
+    const target = state.openTabs.indexOf(targetId);
+    if (from < 0 || target < 0 || from === target) return;
+    const moved = state.openTabs.splice(from, 1)[0];
+    const at = state.openTabs.indexOf(targetId);
+    state.openTabs.splice(after ? at + 1 : at, 0, moved);
+    renderNoteTabs();
+    persistNoteTabs();
+  }
+
+  function moveNoteTabToEnd(id) {
+    const from = state.openTabs.indexOf(id);
+    if (from < 0 || from === state.openTabs.length - 1) return;
+    state.openTabs.push(state.openTabs.splice(from, 1)[0]);
+    renderNoteTabs();
+    persistNoteTabs();
+  }
+
+  function attachNoteTabDrag(tab, id) {
+    tab.addEventListener('dragstart', e => {
+      noteTabDragId = id;
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', 'note-tab:' + id); } catch (_) {}
+      }
+      tab.classList.add('is-dragging');
+    });
+    tab.addEventListener('dragend', () => {
+      noteTabDragId = null;
+      tab.classList.remove('is-dragging');
+      clearNoteTabDropMarks();
+    });
+    tab.addEventListener('dragover', e => {
+      if (!noteTabDragId || noteTabDragId === id) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      const rect = tab.getBoundingClientRect();
+      const after = (e.clientX - rect.left) > rect.width / 2;
+      tab.classList.toggle('is-drop-before', !after);
+      tab.classList.toggle('is-drop-after', after);
+    });
+    tab.addEventListener('dragleave', e => {
+      if (e.relatedTarget && tab.contains(e.relatedTarget)) return;
+      tab.classList.remove('is-drop-before', 'is-drop-after');
+    });
+    tab.addEventListener('drop', e => {
+      if (!noteTabDragId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = tab.getBoundingClientRect();
+      const after = (e.clientX - rect.left) > rect.width / 2;
+      const fromId = noteTabDragId;
+      noteTabDragId = null;
+      clearNoteTabDropMarks();
+      moveNoteTab(fromId, id, after);
+    });
+  }
+
+  function renderNoteTabs() {
+    if (!noteTabStrip || !noteTabsEl) return;
+    pruneNoteTabs();
+    noteTabsEl.innerHTML = '';
+    const items = state.openTabs.map(noteTabNode).filter(Boolean);
+    noteTabStrip.hidden = items.length === 0;
+    const activeId = currentNoteId && noteTabNode(currentNoteId) ? currentNoteId : null;
+    if (activeId) state.activeTab = activeId;
+
+    for (const note of items) {
+      const tab = document.createElement('div');
+      tab.className = 'note-tab' + (note.id === activeId ? ' is-active' : '');
+      tab.dataset.id = note.id;
+      tab.draggable = true;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', note.id === activeId ? 'true' : 'false');
+      tab.tabIndex = note.id === activeId ? 0 : -1;
+      tab.title = (note.title || '(无标题)') + '\n' + (note.path || '');
+
+      const icon = document.createElement('span');
+      icon.className = 'note-tab-icon';
+      icon.textContent = '▤';
+      icon.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'note-tab-title';
+      label.textContent = note.title || '(无标题)';
+
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'note-tab-close';
+      close.title = '关闭标签页';
+      close.setAttribute('aria-label', '关闭 ' + (note.title || '笔记'));
+      close.textContent = '×';
+      close.addEventListener('mousedown', e => e.stopPropagation());
+      close.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeNoteTab(note.id);
+      });
+
+      tab.append(icon, label, close);
+      tab.addEventListener('click', e => {
+        if (e.target.closest('.note-tab-close')) return;
+        openNote(note.id);
+        showView('note');
+      });
+      tab.addEventListener('auxclick', e => {
+        if (e.button === 1) {
+          e.preventDefault();
+          closeNoteTab(note.id);
+        }
+      });
+      tab.addEventListener('keydown', e => {
+        const index = state.openTabs.indexOf(note.id);
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openNote(note.id);
+          showView('note');
+          return;
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          closeNoteTab(note.id);
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          const nextId = state.openTabs[index + (e.key === 'ArrowRight' ? 1 : -1)];
+          if (!nextId) return;
+          openNote(nextId);
+          showView('note');
+          focusNoteTab(nextId);
+        }
+      });
+      attachNoteTabDrag(tab, note.id);
+      noteTabsEl.appendChild(tab);
+    }
+
+    persistNoteTabs();
+    requestAnimationFrame(() => {
+      const active = [...noteTabsEl.querySelectorAll('.note-tab')].find(el => el.classList.contains('is-active'));
+      if (!active) return;
+      if (active.scrollIntoView) {
+        try { active.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
+      }
+    });
+  }
+
+  /** 打开笔记时把它放进标签条；同一篇只保留一个标签。 */
+  function rememberNoteTab(id) {
+    if (!noteTabNode(id)) return false;
+    if (!state.openTabs.includes(id)) {
+      if (state.openTabs.length >= NOTE_TABS_MAX) {
+        const victim = state.openTabs.find(tabId => tabId !== id);
+        if (victim) state.openTabs.splice(state.openTabs.indexOf(victim), 1);
+      }
+      state.openTabs.push(id);
+    }
+    state.activeTab = id;
+    renderNoteTabs();
+    return true;
+  }
+
+  /** 没有可切换的标签时，回到「未选择笔记」的空状态。 */
+  function clearCurrentNote() {
+    currentNoteId = null;
+    state.selectedId = null;
+    state.activeTab = null;
+    editing = false;
+    const editor = $('#note-editor');
+    const body = $('#note-body');
+    if (editor) editor.hidden = true;
+    if (body) body.hidden = false;
+    const editBtn = $('#btn-note-edit');
+    if (editBtn) editBtn.textContent = '编辑';
+    renderNote();
+    updateTreeSelection();
+  }
+
+  function closeNoteTab(id) {
+    const index = state.openTabs.indexOf(id);
+    if (index < 0) return;
+    const wasActive = currentNoteId === id;
+    state.openTabs.splice(index, 1);
+    if (!wasActive) {
+      if (state.activeTab === id) state.activeTab = currentNoteId;
+      renderNoteTabs();
+      persistNoteTabs();
+      return;
+    }
+    const nextId = state.openTabs[index] || state.openTabs[index - 1] || null;
+    showView('note');
+    if (nextId) {
+      openNote(nextId);
+    } else {
+      clearCurrentNote();
+      renderNoteTabs();
+    }
+  }
+
+  if (noteTabsEl) {
+    noteTabsEl.addEventListener('dragover', e => {
+      if (!noteTabDragId) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    });
+    noteTabsEl.addEventListener('drop', e => {
+      if (!noteTabDragId) return;
+      if (e.target.closest && e.target.closest('.note-tab')) return;
+      e.preventDefault();
+      const fromId = noteTabDragId;
+      noteTabDragId = null;
+      clearNoteTabDropMarks();
+      moveNoteTabToEnd(fromId);
+    });
+    noteTabsEl.addEventListener('wheel', e => {
+      if (noteTabsEl.scrollWidth <= noteTabsEl.clientWidth) return;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      noteTabsEl.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+  }
+
+  restoreNoteTabs();
+
+
   /* ── 文件树：多级目录 + 增删改查 ───────────────────────── */
-  const VAULT_KEY = 'race-ainote:vault';
+  const VAULT_KEY = 'vault';
   let treeMenuTarget = null;
 
-  const USAGE_KEY = 'race-ainote:usage';
-  const ORDER_KEY = 'race-ainote:order';
-  const SORT_KEY = 'race-ainote:sort';
+  const USAGE_KEY = 'usage';
+  const ORDER_KEY = 'order';
+  const SORT_KEY = 'sort';
 
   function loadMeta() {
-    try { state.usage = JSON.parse(localStorage.getItem(USAGE_KEY) || '{}') || {}; } catch (_) { state.usage = {}; }
-    try { state.manualOrder = JSON.parse(localStorage.getItem(ORDER_KEY) || '{}') || {}; } catch (_) { state.manualOrder = {}; }
-    try { state.sortMode = localStorage.getItem(SORT_KEY) || 'usage'; } catch (_) { state.sortMode = 'usage'; }
+    try { state.usage = store.getJSON(USAGE_KEY, {}) || {}; } catch (_) { state.usage = {}; }
+    try { state.manualOrder = store.getJSON(ORDER_KEY, {}) || {}; } catch (_) { state.manualOrder = {}; }
+    try { state.sortMode = store.get(SORT_KEY, 'usage') || 'usage'; } catch (_) { state.sortMode = 'usage'; }
   }
 
   function saveUsage() {
-    try { localStorage.setItem(USAGE_KEY, JSON.stringify(state.usage)); } catch (_) {}
+    try { store.setJSON(USAGE_KEY, state.usage); } catch (_) {}
   }
 
   function saveOrder() {
-    try { localStorage.setItem(ORDER_KEY, JSON.stringify(state.manualOrder)); } catch (_) {}
+    try { store.setJSON(ORDER_KEY, state.manualOrder); } catch (_) {}
   }
 
   /** 记录一次使用：打开/编辑都会累加，用于「使用频率」和「更新日期」排序 */
@@ -1033,17 +2002,18 @@
 
   function saveLocalVault() {
     try {
-      localStorage.setItem(VAULT_KEY, JSON.stringify({
+      store.setJSON(VAULT_KEY, {
         label: state.vaultLabel,
         savedAt: Date.now(),
         files: state.files
-      }));
+      });
     } catch (_) {}
+    if (typeof scheduleDiskSync === 'function') scheduleDiskSync();
   }
 
   function loadLocalVault() {
     try {
-      const raw = JSON.parse(localStorage.getItem(VAULT_KEY) || 'null');
+      const raw = store.getJSON(VAULT_KEY, null);
       if (!raw || !Array.isArray(raw.files) || !raw.files.length) return null;
       return raw;
     } catch (_) {
@@ -1069,6 +2039,42 @@
       cursor.notes.push(Object.assign({ fileName: fileName }, note));
     }
     return root;
+  }
+
+  function allFolderPaths() {
+    const paths = [];
+    const root = buildTree(state.graph ? state.graph.notes : []);
+    const walk = node => {
+      for (const folder of node.folders.values()) {
+        paths.push(folder.path);
+        walk(folder);
+      }
+    };
+    walk(root);
+    return paths;
+  }
+
+  function collapseAllFolders() {
+    const paths = allFolderPaths();
+    if (!paths.length) return toast('当前没有可收起的文件夹');
+    const scrollTop = fileTree.scrollTop;
+    state.collapsedFolders.clear();
+    for (const path of paths) state.collapsedFolders.add(path);
+    renderTree();
+    fileTree.scrollTop = scrollTop;
+    toast('已收起全部文件夹');
+  }
+
+  function expandAllFolders() {
+    if (!state.collapsedFolders.size) {
+      renderTree();
+      return toast('文件夹已经全部展开');
+    }
+    const scrollTop = fileTree.scrollTop;
+    state.collapsedFolders.clear();
+    renderTree();
+    fileTree.scrollTop = scrollTop;
+    toast('已展开全部文件夹');
   }
 
   function renderTree() {
@@ -1131,8 +2137,9 @@
     for (const folder of sortFolders([...node.folders.values()], node.path)) {
       const row = document.createElement('div');
       row.className = 'tree-folder';
-      row.style.paddingLeft = (6 + depth * 12) + 'px';
+      row.style.paddingLeft = (9 + depth * 12) + 'px';
       row.dataset.folder = folder.path;
+      row.dataset.depth = String(depth);
       const chevron = document.createElement('span');
       chevron.className = 'chevron';
       chevron.textContent = '▾';
@@ -1179,7 +2186,7 @@
     for (const note of sortNotes(node.notes, node.path)) {
       const row = document.createElement('div');
       row.className = 'tree-file';
-      row.style.paddingLeft = (20 + depth * 12) + 'px';
+      row.style.paddingLeft = (28 + depth * 12) + 'px';
       row.dataset.id = note.id;
       row.draggable = true;
       row.title = note.path;
@@ -1190,6 +2197,13 @@
       label.className = 'file-name';
       label.textContent = note.title;
       row.append(icon, label);
+      if (state.favorites && state.favorites.has(note.path)) {
+        const star = document.createElement('span');
+        star.className = 'file-fav';
+        star.textContent = '★';
+        star.title = '已收藏';
+        row.appendChild(star);
+      }
       row.addEventListener('click', () => { openNote(note.id); showView('note'); });
       row.addEventListener('contextmenu', e => openTreeMenu(e, 'note', note.path));
       row.addEventListener('dragstart', e => {
@@ -1259,6 +2273,8 @@
     createNote(dir);
   });
   $('#btn-new-folder').addEventListener('click', () => createFolder(''));
+  $('#btn-collapse-all').addEventListener('click', collapseAllFolders);
+  $('#btn-expand-all').addEventListener('click', expandAllFolders);
 
   /* ── 增删改查 ───────────────────────────────────────────── */
   function uniquePath(dir, base) {
@@ -1415,7 +2431,7 @@
   function switchToManual() {
     if (state.sortMode !== 'manual') {
       state.sortMode = 'manual';
-      try { localStorage.setItem(SORT_KEY, 'manual'); } catch (_) {}
+      try { store.set(SORT_KEY, 'manual'); } catch (_) {}
       const sel = $('#sort-mode');
       if (sel) sel.value = 'manual';
     }
@@ -1642,6 +2658,7 @@
   ['dragenter', 'dragover'].forEach(type => {
     window.addEventListener(type, e => {
       if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+      if (e.target && e.target.closest && e.target.closest('#ai-panel')) return;
       e.preventDefault();
       if (type === 'dragenter') dragDepth += 1;
       $('#drop-hint').hidden = false;
@@ -1653,6 +2670,7 @@
   });
   window.addEventListener('drop', async e => {
     if (!e.dataTransfer) return;
+    if (e.target && e.target.closest && e.target.closest('#ai-panel')) return;
     e.preventDefault();
     dragDepth = 0;
     $('#drop-hint').hidden = true;
@@ -1921,7 +2939,7 @@
     document.documentElement.dataset.bg = settings.bgPreset || 'default';
     state.dirty = true;
     updateThemeButton();
-    try { localStorage.setItem(STORAGE_KEY + ':theme', settings.themeMode || 'system'); } catch (_) {}
+    try { store.set('theme', settings.themeMode || 'system'); } catch (_) {}
   }
 
   function updateThemeButton() {
@@ -1973,20 +2991,20 @@
     github: [
       { key: 'token', label: 'Token', type: 'password', placeholder: 'ghp_…（需 repo 权限）' },
       { key: 'owner', label: '用户名', type: 'text', placeholder: 'ressoap' },
-      { key: 'repo', label: '仓库', type: 'text', placeholder: 'Race-AiNote' },
+      { key: 'repo', label: '仓库', type: 'text', placeholder: 'wenmo-notes' },
       { key: 'branch', label: '分支', type: 'text', placeholder: 'main' },
-      { key: 'path', label: '文件路径', type: 'text', placeholder: 'race-ainote-backup.json' }
+      { key: 'path', label: '文件路径', type: 'text', placeholder: 'wenmo-notes-backup.json' }
     ],
     gitee: [
       { key: 'token', label: '私人令牌', type: 'password', placeholder: '需 projects 权限' },
       { key: 'owner', label: '用户名', type: 'text', placeholder: 'ressoap' },
-      { key: 'repo', label: '仓库', type: 'text', placeholder: 'race-ai-note' },
+      { key: 'repo', label: '仓库', type: 'text', placeholder: 'wenmo-notes' },
       { key: 'branch', label: '分支', type: 'text', placeholder: 'master' },
-      { key: 'path', label: '文件路径', type: 'text', placeholder: 'race-ainote-backup.json' }
+      { key: 'path', label: '文件路径', type: 'text', placeholder: 'wenmo-notes-backup.json' }
     ],
     baidu: [
       { key: 'accessToken', label: 'access_token', type: 'password', placeholder: '百度网盘开放平台授权后获得' },
-      { key: 'path', label: '网盘路径', type: 'text', placeholder: '/apps/race-ainote/backup.json' }
+      { key: 'path', label: '网盘路径', type: 'text', placeholder: '/apps/wenmo-notes/backup.json' }
     ],
     quark: []
   };
@@ -2113,18 +3131,114 @@
     $('#ai-panel').classList.toggle('is-collapsed', !open);
     document.querySelector('.workspace').classList.toggle('no-ai', !open);
     $('#btn-ai').classList.toggle('is-active', open);
+    if (typeof syncSidebarWidth === 'function') syncSidebarWidth();
     resize();
     state.dirty = true;
   }
 
   /* ── 设置窗口（AI / 本地数据） ──────────────────────────── */
   const prefsModal = $('#prefs-modal');
+  const teacherModal = $('#teacher-modal');
+
+  const TEACHER_TRAIT_FIELDS = [
+    { key: 'lively', id: 'teacher-lively', out: 'teacher-lively-value' },
+    { key: 'detail', id: 'teacher-detail', out: 'teacher-detail-value' },
+    { key: 'guidance', id: 'teacher-guidance', out: 'teacher-guidance-value' },
+    { key: 'correction', id: 'teacher-correction', out: 'teacher-correction-value' }
+  ];
+  const TEACHER_PROFILE_TEMPLATE = [
+    '1. 讲题前先问我卡在哪一步，不要直接报最终答案。',
+    '2. 每道题先写考点，再给思路，最后一步一步推导。',
+    '3. 我算错时先指出错在哪一行，不要只给正确答案。',
+    '4. 条件不足时先追问，不要自行假设条件。',
+    '5. 公式用纯文本 / Unicode，步骤之间留空行。'
+  ].join('\n');
+
+  function updateTeacherCount() {
+    const profile = $('#teacher-profile');
+    const count = $('#teacher-count');
+    if (profile && count) count.textContent = profile.value.length + ' / 6000';
+  }
+
+  function markTeacherDirty() {
+    const status = $('#teacher-status');
+    if (status) status.textContent = '有未保存的修改';
+  }
+
+  function renderTeacherConfig(cfg) {
+    const source = (cfg && cfg.teacherProfile) || '';
+    const profile = $('#teacher-profile');
+    if (profile) {
+      profile.value = source;
+    }
+    const traits = RG.ai.normalizeTeacherTraits((cfg && cfg.teacherTraits) || {});
+    for (const field of TEACHER_TRAIT_FIELDS) {
+      const input = document.getElementById(field.id);
+      const out = document.getElementById(field.out);
+      if (input) input.value = String(traits[field.key]);
+      if (out) out.textContent = String(traits[field.key]);
+    }
+    updateTeacherCount();
+    const status = $('#teacher-status');
+    if (status) status.textContent = '';
+  }
+
+  function restoreTeacherDefaults() {
+    const profile = $('#teacher-profile');
+    if (profile) profile.value = '';
+    const traits = RG.ai.DEFAULT_TEACHER_TRAITS;
+    for (const field of TEACHER_TRAIT_FIELDS) {
+      const input = document.getElementById(field.id);
+      const out = document.getElementById(field.out);
+      if (input) input.value = String(traits[field.key]);
+      if (out) out.textContent = String(traits[field.key]);
+    }
+    updateTeacherCount();
+  }
+
+  function readTeacherConfig() {
+    const profile = $('#teacher-profile');
+    const traits = {};
+    for (const field of TEACHER_TRAIT_FIELDS) {
+      const input = document.getElementById(field.id);
+      const n = Number(input && input.value);
+      traits[field.key] = Number.isFinite(n) ? n : RG.ai.DEFAULT_TEACHER_TRAITS[field.key];
+    }
+    return {
+      teacherProfile: String(profile ? profile.value : '').slice(0, 6000),
+      teacherTraits: RG.ai.normalizeTeacherTraits(traits)
+    };
+  }
+
+  function readTextFile(file) {
+    if (file && typeof file.text === 'function') return file.text();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('读取失败'));
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.readAsText(file);
+    });
+  }
+
+  function openTeacher() {
+    renderTeacherConfig(ai.state.config);
+    if (teacherModal) teacherModal.hidden = false;
+    const btn = $('#btn-teacher');
+    if (btn) btn.classList.add('is-active');
+  }
+
+  function closeTeacher() {
+    if (teacherModal) teacherModal.hidden = true;
+    const btn = $('#btn-teacher');
+    if (btn) btn.classList.remove('is-active');
+  }
 
   function openPrefs() {
     const cfg = ai.state.config;
     $('#prefs-mode').value = cfg.mode || 'proxy';
     $('#prefs-baseurl').value = cfg.baseUrl || '';
     $('#prefs-model').value = cfg.model || '';
+    $('#prefs-vision-model').value = cfg.visionModel || '';
     $('#prefs-key').value = cfg.key || '';
     $('#prefs-ai-format').checked = Boolean(cfg.aiFormatModel);
     $('#prefs-model-status').textContent = '';
@@ -2153,6 +3267,14 @@
   $('#btn-prefs').addEventListener('click', openPrefs);
   $('#prefs-close').addEventListener('click', closePrefs);
   prefsModal.addEventListener('pointerdown', e => { if (e.target === prefsModal) closePrefs(); });
+  const teacherBtn = $('#btn-teacher');
+  if (teacherBtn) teacherBtn.addEventListener('click', openTeacher);
+  const teacherClose = $('#teacher-close');
+  if (teacherClose) teacherClose.addEventListener('click', closeTeacher);
+  if (teacherModal) teacherModal.addEventListener('pointerdown', e => { if (e.target === teacherModal) closeTeacher(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && teacherModal && !teacherModal.hidden) closeTeacher();
+  });
   $('#prefs-mode').addEventListener('change', syncKeyRow);
   $('#prefs-theme').addEventListener('change', e => {
     settings.themeMode = e.target.value;
@@ -2160,6 +3282,90 @@
     applyTheme();
     renderBgSwatches();
   });
+
+  for (const field of TEACHER_TRAIT_FIELDS) {
+    const input = document.getElementById(field.id);
+    if (input) {
+      input.addEventListener('input', () => {
+        const out = document.getElementById(field.out);
+        if (out) out.textContent = String(input.value);
+        markTeacherDirty();
+      });
+    }
+  }
+  const teacherProfile = $('#teacher-profile');
+  if (teacherProfile) {
+    teacherProfile.addEventListener('input', () => { updateTeacherCount(); markTeacherDirty(); });
+  }
+  const teacherFile = $('#teacher-file');
+  const teacherImport = $('#teacher-import');
+  if (teacherImport && teacherFile) {
+    teacherImport.addEventListener('click', () => teacherFile.click());
+    teacherFile.addEventListener('change', async () => {
+      const file = teacherFile.files && teacherFile.files[0];
+      if (!file) return;
+      const status = $('#teacher-status');
+      if (status) status.textContent = '正在读取…';
+      try {
+        let text = await readTextFile(file);
+        if (text.length > 6000) {
+          text = text.slice(0, 6000);
+          if (status) status.textContent = '文件较长，已截取前 6000 字';
+        } else if (status) {
+          status.textContent = '已载入 ' + file.name + '，点「保存性格」生效';
+        }
+        if (teacherProfile) teacherProfile.value = text;
+        updateTeacherCount();
+      } catch (err) {
+        if (status) status.textContent = '读取失败：' + (err && err.message ? err.message : err);
+      }
+      teacherFile.value = '';
+    });
+  }
+  const teacherTemplate = $('#teacher-template');
+  if (teacherTemplate && teacherProfile) {
+    teacherTemplate.addEventListener('click', () => {
+      teacherProfile.value = TEACHER_PROFILE_TEMPLATE;
+      updateTeacherCount();
+      markTeacherDirty();
+    });
+  }
+  const teacherClear = $('#teacher-clear');
+  if (teacherClear && teacherProfile) {
+    teacherClear.addEventListener('click', () => {
+      teacherProfile.value = '';
+      updateTeacherCount();
+      markTeacherDirty();
+    });
+  }
+  const teacherReset = $('#teacher-reset');
+  if (teacherReset) {
+    teacherReset.addEventListener('click', async () => {
+      const ok = await askConfirm({
+        title: '恢复默认性格',
+        message: '会清空自定义讲课方式，并把四根滑杆恢复到默认值。',
+        okText: '恢复',
+        danger: true
+      });
+      if (!ok) return;
+      restoreTeacherDefaults();
+      const status = $('#teacher-status');
+      if (status) status.textContent = '正在恢复…';
+      await ai.applyConfig(readTeacherConfig());
+      if (status) status.textContent = '已恢复默认性格';
+      toast('已恢复默认性格');
+    });
+  }
+  const teacherSave = $('#teacher-save');
+  if (teacherSave) {
+    teacherSave.addEventListener('click', async () => {
+      const status = $('#teacher-status');
+      if (status) status.textContent = '保存中…';
+      await ai.applyConfig(readTeacherConfig());
+      if (status) status.textContent = ai.state.mode === 'local' ? '已保存；接入模型后生效' : '已保存老师性格';
+      toast('老师性格已保存');
+    });
+  }
   $('#prefs-open-folder').addEventListener('click', () => { closePrefs(); openViaPicker(); });
 
   $('#prefs-save').addEventListener('click', async () => {
@@ -2167,12 +3373,13 @@
       mode: $('#prefs-mode').value,
       baseUrl: $('#prefs-baseurl').value.trim(),
       model: $('#prefs-model').value.trim(),
+      visionModel: $('#prefs-vision-model').value.trim(),
       key: $('#prefs-key').value.trim(),
       aiFormatModel: $('#prefs-ai-format').checked
     };
     const mode = await ai.applyConfig(patch);
     $('#prefs-status').textContent = '已保存 · 当前模式：' + (mode === 'local' ? '本地分析' : mode === 'direct' ? '直连' : '代理');
-    toast('设置已保存（Key 只存在本机浏览器）');
+    toast(mode === 'direct' ? '设置已保存（直连模式的 Key 只存在本机浏览器）' : '设置已保存（代理模式不保存 Key）');
   });
 
   $('#prefs-models').addEventListener('click', async () => {
@@ -2217,7 +3424,7 @@
 
   $('#prefs-reset').addEventListener('click', () => {
     ai.clearConfig();
-    localStorage.removeItem('race-ainote:v1');
+    store.resetAll();
     toast('已重置本地设置，即将刷新');
     setTimeout(() => location.reload(), 600);
   });
@@ -2256,12 +3463,15 @@
     }
   }
 
-  $('#ask-tutor').addEventListener('click', () => applyAskMode('tutor'));
-  $('#ask-notes').addEventListener('click', () => applyAskMode('notes'));
+  $('#ask-tutor').addEventListener('click', () => { closeRecordDetail(); applyAskMode('tutor'); });
+  $('#ask-notes').addEventListener('click', () => { closeRecordDetail(); applyAskMode('notes'); });
 
-  /* ── 问题记录：详情弹窗 / 右键菜单 / 搜索 ───────────────── */
-  const recordModal = $('#record-modal');
+  /* ── 问题记录：内嵌详情子选项卡 / 右键菜单 / 搜索 ─────── */
   const recordMenu = $('#record-menu');
+  const recordInline = $('#record-inline');
+  const recordInlineScroll = recordInline ? recordInline.querySelector('.record-inline-scroll') : null;
+  const recordSubtab = $('#record-subtab');
+  const aiChatcol = $('.ai-chatcol');
   let recordMenuTarget = null;
   let recordOpenId = null;
 
@@ -2269,49 +3479,203 @@
     return (ai.records() || []).find(r => r.id === id) || null;
   }
 
+  /** 打开记录对应的错题笔记，并滚动到这条问答的具体位置 */
+  function locateRecordInNote(record) {
+    if (!record) return;
+    const targetPath = String(record.targetPath || '');
+    const targetTitle = String(record.targetTitle || '');
+    let node = null;
+    if (state.graph && targetPath) {
+      node = state.graph.notes.find(n => n.path === targetPath || n.path.endsWith('/' + targetPath)) || null;
+    }
+    if (!node && targetTitle) node = findNodeByTitle(targetTitle);
+    if (!node) return toast('找不到错题笔记：' + (targetTitle || targetPath || '尚未记入'));
+
+    showView('note');
+    openNote(node.id);
+
+    const question = String(record.question || '').replace(/\s+/g, ' ').trim();
+    const needle = question.slice(0, Math.min(40, question.length));
+    const when = new Date(record.at || Date.now());
+    const pad = n => String(n).padStart(2, '0');
+    const stamp = when.getFullYear() + '-' + pad(when.getMonth() + 1) + '-' + pad(when.getDate())
+      + ' ' + pad(when.getHours()) + ':' + pad(when.getMinutes());
+
+    setTimeout(() => {
+      const body = $('#note-body');
+      if (!body) return;
+      const normalize = s => String(s || '').replace(/\s+/g, ' ').trim();
+      const blocks = [...body.querySelectorAll('h2,h3,h4,h5,h6,p,li,blockquote')];
+      let found = needle
+        ? blocks.find(el => normalize(el.textContent).includes(needle))
+        : null;
+      if (!found) {
+        const heading = blocks.find(el => /^H[2-6]$/.test(el.tagName) && normalize(el.textContent).includes('AI 答疑记录 ' + stamp));
+        if (heading) found = heading.nextElementSibling || heading;
+      }
+      if (!found) return toast('已打开《' + node.title + '》，但没有找到这条记录');
+      if (typeof found.scrollIntoView === 'function') found.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      found.classList.add('record-locate-flash');
+      setTimeout(() => found.classList.remove('record-locate-flash'), 2400);
+      toast('已定位到《' + node.title + '》中的这条记录');
+    }, 40);
+  }
+
+  /** 把旧版平铺的 10-错题本/*.md 迁进 10-错题本/<学科>/，并同步记录目标路径 */
+  function migrateMistakeFolders() {
+    const mapping = new Map();
+    const keep = currentNote();
+    const keepTitle = keep ? keep.title : '';
+    const bs = String.fromCharCode(92);
+    const nl = String.fromCharCode(10);
+    for (const file of state.files.slice()) {
+      const m = String(file.path || '').match(new RegExp('^10-错题本/([^/]+' + bs + '.md)$'));
+      if (!m) continue;
+      const name = m[1];
+      if (/使用指南|使用说明|模板|README/i.test(name)) continue;
+      const raw = name.replace(new RegExp(bs + '.md$', 'i'), '');
+      const subject = RG.ai.guessSubject(raw + nl + String(file.content || '').slice(0, 2000)).subject;
+      if (!subject || subject === '其他') continue;
+      const safe = subject.replace(/[\/:*?"<>|]/g, '-');
+      const target = '10-错题本/' + safe + '/' + name;
+      if (state.files.some(f => f.path === target)) continue;
+      const oldPath = file.path;
+      file.path = target;
+      mapping.set(oldPath, target);
+    }
+    if (!mapping.size) return 0;
+    state.graph = vault.buildVault(state.files);
+    state.positions = new Map();
+    renderTree();
+    rebuild({ fresh: true });
+    saveLocalVault();
+    if (ai && ai.remapRecordPaths) ai.remapRecordPaths(mapping);
+    if (keepTitle) {
+      const node = state.graph.notes.find(n => n.title === keepTitle);
+      if (node) openNote(node.id);
+    }
+    return mapping.size;
+  }
+
   function openRecordDetail(record) {
     if (!record) return;
     recordOpenId = record.id;
-    $('#record-title').textContent = '问题记录';
-    const when = new Date(record.at).toLocaleString('zh-CN');
-    $('#record-meta').textContent = when + ' · ' + (record.mode === 'notes' ? '笔记问答' : '答疑老师');
-    const status = $('#record-status');
+    $('#record-inline-mode').textContent = record.mode === 'notes' ? '笔记问答' : '答疑老师';
+    $('#record-inline-time').textContent = new Date(record.at).toLocaleString('zh-CN');
+    const status = $('#record-inline-status');
     status.className = 'record-status ' + (record.status === 'resolved' ? 'is-resolved' : '');
     status.textContent = record.status === 'resolved'
       ? '已解决' + (record.targetTitle ? ' · 已记入《' + record.targetTitle + '》' : ' · 未记入错题本')
       : '待解决';
-    $('#record-question').textContent = record.question || '（无）';
-    const answerEl = $('#record-answer');
-    answerEl.innerHTML = record.answer ? markdown.render(record.answer) : '（无）';
-    $('#record-toggle').textContent = record.targetTitle ? '取消记入错题本' : '记入错题本';
-    recordModal.hidden = false;
+    $('#record-inline-question').textContent = record.question || '（无）';
+    const answerEl = $('#record-inline-answer');
+    answerEl.innerHTML = record.answer
+      ? (markdown.renderAi ? markdown.renderAi(record.answer) : markdown.render(record.answer))
+      : '（无）';
+    $('#record-inline-toggle').textContent = record.targetTitle ? '取消记入错题本' : '记入错题本';
+    const locateBtn = $('#record-inline-locate');
+    if (locateBtn) locateBtn.hidden = !(record.targetPath || record.targetTitle);
+
+    if (aiChatcol) aiChatcol.classList.add('is-record-view');
+    if (recordInline) recordInline.hidden = false;
+    if (recordInlineScroll) recordInlineScroll.scrollTop = 0;
+
+    if (recordSubtab) {
+      recordSubtab.hidden = false;
+      $('#record-subtab-title').textContent = String(record.question || '问题记录').slice(0, 16);
+      recordSubtab.classList.remove('is-in');
+      void recordSubtab.offsetWidth;
+      recordSubtab.classList.add('is-in');
+    }
   }
 
   function closeRecordDetail() {
-    recordModal.hidden = true;
     recordOpenId = null;
+    if (aiChatcol) aiChatcol.classList.remove('is-record-view');
+    if (recordInline) recordInline.hidden = true;
+    if (recordSubtab) recordSubtab.hidden = true;
   }
 
-  $('#record-close').addEventListener('click', closeRecordDetail);
-  recordModal.addEventListener('pointerdown', e => { if (e.target === recordModal) closeRecordDetail(); });
+  $('#record-inline-locate').addEventListener('click', () => {
+    const record = findRecordById(recordOpenId);
+    if (record) locateRecordInNote(record);
+  });
 
-  $('#record-ask').addEventListener('click', () => {
+  $('#record-inline-close').addEventListener('click', closeRecordDetail);
+  $('#record-subtab-close').addEventListener('click', e => {
+    e.stopPropagation();
+    closeRecordDetail();
+  });
+
+  $('#record-inline-ask').addEventListener('click', () => {
     const record = findRecordById(recordOpenId);
     closeRecordDetail();
     if (record) continueAsking(record);
   });
 
-  $('#record-copy').addEventListener('click', () => {
+  $('#record-inline-copy').addEventListener('click', () => {
     const record = findRecordById(recordOpenId);
     if (!record || !navigator.clipboard) return;
-    const text = '问：' + (record.question || '') + '\n\n答：\n' + (record.answer || '');
+    const text = '问：' + (record.question || '') + String.fromCharCode(10, 10) + '答：' + String.fromCharCode(10) + (record.answer || '');
     navigator.clipboard.writeText(text).then(() => toast('已复制问答'));
   });
 
-  $('#record-toggle').addEventListener('click', () => {
+  $('#record-inline-toggle').addEventListener('click', () => {
     const record = findRecordById(recordOpenId);
     if (record) toggleRecordMistake(record);
   });
+
+  /** 自动归档：按 API/本地分析出的学科建错题本，并写入知识点+日期标题 */
+  function autoFileRecord(record, analysis, force) {
+    if (!record) return null;
+    const questionText = String(record.question || '');
+    const isMeta = /哪些笔记.*链接|薄弱环节|复习计划|核心考点|知识卡|整体结构|分析.*笔记|整理.*笔记|这个库.*怎么样|怎么用|介绍一下|你是谁/.test(questionText);
+    const subject = RG.ai.normalizeSubject((analysis && analysis.subject) || record.subject || '其他');
+    if (!force && isMeta) return null;
+    const points = Array.isArray(analysis && analysis.knowledgePoints)
+      ? analysis.knowledgePoints.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3)
+      : (Array.isArray(record.knowledgePoints) ? record.knowledgePoints.slice(0, 3) : []);
+    const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';
+    const bookTitle = safeSubject + '-错题索引';
+    const bookPath = '10-错题本/' + safeSubject + '/' + bookTitle + '.md';
+    if (record.targetPath === bookPath) return null;
+
+    let file = state.files.find(f => f.path === bookPath);
+    if (!file) {
+      file = {
+        path: bookPath,
+        content: [
+          '---',
+          'title: ' + bookTitle,
+          'tags: [错题, ' + subject + ']',
+          '---',
+          '',
+          '# ' + subject + '错题索引',
+          '',
+          '按知识点归档：',
+          ''
+        ].join('\n')
+      };
+      state.files.push(file);
+    }
+
+    const alreadyFiled = file && typeof RG.ai.mistakeContentHasQuestion === 'function'
+      && RG.ai.mistakeContentHasQuestion(file.content, record.question);
+    if (alreadyFiled) {
+      const node = state.graph && state.graph.notes.find(n => n.path === bookPath);
+      return { targetId: node ? node.id : null, targetTitle: bookTitle, targetPath: bookPath };
+    }
+
+    const snippet = RG.ai.mistakeSnippet(Object.assign({}, record, { subject, knowledgePoints: points }), analysis);
+    file.content = String(file.content || '').replace(/\s*$/, '') + snippet;
+    state.graph = vault.buildVault(state.files);
+    renderTree();
+    rebuild({});
+    saveLocalVault();
+    if (currentNoteId) renderNote();
+    const node = state.graph.notes.find(n => n.path === bookPath);
+    return { targetId: node ? node.id : null, targetTitle: bookTitle, targetPath: bookPath };
+  }
 
   /** 记入 / 取消记入错题本 */
   function toggleRecordMistake(record) {
@@ -2322,34 +3686,32 @@
       if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
       return;
     }
-    const info = RG.ai.recommendMistakeBook(record.question || '', state.graph);
-    if (!info.candidates.length) return toast('当前库里没有错题本类笔记');
-    const chosen = info.recommended || info.candidates[0];
-    const record2 = Object.assign({}, record, {
-      targetId: chosen.id,
-      targetTitle: chosen.title,
-      targetPath: chosen.path,
+    const local = RG.ai.classifyLocally(record.question || '', record.answer || '');
+    const analysis = {
+      subject: record.subject || local.subject,
+      knowledgePoints: (Array.isArray(record.knowledgePoints) && record.knowledgePoints.length)
+        ? record.knowledgePoints
+        : local.knowledgePoints
+    };
+    const filed = autoFileRecord(record, analysis, true);
+    if (!filed || !filed.targetPath) return toast('自动归档失败，请检查错题本目录');
+    const fresh = ai.updateRecord(record.id, {
+      targetId: filed.targetId || null,
+      targetTitle: filed.targetTitle,
+      targetPath: filed.targetPath,
       status: 'resolved',
-      resolvedAt: Date.now()
+      resolvedAt: Date.now(),
+      subject: analysis.subject,
+      knowledgePoints: analysis.knowledgePoints,
+      knowledgePoint: (analysis.knowledgePoints && analysis.knowledgePoints[0]) || ''
     });
-    ai.updateRecord(record.id, {
-      targetId: chosen.id, targetTitle: chosen.title, targetPath: chosen.path,
-      status: 'resolved', resolvedAt: Date.now()
-    });
-    const file = state.files.find(f => f.path === chosen.path);
-    const snippet = RG.ai.mistakeSnippet(record2);
-    if (file) file.content = String(file.content || '') + snippet;
-    else state.files.push({ path: chosen.path, content: snippet });
-    state.graph = vault.buildVault(state.files);
-    rebuild({});
-    if (currentNoteId) renderNote();
-    toast('已记入《' + chosen.title + '》并标记为已解决');
-    const fresh = findRecordById(record.id);
+    toast('已记入《' + filed.targetTitle + '》并标记为已解决');
     if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
   }
 
   /** 继续追问：把这个问题带回答疑老师继续聊 */
   function continueAsking(record) {
+    closeRecordDetail();
     applyAskMode('tutor');
     setAiPanel(true);
     const box = $('#ai-text');
@@ -2402,18 +3764,192 @@
     });
   }
 
+  const recordDate = $('#record-date-filter');
+  if (recordDate) recordDate.addEventListener('change', () => ai.setRecordDate(recordDate.value));
+
+  /* ── AI 输入框：拖动上边缘扩大（类 QQ / 微信） ─────────── */
+  const aiTextArea = $('#ai-text');
+  const aiInputResizer = $('#ai-input-resizer');
+  if (aiTextArea && aiInputResizer) {
+    const MIN_INPUT_H = 104;
+    const maxInputH = () => Math.max(MIN_INPUT_H, Math.min(Math.round(window.innerHeight * 0.55), 520));
+    const clampInputH = h => Math.max(MIN_INPUT_H, Math.min(maxInputH(), Math.round(Number(h) || MIN_INPUT_H)));
+    let inputStartY = 0;
+    let inputStartH = 0;
+    let inputDragging = false;
+    const applyInputHeight = (h, persist) => {
+      const next = clampInputH(h);
+      aiTextArea.style.height = next + 'px';
+      if (persist) store.set('aiInputHeight', next);
+      return next;
+    };
+    applyInputHeight(store.get('aiInputHeight') || MIN_INPUT_H, false);
+
+    aiInputResizer.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      inputDragging = true;
+      inputStartY = e.clientY;
+      inputStartH = aiTextArea.getBoundingClientRect().height || aiTextArea.offsetHeight || MIN_INPUT_H;
+      try { aiInputResizer.setPointerCapture(e.pointerId); } catch (_) {}
+      document.body.classList.add('is-resizing-ai-input');
+      e.preventDefault();
+    });
+    aiInputResizer.addEventListener('pointermove', e => {
+      if (!inputDragging) return;
+      applyInputHeight(inputStartH + (inputStartY - e.clientY), false);
+    });
+    const stopInputDrag = () => {
+      if (!inputDragging) return;
+      inputDragging = false;
+      document.body.classList.remove('is-resizing-ai-input');
+      store.set('aiInputHeight', Math.round(aiTextArea.getBoundingClientRect().height || aiTextArea.offsetHeight || MIN_INPUT_H));
+    };
+    aiInputResizer.addEventListener('pointerup', stopInputDrag);
+    aiInputResizer.addEventListener('pointercancel', stopInputDrag);
+    aiInputResizer.addEventListener('lostpointercapture', stopInputDrag);
+    aiInputResizer.addEventListener('dblclick', () => applyInputHeight(MIN_INPUT_H, true));
+    aiInputResizer.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      const delta = e.key === 'ArrowUp' ? 16 : -16;
+      const current = aiTextArea.getBoundingClientRect().height || aiTextArea.offsetHeight || MIN_INPUT_H;
+      applyInputHeight(current + delta, true);
+    });
+    window.addEventListener('resize', () => {
+      const current = aiTextArea.getBoundingClientRect().height || aiTextArea.offsetHeight || MIN_INPUT_H;
+      if (current > maxInputH()) applyInputHeight(maxInputH(), true);
+    });
+  }
+
+  /* ── AI 面板：拖入图片只做聊天附件，不触发全库载入 ─────── */
+  const aiPanel = $('#ai-panel');
+  const aiInputBox = $('.ai-input');
+  if (aiPanel && aiInputBox) {
+    const hasFileDrag = e => Boolean(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
+    ['dragenter', 'dragover'].forEach(type => {
+      aiPanel.addEventListener(type, e => {
+        if (!hasFileDrag(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        aiInputBox.classList.add('is-drag-over');
+      });
+    });
+    aiPanel.addEventListener('dragleave', e => {
+      if (!e.relatedTarget || !aiPanel.contains(e.relatedTarget)) aiInputBox.classList.remove('is-drag-over');
+    });
+    aiPanel.addEventListener('drop', async e => {
+      if (!e.dataTransfer) return;
+      e.preventDefault();
+      e.stopPropagation();
+      aiInputBox.classList.remove('is-drag-over');
+      const files = [...(e.dataTransfer.files || [])];
+      if (!files.some(f => /^image\//i.test(f.type || '') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name || ''))) {
+        toast('AI 助手只支持拖入图片');
+        return;
+      }
+      try {
+        const added = await ai.addImageFiles(files);
+        toast(added ? '已添加 ' + added + ' 张图片' : '最多添加 3 张图片');
+      } catch (err) {
+        toast('图片读取失败：' + (err && err.message ? err.message : err));
+      }
+    });
+  }
+
+  /* ── AI 面板：左右拖动分割线调整宽度 ───────────────────── */
+  const aiPanelEl = $('#ai-panel');
+  const aiPanelResizer = $('#ai-resizer');
+  if (aiPanelEl && aiPanelResizer) {
+    const DEFAULT_AI_W = 560;
+    const MIN_AI_W = 360;
+    const maxAiW = () => Math.max(MIN_AI_W, Math.min(920, window.innerWidth - 40));
+    const clampAiW = w => Math.max(MIN_AI_W, Math.min(maxAiW(), Math.round(Number(w) || DEFAULT_AI_W)));
+    const applyAiWidth = (w, persist) => {
+      const next = clampAiW(w);
+      document.documentElement.style.setProperty('--ai-panel-w', next + 'px');
+      if (persist) store.set('aiPanelWidth', next);
+      return next;
+    };
+    applyAiWidth(store.get('aiPanelWidth') || DEFAULT_AI_W, false);
+
+    let aiDragX = 0;
+    let aiDragW = 0;
+    let aiDragging = false;
+    aiPanelResizer.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      aiDragging = true;
+      aiDragX = e.clientX;
+      aiDragW = aiPanelEl.getBoundingClientRect().width || aiPanelEl.offsetWidth || DEFAULT_AI_W;
+      try { aiPanelResizer.setPointerCapture(e.pointerId); } catch (_) {}
+      document.body.classList.add('is-resizing-ai-panel');
+      e.preventDefault();
+    });
+    aiPanelResizer.addEventListener('pointermove', e => {
+      if (!aiDragging) return;
+      applyAiWidth(aiDragW + (aiDragX - e.clientX), false);
+    });
+    const stopAiDrag = () => {
+      if (!aiDragging) return;
+      aiDragging = false;
+      document.body.classList.remove('is-resizing-ai-panel');
+      const current = aiPanelEl.getBoundingClientRect().width || aiPanelEl.offsetWidth || DEFAULT_AI_W;
+      store.set('aiPanelWidth', clampAiW(current));
+    };
+    aiPanelResizer.addEventListener('pointerup', stopAiDrag);
+    aiPanelResizer.addEventListener('pointercancel', stopAiDrag);
+    aiPanelResizer.addEventListener('lostpointercapture', stopAiDrag);
+    aiPanelResizer.addEventListener('dblclick', () => applyAiWidth(DEFAULT_AI_W, true));
+    aiPanelResizer.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const current = aiPanelEl.getBoundingClientRect().width || aiPanelEl.offsetWidth || DEFAULT_AI_W;
+      applyAiWidth(current + (e.key === 'ArrowLeft' ? 24 : -24), true);
+    });
+    window.addEventListener('resize', () => {
+      const current = aiPanelEl.getBoundingClientRect().width || aiPanelEl.offsetWidth || DEFAULT_AI_W;
+      if (current > maxAiW()) applyAiWidth(maxAiW(), true);
+    });
+  }
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
     onToast: message => toast(message),
     onRecordOpen: record => openRecordDetail(record),
+    onRecordAnalyzed: (record, analysis) => autoFileRecord(record, analysis),
+    onRecordLocate: record => locateRecordInNote(record),
     onRecordMenu: (event, record) => openRecordMenu(event, record),
     onRecordMistake: record => {
-      const snippet = RG.ai.mistakeSnippet(record);
+      const local = RG.ai.classifyLocally(record.question || '', record.answer || '');
+      const subject = record.subject || local.subject;
+      const points = (Array.isArray(record.knowledgePoints) && record.knowledgePoints.length)
+        ? record.knowledgePoints
+        : local.knowledgePoints;
+      const chosenTitle = record.targetTitle || '';
+      if (subject && subject !== '其他' && chosenTitle && !chosenTitle.includes(subject)) {
+        const filed = autoFileRecord(record, { subject, knowledgePoints: points }, true);
+        if (filed && filed.targetPath) {
+          ai.updateRecord(record.id, {
+            targetId: filed.targetId || null,
+            targetTitle: filed.targetTitle,
+            targetPath: filed.targetPath,
+            status: 'resolved',
+            resolvedAt: Date.now(),
+            subject,
+            knowledgePoints: points,
+            knowledgePoint: points[0] || ''
+          });
+          toast('已按学科自动改到《' + filed.targetTitle + '》');
+          return;
+        }
+      }
+      const snippet = RG.ai.mistakeSnippet(Object.assign({}, record, { subject, knowledgePoints: points }), { subject, knowledgePoints: points });
       let file = state.files.find(f => f.path === record.targetPath);
-      const questionKey = String(record.question || '').slice(0, 18);
-      if (file && questionKey && String(file.content || '').includes(questionKey)) {
+      const alreadyFiled = file && typeof RG.ai.mistakeContentHasQuestion === 'function'
+        && RG.ai.mistakeContentHasQuestion(file.content, record.question);
+      if (alreadyFiled) {
         toast('这条已经在《' + record.targetTitle + '》里，未重复写入');
         return;
       }
@@ -2545,12 +4081,15 @@
   $('#btn-plugin-menu').addEventListener('click', e => {
     e.stopPropagation();
     const menu = $('#plugin-menu');
-    const rect = e.currentTarget.getBoundingClientRect();
-    menu.hidden = !menu.hidden;
+    if (!menu) return;
+    const willOpen = menu.hidden;
+    renderPluginUI();
+    menu.hidden = !willOpen;
     if (!menu.hidden) {
-      menu.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+      const rect = e.currentTarget.getBoundingClientRect();
+      const width = menu.offsetWidth || 200;
+      menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + 'px';
       menu.style.top = (rect.bottom + 6) + 'px';
-      renderPluginUI();
     }
   });
   document.addEventListener('mousedown', e => {
@@ -2623,7 +4162,7 @@
     sortSelect.value = state.sortMode;
     sortSelect.addEventListener('change', () => {
       state.sortMode = sortSelect.value;
-      try { localStorage.setItem(SORT_KEY, state.sortMode); } catch (_) {}
+      try { store.set(SORT_KEY, state.sortMode); } catch (_) {}
       renderTree();
       toast('排序：' + sortSelect.options[sortSelect.selectedIndex].textContent);
     });
@@ -2640,7 +4179,13 @@
     loadDemo();
   }
   showView('note');
-  if (state.graph && state.graph.notes[0]) openNote(state.graph.notes[0].id);
+  if (state.graph && state.graph.notes[0]) {
+    const restoreTab = state.activeTab;
+    if (restoreTab && state.graph.notes.some(n => n.id === restoreTab)) openNote(restoreTab);
+    else openNote(state.graph.notes[0].id);
+  } else {
+    renderNoteTabs();
+  }
   try {
     const params = new URLSearchParams(location.search);
     const themeParam = params.get('theme');
@@ -2655,7 +4200,9 @@
     if (openTitle) openNoteByTitle(openTitle);
   } catch (_) {}
   applyAskMode('tutor');
-  ai.initRecords();
+  ai.initRecords().then(() => {
+    if (typeof migrateMistakeFolders === 'function') migrateMistakeFolders();
+  });
   pluginHost.boot();
   renderPluginUI();
   refreshNoteWidgets();
@@ -2663,9 +4210,10 @@
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
-  console.log('[Race-AiNote] ready');
+  window.__wenmoNotes = window.__raceAiNote; // 新名字别名；旧 API 名保留给测试与插件兼容
+  console.log('[问墨笔记] ready');
 })();

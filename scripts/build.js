@@ -5,6 +5,8 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+require('./build-app.js').writeApp();
+require('./build-ai.js').writeAi();
 
 let html = read('index.html');
 
@@ -22,10 +24,10 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
 
 const outDir = path.join(root, 'dist');
 fs.mkdirSync(outDir, { recursive: true });
-const outFile = path.join(outDir, 'Race-AiNote.html');
+const outFile = path.join(outDir, 'Wenmo-Notes.html');
 fs.writeFileSync(outFile, html, 'utf8');
 
 const kb = (Buffer.byteLength(html, 'utf8') / 1024).toFixed(1);
 const leftover = /(<link rel="stylesheet"|<script src=)/.test(html);
-console.log('构建完成: dist/Race-AiNote.html  ' + kb + ' KB' + (leftover ? '  ⚠ 仍有外部引用' : ''));
+console.log('构建完成: dist/Wenmo-Notes.html  ' + kb + ' KB' + (leftover ? '  ⚠ 仍有外部引用' : ''));
 process.exit(leftover ? 1 : 0);

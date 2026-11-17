@@ -89,3 +89,15 @@ test('网格索引覆盖所有节点', () => {
   for (const cell of grid.values()) count += cell.length;
   assert.equal(count, 3);
 });
+
+test('大图近似排斥：500 节点推进后仍为有限坐标', () => {
+  const nodes = Array.from({ length: 500 }, (_, i) => ({
+    id: 'n' + i,
+    x: (i % 25) * 40,
+    y: Math.floor(i / 25) * 40,
+    degree: i % 7
+  }));
+  const sim = physics.createSimulation({ nodes, links: [], settings: { alphaDecay: 0.999 } });
+  for (let i = 0; i < 8; i++) sim.tick();
+  assert.ok(nodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y)));
+});

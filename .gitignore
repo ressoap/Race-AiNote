@@ -6,6 +6,7 @@ dist/*.map
 # 凭据（严禁入库）
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.p12
@@ -28,3 +29,4 @@ dist/data/
 
 # Electron 打包产物（体积大，按需构建）
 dist/Race-AiNote-Electron/
+dist/Wenmo-Notes-Electron/

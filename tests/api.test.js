@@ -23,10 +23,17 @@ function startMockUpstream() {
         const hasAuth = Boolean(req.headers.authorization && req.headers.authorization.startsWith('Bearer '));
         res.writeHead(hasAuth ? 200 : 401, { 'Content-Type': 'application/json' });
         const sys = (payload.messages || []).find(m => m.role === 'system') || { content: '' };
+        if (sys.content.includes('错题归档助手')) {
+          res.end(JSON.stringify({ choices: [{ message: { content: '{"subject":"英语","knowledgePoints":["虚拟语气","从句"]}' } }] }));
+          return;
+        }
         const history = (payload.messages || []).filter(m => m.role !== 'system');
+        const last = history[history.length - 1] || {};
+        const imageCount = Array.isArray(last.content) ? last.content.filter(p => p.type === 'image_url').length : 0;
         const persona = sys.content.includes('学科老师') ? 'tutor' : 'notes';
+        const teacher = sys.content.includes('学生自定义老师性格') ? '｜老师性格=1' : '';
         res.end(JSON.stringify({
-          choices: [{ message: { content: '依据笔记回答：见 [[导数及其应用]]。模型=' + payload.model + '｜人设=' + persona + '｜消息数=' + history.length } }]
+          choices: [{ message: { content: '依据笔记回答：见 [[导数及其应用]]。模型=' + payload.model + '｜人设=' + persona + teacher + '｜消息数=' + history.length + '｜图片数=' + imageCount } }]
         }));
       });
       return;
@@ -85,6 +92,40 @@ test('代理服务：健康检查 / 模型列表 / 对话转发', async (t) => {
   }).then(r => r.json());
   assert.match(tutor.answer, /人设=tutor/);
   assert.match(tutor.answer, /消息数=3/);
+
+  const customTutor = await fetch('http://127.0.0.1:' + SERVE_PORT + '/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question: '用我喜欢的风格讲这道题',
+      context: '',
+      mode: 'tutor',
+      teacherPrompt: '【学生自定义老师性格】先反问我卡在哪一步，再一步步推导。'
+    })
+  }).then(r => r.json());
+  assert.match(customTutor.answer, /老师性格=1/);
+
+  const analyze = await fetch('http://127.0.0.1:' + SERVE_PORT + '/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: 'If I were you, I would apologize.', answer: '虚拟语气' })
+  }).then(r => r.json());
+  assert.equal(analyze.subject, '英语');
+  assert.deepEqual(analyze.knowledgePoints, ['虚拟语气', '从句']);
+  assert.equal(analyze.source, 'api');
+
+  const withImage = await fetch('http://127.0.0.1:' + SERVE_PORT + '/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question: '这张图里的题怎么做',
+      context: '【当前笔记】导数及其应用：导数表示切线斜率',
+      images: ['data:image/png;base64,AAAA'],
+      visionModel: 'mock-vision'
+    })
+  }).then(r => r.json());
+  assert.match(withImage.answer, /图片数=1/);
+  assert.match(withImage.answer, /模型=mock-vision/);
 });
 
 test('代理服务：未配置密钥时健康检查返回 503（前端据此降级）', async (t) => {

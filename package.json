@@ -1,23 +1,29 @@
 {
-  "name": "race-ainote",
+  "name": "wenmo-notes",
   "version": "0.1.0",
   "private": true,
-  "description": "零依赖 Obsidian 风格关系图谱 + 真实 Markdown 库解析（传智杯 AI 创新应用挑战赛）",
+  "description": "问墨笔记 · 会回答的本地 AI 笔记本（传智杯 AI 创新应用挑战赛）",
   "scripts": {
-    "test": "node --test",
-    "build": "node scripts/gen-demo.js && node scripts/build.js",
+    "pretest": "node scripts/build-app.js --check && node scripts/build-ai.js --check",
+    "test": "node --test tests/ai.test.js tests/api.test.js tests/cloud.test.js tests/markdown.test.js tests/physics.test.js tests/plugins.test.js tests/query.test.js tests/render.test.js tests/richtext.test.js tests/server.test.js tests/store.test.js tests/vault.test.js",
+    "build:app": "node scripts/build-app.js",
+    "build": "node scripts/build-app.js && node scripts/build-ai.js && node scripts/gen-demo.js && node scripts/build.js",
     "ai:organize": "node scripts/ai-organize.mjs",
+    "presmoke": "node scripts/build-app.js --check && node scripts/build-ai.js --check",
     "smoke": "node scripts/smoke.js && node scripts/smoke-dist.js",
     "demo": "node scripts/gen-demo.js",
     "serve": "node scripts/serve.mjs",
-    "desktop": "node scripts/desktop.js",
+    "desktop": "node scripts/build-app.js && node scripts/build-ai.js && node scripts/desktop.js",
     "build:exe": "node scripts/build-exe.js",
-    "build:electron": "node scripts/build-electron.js"
+    "build:electron": "node scripts/build-electron.js",
+    "build:ai": "node scripts/build-ai.js"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "jsdom": "^31.0.0"
+    "jsdom": "^31.0.0",
+    "postject": "^1.0.0-alpha.6",
+    "resedit": "^3.1.1"
   }
 }

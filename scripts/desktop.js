@@ -22,7 +22,7 @@ const PORT = Number(argOf('port', 4399));
 const URL_APP = 'http://127.0.0.1:' + PORT + '/';
 
 const BROWSER_CANDIDATES = [
-  process.env.RACE_BROWSER,
+  process.env.WENMO_BROWSER || process.env.RACE_BROWSER,
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -45,6 +45,7 @@ function profileDir() {
   const base = process.platform === 'win32'
     ? (process.env.LOCALAPPDATA || os.tmpdir())
     : path.join(os.homedir(), '.local', 'share');
+  // 保留旧 profile 目录名：浏览器 localStorage 里有用户的本地笔记与设置
   const dir = path.join(base, 'Race-AiNote', 'profile');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -68,7 +69,7 @@ function waitForServer(url, timeoutMs) {
 (async () => {
   const browser = findBrowser();
   if (!browser) {
-    console.error('没找到 Edge 或 Chrome。可以用环境变量 RACE_BROWSER 指定浏览器可执行文件路径。');
+    console.error('没找到 Edge 或 Chrome。可以用环境变量 WENMO_BROWSER 指定浏览器可执行文件路径（兼容旧名 RACE_BROWSER）。');
     process.exit(1);
   }
 

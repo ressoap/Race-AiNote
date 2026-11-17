@@ -22,4 +22,4 @@ jobs:
       - name: 冒烟测试（源码版 + 单文件版）
         run: npm run smoke
       - name: 确认产物存在
-        run: test -f dist/Race-AiNote.html
+        run: test -f dist/Wenmo-Notes.html

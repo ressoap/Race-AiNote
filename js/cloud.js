@@ -10,7 +10,22 @@
 (function (root) {
   'use strict';
 
-  const CONFIG_KEY = 'race-ainote:cloud';
+  const store = root.RG && root.RG.store;
+  const CONFIG_KEY = 'cloudConfig';
+  const LEGACY_CONFIG_KEY = 'race-ainote:cloud';
+
+  function storageGet(name, legacyKey) {
+    if (store) {
+      const value = store.get(name);
+      if (value != null) return value;
+    }
+    try { return localStorage.getItem(legacyKey); } catch (_) { return null; }
+  }
+
+  function storageSet(name, value, legacyKey) {
+    if (store) return store.set(name, value);
+    try { localStorage.setItem(legacyKey, value); return true; } catch (_) { return false; }
+  }
   const PROVIDERS = {
     github: { name: 'GitHub', official: true, needs: ['token', 'owner', 'repo', 'path'] },
     gitee: { name: 'Gitee', official: true, needs: ['token', 'owner', 'repo', 'path'] },
@@ -21,16 +36,16 @@
   function defaultConfig() {
     return {
       provider: 'github',
-      github: { token: '', owner: '', repo: '', branch: 'main', path: 'race-ainote-backup.json' },
-      gitee: { token: '', owner: '', repo: '', branch: 'master', path: 'race-ainote-backup.json' },
-      baidu: { accessToken: '', path: '/apps/race-ainote/backup.json' },
+      github: { token: '', owner: '', repo: '', branch: 'main', path: 'wenmo-notes-backup.json' },
+      gitee: { token: '', owner: '', repo: '', branch: 'master', path: 'wenmo-notes-backup.json' },
+      baidu: { accessToken: '', path: '/apps/wenmo-notes/backup.json' },
       lastSync: null
     };
   }
 
   function loadConfig() {
     try {
-      const raw = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+      const raw = JSON.parse(storageGet(CONFIG_KEY, LEGACY_CONFIG_KEY) || '{}');
       const base = defaultConfig();
       return {
         provider: raw.provider || base.provider,
@@ -45,7 +60,7 @@
   }
 
   function saveConfig(cfg) {
-    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (_) {}
+    try { storageSet(CONFIG_KEY, JSON.stringify(cfg), LEGACY_CONFIG_KEY); } catch (_) {}
   }
 
   /* ── 编码工具（浏览器与 Node 通用） ─────────────────────── */
@@ -66,7 +81,7 @@
   /** 备份包：包含所有笔记的 Markdown 原文 */
   function buildSnapshot(files, label) {
     return JSON.stringify({
-      app: 'Race-AiNote',
+      app: '问墨笔记',
       version: 1,
       savedAt: new Date().toISOString(),
       vault: label || '',
@@ -104,7 +119,7 @@
     async write(cfg, text, message) {
       const existing = await this.read(cfg);
       const body = {
-        message: message || 'chore: 更新 Race-AiNote 备份',
+        message: message || 'chore: 更新问墨笔记备份',
         content: toBase64Utf8(text),
         branch: cfg.branch || 'main'
       };
@@ -143,7 +158,7 @@
       const payload = {
         access_token: cfg.token,
         content: toBase64Utf8(text),
-        message: message || 'chore: 更新 Race-AiNote 备份',
+        message: message || 'chore: 更新问墨笔记备份',
         branch: cfg.branch || 'master'
       };
       if (existing) payload.sha = existing.sha;
@@ -206,7 +221,7 @@
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     const snapshot = buildSnapshot(files, label);
-    await driver.write(cfg[provider], snapshot, 'chore: Race-AiNote 备份 ' + new Date().toISOString().slice(0, 16));
+    await driver.write(cfg[provider], snapshot, 'chore: 问墨笔记备份 ' + new Date().toISOString().slice(0, 16));
     return { bytes: snapshot.length, at: Date.now() };
   }
 

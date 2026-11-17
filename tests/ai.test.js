@@ -89,3 +89,79 @@ test('示例库 50 篇全部走一遍格式整理，正文一个字都不能变'
   }
   assert.ok(checked >= 40);
 });
+
+test('英语题识别为英语，不能落回数学', () => {
+  const cases = [
+    'The report ______ by the end of next week. 选项：will have been finished / will be finished',
+    'If I ______ (be) you, I would apologize to her.',
+    'The passage is mainly about ______. 这道阅读题怎么选？'
+  ];
+  for (const q of cases) {
+    assert.equal(ai.guessSubject(q).subject, '英语', q);
+    assert.equal(ai.classifyLocally(q, '').subject, '英语', q);
+  }
+  const c = ai.classifyLocally('If I ______ (be) you, I would apologize to her.', '虚拟语气用 were');
+  assert.equal(c.subject, '英语');
+  assert.ok(c.knowledgePoints.some(x => /虚拟语气/.test(x)), JSON.stringify(c.knowledgePoints));
+});
+
+test('数据结构与信号系统不会串到数学/英语', () => {
+  assert.equal(ai.guessSubject('哈希表容量 11，H(k)=k mod 11，用线性探测，查找 2 要几次？').subject, '数据结构');
+  assert.equal(ai.guessSubject('已知 x(t)=e^{-2t}u(t)，求拉普拉斯变换及收敛域。').subject, '信号与系统');
+  const ds = ai.classifyLocally('数组归并排序的递归过程和复杂度', '');
+  assert.equal(ds.subject, '数据结构');
+  assert.ok(ds.knowledgePoints.some(x => /归并排序|复杂度/.test(x)));
+  const sig = ai.classifyLocally('系统 y(t)=x(t-1)+2x(t+1)，判断线性、时不变、因果、稳定。', '');
+  assert.equal(sig.subject, '信号与系统');
+});
+
+test('错题片段标题包含知识点与日期', () => {
+  const record = { question: 'If I were you.', answer: '虚拟语气', at: Date.now() };
+  const snippet = ai.mistakeSnippet(record, { subject: '英语', knowledgePoints: ['虚拟语气', '条件句'] });
+  assert.match(snippet, /^## 虚拟语气 · \d{4}-\d{2}-\d{2}$/m);
+  assert.match(snippet, /\*\*学科\*\*：英语/);
+  assert.match(snippet, /\*\*知识点\*\*：虚拟语气、条件句/);
+});
+
+test('错题片段完整保留原题目：不截断、不压平换行', () => {
+  const longLine = '长题干'.repeat(300);
+  const question = '第一问：求导并写出单调区间。\n第二问：若 f(x)≥0 恒成立，求 a 的取值范围。\n' + longLine;
+  const snippet = ai.mistakeSnippet({ question, answer: '解析正文', at: Date.now() }, { subject: '数学', knowledgePoints: ['导数与函数单调性'] });
+  assert.match(snippet, /### 原题目/);
+  assert.ok(snippet.includes('> 第一问：求导并写出单调区间。'));
+  assert.ok(snippet.includes('> 第二问：若 f(x)≥0 恒成立，求 a 的取值范围。'));
+  assert.ok(snippet.includes('> ' + longLine));
+  assert.equal(ai.mistakeContentHasQuestion(snippet, question), true);
+});
+
+test('旧版压平成一行的原题也能被识别为已记录', () => {
+  const question = '已知函数 f(x)=x²。\n求 f(2)。';
+  const old = '**问**：' + question.replace(/\n+/g, ' ');
+  assert.equal(ai.mistakeContentHasQuestion(old, question), true);
+  assert.equal(ai.mistakeContentHasQuestion(old, '另一道完全不同的题'), false);
+});
+
+test('老师性格：自填讲课方式和四维滑杆都进入系统提示词', () => {
+  const prompt = ai.buildTeacherPrompt({
+    teacherProfile: '讲题前先反问我卡在哪一步，不要直接给答案。',
+    teacherTraits: { lively: 10, detail: 90, guidance: 20, correction: 80 }
+  });
+  assert.match(prompt, /讲题前先反问我卡在哪一步/);
+  assert.ok(prompt.includes('语气（活泼 ↔ 严厉）：10/100'));
+  assert.ok(prompt.includes('讲解（简洁 ↔ 详细）：90/100'));
+  assert.ok(prompt.includes('引导（启发 ↔ 直接）：20/100'));
+  assert.ok(prompt.includes('纠错（鼓励 ↔ 严格）：80/100'));
+  assert.match(prompt, /多提问引导/);
+  assert.match(prompt, /严格指出错误/);
+  const normalized = ai.normalizeTeacherTraits({ lively: 999, detail: -5 });
+  assert.equal(normalized.lively, 100);
+  assert.equal(normalized.detail, 0);
+  assert.equal(normalized.guidance, ai.DEFAULT_TEACHER_TRAITS.guidance);
+  assert.equal(normalized.correction, ai.DEFAULT_TEACHER_TRAITS.correction);
+});
+
+test('泛问靠答案文本也能识别数学，而不是落入其他', () => {
+  const c = ai.classifyLocally('这题怎么做', '求导得 f(x)=2x，属于导数与函数单调性问题。');
+  assert.equal(c.subject, '数学');
+  assert.ok(c.knowledgePoints.some(x => /导数|函数/.test(x)));
+});

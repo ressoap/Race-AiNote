@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Race-AiNote · AI 笔记</title>
+<meta name="application-name" content="问墨笔记">
+<meta name="description" content="问墨笔记 · 会回答的本地 AI 笔记本">
+<title>问墨笔记 · AI 笔记</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -30,6 +33,9 @@
         <button id="btn-new-folder" class="icon-btn" title="新建文件夹">
           <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M12 11.5v5M9.5 14h5"/></svg>
         </button>
+        <button id="btn-photo" class="icon-btn" title="拍题入库（需要视觉模型）">
+          <svg viewBox="0 0 24 24"><path d="M4 8h4l1.5-2h5L16 8h4v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+        </button>
         <button id="btn-clear" class="icon-btn" title="清空当前库">
           <svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M7 7l1 12h8l1-12"/></svg>
         </button>
@@ -47,12 +53,18 @@
     <div class="sidebar-search">
       <input id="file-search" type="search" placeholder="搜索文件…" autocomplete="off" spellcheck="false">
     </div>
+    <div class="sidebar-tree-actions">
+      <button id="btn-collapse-all" class="ghost-btn" title="收起所有文件夹">全部收起</button>
+      <button id="btn-expand-all" class="ghost-btn" title="展开所有文件夹">全部展开</button>
+    </div>
     <div id="file-tree" class="file-tree" role="tree" aria-label="文件树"></div>
     <input id="folder-input" type="file" multiple webkitdirectory directory hidden>
+    <input id="photo-input" type="file" accept="image/*" hidden>
     <div class="sidebar-foot">
       <span id="vault-stats">—</span>
       <span class="hint">拖入 .md 文件夹也可载入</span>
     </div>
+    <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="拖动调整左侧栏宽度" aria-valuemin="190" aria-valuemax="520" aria-valuenow="268" tabindex="0" title="左右拖动调整左侧栏宽度，双击恢复默认"></div>
   </aside>
 
   <!-- ── 右侧：主工作区 ───────────────────────────────────── -->
@@ -61,6 +73,9 @@
       <div class="seg" role="group" aria-label="视图">
         <button id="view-note" class="seg-btn is-active">笔记</button>
         <button id="view-graph" class="seg-btn">关系图谱</button>
+      </div>
+      <div id="note-tab-strip" class="note-tab-strip" hidden>
+        <div id="note-tabs" class="note-tabs" role="tablist" aria-label="已打开的笔记"></div>
       </div>
       <div id="graph-tools" class="graph-tools" hidden>
         <div class="seg small" role="group" aria-label="图谱模式">
@@ -83,13 +98,16 @@
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M19.8 7.5l-1.7 1M5.9 15.5l-1.7 1"/></svg>
         </button>
       </div>
+      <div class="toolbar-spacer"></div>
+      <button id="btn-theme" class="icon-btn" title="切换明暗主题">
+        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+      </button>
       <div id="plugin-buttons" class="plugin-buttons"></div>
       <button id="btn-plugin-menu" class="icon-btn" title="插件命令">
         <svg viewBox="0 0 24 24"><path d="M9 4.5v3M15 4.5v3"/><rect x="6" y="7.5" width="12" height="9" rx="2"/><path d="M12 16.5v3"/></svg>
       </button>
-      <div class="toolbar-spacer"></div>
-      <button id="btn-theme" class="icon-btn" title="切换明暗主题">
-        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+      <button id="btn-teacher" class="icon-btn" title="老师性格">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.3"/><path d="M4.5 20c1.6-3.4 4.2-5.1 7.5-5.1s5.9 1.7 7.5 5.1"/><path d="M18.6 3.5l.6 1.3 1.3.6-1.3.6-.6 1.3-.6-1.3-1.3-.6 1.3-.6z"/></svg>
       </button>
       <button id="btn-prefs" class="icon-btn" title="设置（AI / 数据）">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -145,7 +163,7 @@
           <canvas id="graph-canvas"></canvas>
           <div id="graph-empty" class="empty-state" hidden>
             <p class="empty-title">还没有载入任何笔记</p>
-            <p class="empty-desc">点左上角文件夹图标选择 Obsidian 库目录，或把 .md 文件夹拖进来。</p>
+            <p class="empty-desc">点左上角文件夹图标选择 Markdown 库目录，或把 .md 文件夹拖进来。</p>
           </div>
           <div id="drop-hint" class="drop-hint" hidden>松开鼠标：载入这个文件夹</div>
           <div id="settings-panel" class="settings-panel" hidden>
@@ -196,10 +214,11 @@
 
       <!-- AI 问答面板（特色功能） -->
       <aside id="ai-panel" class="ai-panel">
+        <div id="ai-resizer" class="ai-resizer" role="separator" aria-orientation="vertical" aria-label="拖动调整 AI 助手宽度" tabindex="0" title="左右拖动调整 AI 面板宽度，双击恢复默认"></div>
         <header class="ai-head">
           <div class="ai-title">
             <span class="ai-dot"></span>
-            <span>AI 笔记助手</span>
+            <span>问墨 AI 助手</span>
           </div>
           <div class="ai-head-actions">
             <button id="btn-ai-clear" class="icon-btn small" title="清空当前对话">×</button>
@@ -209,18 +228,50 @@
         <div class="ai-modeswitch" role="group" aria-label="问答模式">
           <button id="ask-tutor" class="seg-btn is-active" data-ask="tutor">答疑老师</button>
           <button id="ask-notes" class="seg-btn" data-ask="notes">笔记问答</button>
+          <div id="record-subtab" class="record-subtab" hidden>
+            <span class="record-subtab-dot"></span>
+            <span id="record-subtab-title" class="record-subtab-title">问题记录</span>
+            <button id="record-subtab-close" class="record-subtab-close" title="关闭记录">×</button>
+          </div>
         </div>
         <div id="ai-mode" class="ai-mode" title="当前连接模式">本地分析模式</div>
 
         <div class="ai-body">
           <div class="ai-chatcol">
             <div id="ai-log" class="ai-log"></div>
+            <section id="record-inline" class="record-inline" hidden>
+              <header class="record-inline-head">
+                <div class="record-inline-meta">
+                  <span id="record-inline-mode" class="record-inline-mode">答疑老师</span>
+                  <span id="record-inline-time" class="record-inline-time"></span>
+                </div>
+                <span id="record-inline-status" class="record-status"></span>
+              </header>
+              <div class="record-inline-scroll">
+                <h3 class="record-sub">提问</h3>
+                <div id="record-inline-question" class="record-question"></div>
+                <h3 class="record-sub">回答</h3>
+                <div id="record-inline-answer" class="record-answer md-body"></div>
+              </div>
+              <footer class="record-actions">
+                <button id="record-inline-locate" class="ghost-btn tiny" hidden>定位错题笔记</button>
+                <button id="record-inline-close" class="ghost-btn tiny">返回对话</button>
+                <button id="record-inline-ask" class="ghost-btn tiny">继续询问</button>
+                <button id="record-inline-copy" class="ghost-btn tiny">复制问答</button>
+                <button id="record-inline-toggle" class="primary-btn tiny">记入错题本</button>
+              </footer>
+            </section>
             <div class="ai-suggest" id="ai-suggest"></div>
             <div class="ai-input">
-              <label class="ai-option"><input type="checkbox" id="ai-use-note" checked> 带上当前笔记</label>
+              <div id="ai-input-resizer" class="ai-input-resizer" role="separator" aria-orientation="horizontal" aria-label="拖动调整输入框高度" tabindex="0" title="上下拖动调整输入框高度，双击恢复默认"><span></span></div>
+              <label class="ai-option"><input type="checkbox" id="ai-use-note"> 带上当前笔记</label>
+              <div id="ai-attachments" class="ai-attachments" hidden></div>
               <div class="ai-input-row">
-                <textarea id="ai-text" rows="2" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
-                <button id="ai-send" class="primary-btn">发送</button>
+                <textarea id="ai-text" rows="4" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
+                <div class="ai-send-stack">
+                  <button id="ai-stop" class="ghost-btn ai-stop-btn" hidden title="停止当前回答">停止</button>
+                  <button id="ai-send" class="primary-btn">发送</button>
+                </div>
               </div>
             </div>
           </div>
@@ -230,6 +281,9 @@
               <span id="ai-records-count" class="ai-records-count">0</span>
             </header>
             <input id="record-search" class="record-search" type="search" placeholder="搜索问题…" autocomplete="off" spellcheck="false">
+            <select id="record-date-filter" class="record-date-filter" aria-label="按日期筛选问题记录" title="按日期快速定位问题记录">
+              <option value="">全部日期</option>
+            </select>
             <div id="ai-record-list" class="ai-record-list"></div>
           </aside>
         </div>
@@ -282,6 +336,8 @@
           <button id="prefs-models" class="ghost-btn" title="从服务商拉取可用模型列表">拉取模型</button>
         </div>
       </div>
+      <label class="prefs-row"><span>视觉模型</span><input id="prefs-vision-model" type="text" list="prefs-model-list" placeholder="如 gpt-4o / qwen-vl-max；留空则用上面的模型"></label>
+      <p class="prefs-tip">图片消息会优先使用视觉模型；只有支持图片输入的模型才能识别图片内容。</p>
       <datalist id="prefs-model-list"></datalist>
       <p id="prefs-model-status" class="prefs-status"></p>
       <label class="prefs-row" id="prefs-key-row"><span>API Key</span><input id="prefs-key" type="password" placeholder="sk-…（只保存在本机浏览器）" autocomplete="off"></label>
@@ -349,6 +405,67 @@
     </section>
   </div>
 </div>
+<div id="teacher-modal" class="modal" hidden>
+  <div class="modal-card teacher-card">
+    <header>
+      <div>
+        <h2>老师性格</h2>
+        <p class="modal-path">像 AGENTS.md 一样约束答疑老师的讲课方式</p>
+      </div>
+      <button id="teacher-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+
+    <div class="teacher-layout">
+      <div class="teacher-editor">
+        <section class="prefs-section">
+          <h3>讲课方式约束</h3>
+          <p class="prefs-tip">写下你希望的讲题方式；也可以直接载入本地 .md / .txt。只影响「答疑老师」模式，不会改你的笔记。</p>
+          <textarea id="teacher-profile" class="teacher-profile" rows="10" maxlength="6000" spellcheck="false" placeholder="例如：讲题前先问我卡在哪一步，不要直接报答案；每道题先写考点，再给思路，最后一步步推导；我算错时先指出错在哪一行；条件不足时先追问，不要自行假设。"></textarea>
+          <div class="teacher-profile-meta"><span>讲课方式 / 题目讲解约束</span><span id="teacher-count">0 / 6000</span></div>
+          <div class="teacher-actions">
+            <button id="teacher-import" class="ghost-btn tiny" type="button">载入 .md</button>
+            <input id="teacher-file" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+            <button id="teacher-template" class="ghost-btn tiny" type="button">用示例</button>
+            <button id="teacher-clear" class="ghost-btn tiny" type="button">清空</button>
+          </div>
+        </section>
+      </div>
+      <div class="teacher-controls">
+        <section class="prefs-section">
+          <h3>性格滑杆</h3>
+          <div class="teacher-traits">
+            <div class="teacher-trait">
+              <div class="teacher-trait-name">语气</div>
+              <div class="teacher-trait-head"><span>活泼</span><output id="teacher-lively-value">50</output><span>严厉</span></div>
+              <input id="teacher-lively" type="range" min="0" max="100" step="1" value="50" aria-label="讲课语气：活泼到严厉">
+            </div>
+            <div class="teacher-trait">
+              <div class="teacher-trait-name">讲解</div>
+              <div class="teacher-trait-head"><span>简洁</span><output id="teacher-detail-value">60</output><span>详细</span></div>
+              <input id="teacher-detail" type="range" min="0" max="100" step="1" value="60" aria-label="讲解密度：简洁到详细">
+            </div>
+            <div class="teacher-trait">
+              <div class="teacher-trait-name">引导</div>
+              <div class="teacher-trait-head"><span>启发</span><output id="teacher-guidance-value">45</output><span>直接</span></div>
+              <input id="teacher-guidance" type="range" min="0" max="100" step="1" value="45" aria-label="引导方式：启发到直接给答案">
+            </div>
+            <div class="teacher-trait">
+              <div class="teacher-trait-name">纠错</div>
+              <div class="teacher-trait-head"><span>鼓励</span><output id="teacher-correction-value">55</output><span>严格</span></div>
+              <input id="teacher-correction" type="range" min="0" max="100" step="1" value="55" aria-label="纠错语气：鼓励到严格">
+            </div>
+          </div>
+          <p class="prefs-tip teacher-traits-tip">0 = 更靠左，100 = 更靠右；接入模型后生效。</p>
+          <div class="prefs-actions">
+            <button id="teacher-reset" class="ghost-btn tiny" type="button">恢复默认</button>
+            <button id="teacher-save" class="primary-btn tiny" type="button">保存性格</button>
+          </div>
+        </section>
+      </div>
+    </div>
+    <p id="teacher-status" class="prefs-status teacher-status"></p>
+  </div>
+</div>
 <div id="plugin-menu" class="tree-menu plugin-menu" hidden></div>
 
 <div id="sel-toolbar" class="sel-toolbar" hidden>
@@ -373,6 +490,17 @@
   </div>
 </div>
 
+<div id="graph-picker" class="modal" hidden>
+  <div class="modal-card link-picker-card">
+    <header>
+      <div><h2 id="graph-picker-title">选择文件夹</h2><p id="graph-picker-desc" class="modal-path">选择目标位置</p></div>
+      <button id="graph-picker-close" class="icon-btn small" title="关闭">×</button>
+    </header>
+    <input id="graph-picker-search" class="link-picker-search" type="search" placeholder="搜索…" autocomplete="off">
+    <div id="graph-picker-list" class="link-picker-list"></div>
+  </div>
+</div>
+
 <div id="tree-menu" class="tree-menu" hidden>
   <button data-act="new-note">新建笔记</button>
   <button data-act="new-folder">新建文件夹</button>
@@ -385,28 +513,46 @@
   <button data-act="ask-again">继续询问</button>
   <button data-act="delete" class="is-danger">删除此条记录</button>
 </div>
-
-<div id="record-modal" class="modal" hidden>
-  <div class="modal-card record-card">
-    <header>
-      <div>
-        <h2 id="record-title">问题记录</h2>
-        <p class="modal-path" id="record-meta">—</p>
+<div id="graph-menu" class="graph-menu" hidden>
+  <div class="graph-menu-head">
+    <span class="graph-menu-dot"></span>
+    <span id="graph-menu-title" class="graph-menu-title">—</span>
+    <span class="graph-menu-grip">•••</span>
+  </div>
+  <div class="graph-menu-group">
+    <button type="button" data-act="open-tab"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="16" rx="2"/><path d="M16 4h4v4M20 4l-6 6"/></svg><span>在新标签页中打开</span></button>
+    <button type="button" data-act="open-window"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="M8 6V4h12v12h-2"/></svg><span>在新窗口中打开</span></button>
+  </div>
+  <div class="graph-menu-group">
+    <button type="button" data-act="move"><svg viewBox="0 0 24 24"><path d="M3.5 7h6l2 2h9v9h-17z"/><path d="M9 13h6M13 11l2 2-2 2"/></svg><span>将文件移动到...</span></button>
+    <button type="button" data-act="favorite"><svg viewBox="0 0 24 24"><path d="M7 4h10v16l-5-3-5 3z"/></svg><span id="graph-menu-fav-label">收藏</span></button>
+    <button type="button" data-act="merge"><svg viewBox="0 0 24 24"><path d="M4 5h6l4 4h6M4 19h6l4-4h6"/><path d="M17 7l3 2-3 2M17 13l3 2-3 2"/></svg><span>将该笔记合并到...</span></button>
+  </div>
+  <div class="graph-menu-group">
+    <div class="graph-menu-subwrap">
+      <button type="button" data-submenu="copy" class="has-sub"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V5h10"/></svg><span>复制路径</span><span class="graph-menu-arrow">›</span></button>
+      <div class="graph-submenu">
+        <button type="button" data-act="copy-relative">复制相对路径</button>
+        <button type="button" data-act="copy-wikilink">复制 Wiki 链接</button>
+        <button type="button" data-act="copy-title">复制笔记标题</button>
       </div>
-      <button id="record-close" class="icon-btn small" title="关闭">×</button>
-    </header>
-    <div class="record-status" id="record-status"></div>
-    <div class="md-body record-body">
-      <h3 class="record-sub">提问</h3>
-      <div id="record-question" class="record-question"></div>
-      <h3 class="record-sub">回答</h3>
-      <div id="record-answer" class="record-answer"></div>
     </div>
-    <footer class="record-actions">
-      <button id="record-ask" class="ghost-btn">继续询问</button>
-      <button id="record-copy" class="ghost-btn">复制问答</button>
-      <button id="record-toggle" class="primary-btn">记入错题本</button>
-    </footer>
+    <div class="graph-menu-subwrap">
+      <button type="button" data-submenu="open" class="has-sub"><svg viewBox="0 0 24 24"><path d="M5 4h9l4 4v12H5z"/><path d="M14 4v5h5"/><path d="M9 14h6M9 17h4"/></svg><span>打开当前笔记的...</span><span class="graph-menu-arrow">›</span></button>
+      <div class="graph-submenu">
+        <button type="button" data-act="reveal-folder">展开所在文件夹</button>
+        <button type="button" data-act="show-backlinks">查看反向链接</button>
+        <button type="button" data-act="focus-graph">在图谱中定位</button>
+      </div>
+    </div>
+  </div>
+  <div class="graph-menu-group">
+    <button type="button" data-act="default-app"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>使用默认应用打开</span></button>
+    <button type="button" data-act="explorer"><svg viewBox="0 0 24 24"><path d="M3.5 7h6l2 2h9v9h-17z"/><path d="M3.5 11h17"/></svg><span>在系统资源管理器中显示</span></button>
+    <button type="button" data-act="show-tree"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>在文件列表中显示当前文件</span></button>
+  </div>
+  <div class="graph-menu-group graph-menu-danger">
+    <button type="button" data-act="delete" class="is-danger"><svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12"/></svg><span>删除文件</span></button>
   </div>
 </div>
 
@@ -441,6 +587,7 @@
 <script src="js/render.js"></script>
 <script src="js/markdown.js"></script>
 <script src="js/richtext.js"></script>
+<script src="js/store.js"></script>
 <script src="js/cloud.js"></script>
 <script src="js/plugins.js"></script>
 <script src="js/sample-plugins.js"></script>

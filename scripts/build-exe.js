@@ -1,64 +1,56 @@
 #!/usr/bin/env node
 /* ============================================================
    build-exe.js — 用 Node 官方 SEA 把应用打成单文件 Windows exe
-   产物：dist/Race-AiNote.exe（内置 Node 运行时 + 单文件页面）
+   产物：dist/Wenmo-Notes.exe（内置 Node 运行时 + 单文件页面）
    不需要目标机器装 Node，也不需要 Electron。
    用法：node scripts/build-exe.js
    ============================================================ */
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { execFileSync } = require('child_process');
+const { patchExeIcon } = require('./patch-exe-icon.js');
+const { setGuiSubsystem } = require('./patch-exe-subsystem.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT, 'dist');
 const WORK = path.join(ROOT, '_tmp', 'sea');
-const HTML = fs.readFileSync(path.join(OUT_DIR, 'Race-AiNote.html'), 'utf8');
+const HTML = fs.readFileSync(path.join(OUT_DIR, 'Wenmo-Notes.html'), 'utf8');
+const CORE = fs.readFileSync(path.join(ROOT, 'scripts', 'server-core.cjs'), 'utf8');
+const ICON = path.join(ROOT, 'assets', 'wenmo-icon.ico');
 
 fs.mkdirSync(WORK, { recursive: true });
 
-/* 1) 把 ESM 版 serve.mjs 改写成 SEA 可用的一段 CJS 代码 */
-let server = fs.readFileSync(path.join(ROOT, 'scripts', 'serve.mjs'), 'utf8');
-server = server
-  .replace(/^#!.*\n/, '')
-  .replace(/^import .*$/gm, '')
-  .replace(
-    'const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), \'..\');',
-    'const ROOT = APP_DIR;'
-  );
-server = server
-  .replace("const DATA_DIR = path.join(ROOT, 'data');", "const DATA_DIR = path.join(EXE_DIR, 'data');");
-
-/* 去掉 serve.mjs 自带的 server.listen，改由 exe 入口按端口重试启动 */
-const listenIdx = server.indexOf('server.listen(PORT, () => {');
-if (listenIdx >= 0) {
-  const endIdx = server.indexOf('});', listenIdx);
-  server = server.slice(0, listenIdx) + server.slice(endIdx + 3);
-}
-
-const entry = [
-  '/* 由 scripts/build-exe.js 自动生成，请勿手改 */',
-  "const http = require('node:http');",
-  "const fs = require('node:fs');",
-  "const path = require('node:path');",
+/* argOf 必须在 boot 之前可用：把启动器包裹进函数，避免变量提前求值 */
+const wrapped = [
+  '/* 由 scripts/build-exe.js 自动生成：server-core.cjs + SEA 启动器，请勿手改 */',
+  CORE,
+  '',
+  '/* ===== 以下为 SEA 启动器 ===== */',
   "const os = require('node:os');",
-  "const crypto = require('node:crypto');",
   "const { spawn } = require('node:child_process');",
-  '',
-  '/* 应用运行时目录：exe 同级 data 放记录，页面本身写进临时目录 */',
+  "const startCore = module.exports.createAppServer;",
+  "const loadEnv = module.exports.loadDotEnv;",
+  'function argOf(name, def) {',
+  '  const argv = process.argv.slice(2);',
+  "  const i = argv.indexOf('--' + name);",
+  '  return i >= 0 && argv[i + 1] ? argv[i + 1] : def;',
+  '}',
   'const EXE_DIR = path.dirname(process.execPath);',
-  "const APP_DIR = path.join(os.tmpdir(), 'Race-AiNote-app');",
+  "const APP_DIR = path.join(os.tmpdir(), 'Wenmo-Notes-app');",
   'fs.mkdirSync(APP_DIR, { recursive: true });',
-  'fs.mkdirSync(path.join(EXE_DIR, \'data\'), { recursive: true });',
-  '',
-  '/* 页面本体：单文件 HTML 内嵌在 exe 里 */',
-  "const PAGE_HTML = Buffer.from('" + Buffer.from(HTML, 'utf8').toString('base64') + "', 'base64').toString('utf8');",
+  "fs.mkdirSync(path.join(EXE_DIR, 'data'), { recursive: true });",
+  'const PAGE_HTML = Buffer.from(' + JSON.stringify(Buffer.from(HTML, 'utf8').toString('base64')) + ", 'base64').toString('utf8');",
   "fs.writeFileSync(path.join(APP_DIR, 'index.html'), PAGE_HTML, 'utf8');",
+  'loadEnv(EXE_DIR);',
   '',
-  '/* 启动浏览器应用窗口 */',
+  "const LOG_FILE = path.join(EXE_DIR, 'data', 'startup.log');",
+  'function logLine(text) {',
+  '  try { fs.appendFileSync(LOG_FILE, new Date().toISOString() + " " + text + "\\n"); } catch (_) {}',
+  '}',
+  '',
   'function launchWindow(port) {',
   '  const candidates = [',
-  '    process.env.RACE_BROWSER,',
+  '    process.env.WENMO_BROWSER || process.env.RACE_BROWSER,',
   "    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',",
   "    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',",
   "    'C:/Program Files/Google/Chrome/Application/chrome.exe',",
@@ -66,10 +58,15 @@ const entry = [
   '  ].filter(Boolean);',
   '  const browser = candidates.find(p => { try { return fs.existsSync(p); } catch (_) { return false; } });',
   '  if (!browser) {',
-  "    console.log('未找到 Edge/Chrome，请手动打开 http://127.0.0.1:' + port);",
+  "    console.log('未找到 Edge/Chrome，尝试用系统默认浏览器打开 http://127.0.0.1:' + port);",
+  "    logLine('未找到 Edge/Chrome，尝试默认浏览器: http://127.0.0.1:' + port);",
+  '    try {',
+  "      const fallback = spawn('cmd.exe', ['/c', 'start', '', 'http://127.0.0.1:' + port + '/'], { stdio: 'ignore', windowsHide: true, detached: true });",
+  '      fallback.unref();',
+  '    } catch (_) {}',
   '    return null;',
   '  }',
-  '  const profile = path.join(EXE_DIR, \'profile\');',
+  "  const profile = process.env.WENMO_PROFILE_DIR || path.join(process.env.LOCALAPPDATA || os.homedir(), 'Wenmo-Notes', 'browser-profile');",
   '  fs.mkdirSync(profile, { recursive: true });',
   '  return spawn(browser, [',
   "    '--app=http://127.0.0.1:' + port + '/',",
@@ -78,40 +75,32 @@ const entry = [
   "    '--no-first-run',",
   "    '--no-default-browser-check',",
   "    '--disable-features=Translate,MediaRouter'",
-  '  ], { stdio: \'ignore\' });',
+  "  ], { stdio: 'ignore', windowsHide: true });",
   '}',
   '',
-  '/* ===== 以下为 serve.mjs 的服务器实现（构建时内联） ===== */',
-  server,
-  '',
-  '/* ===== 启动：先用默认端口，占用则自动换端口 ===== */',
   'function boot(port, attempt) {',
-  '  const handler = server.listeners ? null : null;',
-  '  try {',
-  '    server.listen(port, () => {',
-  "      console.log('Race-AiNote 已启动: http://127.0.0.1:' + port);",
-  "      console.log(API_KEY ? '模型模式：' + MODEL : 'AI 本地分析模式（未配置 COMMAND_CODE_API_KEY）');",
-  "      const win = (process.argv.includes('--no-window') || process.env.RACE_NO_WINDOW) ? null : launchWindow(port);",
-  '      if (win) win.on(\'exit\', () => { try { server.close(); } catch (_) {} process.exit(0); });',
-  '    });',
-  '    server.on(\'error\', err => {',
-  "      if (err && err.code === 'EADDRINUSE' && attempt < 20) boot(port + 1, attempt + 1);",
-  '      else { console.error(err); process.exit(1); }',
-  '    });',
-  '  } catch (err) {',
-  '    console.error(err);',
-  '    process.exit(1);',
-  '  }',
+  "  const app = startCore({ root: APP_DIR, dataDir: path.join(EXE_DIR, 'data') });",
+  "  app.server.on('error', err => {",
+  "    if (err && err.code === 'EADDRINUSE' && attempt < 20) boot(port + 1, attempt + 1);",
+  "    else { console.error(err); logLine('服务启动失败: ' + (err && err.stack ? err.stack : err)); process.exit(1); }",
+  '  });',
+  "  app.server.listen(port, '127.0.0.1', () => {",
+  "    const modeText = app.config.apiKey ? ('模型模式：' + app.config.model) : 'AI 本地分析模式（未配置 COMMAND_CODE_API_KEY）';",
+  "    console.log('问墨笔记 已启动: http://127.0.0.1:' + port);",
+  '    console.log(modeText);',
+  "    logLine('问墨笔记 已启动: http://127.0.0.1:' + port + ' | ' + modeText);",
+  "    const win = (process.argv.includes('--no-window') || process.env.WENMO_NO_WINDOW || process.env.RACE_NO_WINDOW) ? null : launchWindow(port);",
+  "    if (win) win.on('exit', () => { try { app.server.close(); } catch (_) {} process.exit(0); });",
+  '  });',
   '}',
   '',
-  'boot(Number(argOf(\'port\', process.env.PORT || 4399)), 0);',
+  "boot(Number(argOf('port', process.env.PORT || 4399)), 0);",
   ''
 ].join('\n');
 
-fs.writeFileSync(path.join(WORK, 'entry.js'), entry, 'utf8');
+fs.writeFileSync(path.join(WORK, 'entry.js'), wrapped, 'utf8');
 console.log('1/4 生成入口脚本 entry.js');
 
-/* 2) 生成 SEA 配置并打包 */
 const seaConfig = {
   main: path.join(WORK, 'entry.js'),
   output: path.join(WORK, 'app.blob'),
@@ -123,13 +112,28 @@ fs.writeFileSync(path.join(WORK, 'sea-config.json'), JSON.stringify(seaConfig, n
 execFileSync(process.execPath, ['--experimental-sea-config', path.join(WORK, 'sea-config.json')], { stdio: 'inherit' });
 console.log('2/4 生成 SEA blob');
 
-/* 3) 复制 node 可执行文件作为宿主 */
-const exePath = path.join(OUT_DIR, 'Race-AiNote.exe');
-fs.copyFileSync(process.execPath, exePath);
-console.log('3/4 复制 Node 运行时 → dist/Race-AiNote.exe');
+const outIndex = process.argv.indexOf('--out');
+let exePath = outIndex >= 0 && process.argv[outIndex + 1]
+  ? path.resolve(process.argv[outIndex + 1])
+  : path.join(OUT_DIR, 'Wenmo-Notes.exe');
+fs.mkdirSync(path.dirname(exePath), { recursive: true });
+try {
+  fs.copyFileSync(process.execPath, exePath);
+} catch (err) {
+  const locked = err && (err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES');
+  if (outIndex >= 0 || !locked) throw err;
+  const fallback = path.join(OUT_DIR, 'Wenmo-Notes-NoConsole.exe');
+  console.warn('旧版 Wenmo-Notes.exe 正在运行，改为生成无控制台版本：' + fallback);
+  exePath = fallback;
+  fs.copyFileSync(process.execPath, exePath);
+}
+console.log('3/4 复制 Node 运行时 → ' + exePath);
 
-/* 4) 注入 blob */
 const postject = path.join(ROOT, 'node_modules', 'postject', 'dist', 'cli.js');
+if (!fs.existsSync(postject)) {
+  console.error('缺少 postject。请先运行 npm install（它已在 devDependencies 中）。');
+  process.exit(1);
+}
 const fuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 execFileSync(process.execPath, [
   postject,
@@ -139,7 +143,20 @@ execFileSync(process.execPath, [
   '--sentinel-fuse', fuse
 ], { stdio: 'inherit' });
 console.log('4/4 注入完成');
+try {
+  if (patchExeIcon(exePath, ICON)) console.log('   已写入应用图标: assets/wenmo-icon.ico');
+} catch (err) {
+  console.warn('   图标写入失败（不影响程序运行）: ' + (err && err.message ? err.message : err));
+}
+try {
+  const subsystem = setGuiSubsystem(exePath);
+  console.log(subsystem.changed
+    ? '   已切换为 GUI 子系统：双击不再弹黑色控制台窗口'
+    : '   已是 GUI 子系统：双击不弹控制台');
+} catch (err) {
+  console.warn('   控制台窗口隐藏失败（不影响程序运行）: ' + (err && err.message ? err.message : err));
+}
 
 const size = (fs.statSync(exePath).size / 1024 / 1024).toFixed(1);
-console.log('✅ 构建完成: dist/Race-AiNote.exe（' + size + ' MB，内置 Node 运行时）');
+console.log('✅ 构建完成: ' + path.relative(ROOT, exePath) + '（' + size + ' MB，内置 Node 运行时）');
 console.log('   双击即可启动；记录存在 exe 同级的 data/ 目录');

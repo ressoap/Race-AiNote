@@ -9,12 +9,27 @@
 (function (root) {
   'use strict';
 
-  const STORAGE_KEY = 'race-ainote:plugins';
+  const store = root.RG && root.RG.store;
+  const STORAGE_KEY = 'plugins';
+  const LEGACY_STORAGE_KEY = 'race-ainote:plugins';
+
+  function storageGet(name, legacyKey) {
+    if (store) {
+      const value = store.get(name);
+      if (value != null) return value;
+    }
+    try { return localStorage.getItem(legacyKey); } catch (_) { return null; }
+  }
+
+  function storageSet(name, value, legacyKey) {
+    if (store) return store.set(name, value);
+    try { localStorage.setItem(legacyKey, value); return true; } catch (_) { return false; }
+  }
   const API_VERSION = 1;
 
   function loadAll() {
     try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const raw = JSON.parse(storageGet(STORAGE_KEY, LEGACY_STORAGE_KEY) || '[]');
       return Array.isArray(raw) ? raw : [];
     } catch (_) {
       return [];
@@ -22,7 +37,7 @@
   }
 
   function saveAll(list) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (_) {}
+    try { storageSet(STORAGE_KEY, JSON.stringify(list), LEGACY_STORAGE_KEY); } catch (_) {}
   }
 
   function normalizeId(input) {
@@ -106,15 +121,15 @@
         storage: {
           get(key) {
             try {
-              const raw = JSON.parse(localStorage.getItem('race-ainote:plugin:' + pid) || '{}');
+              const raw = JSON.parse(storageGet('pluginData:' + pid, 'race-ainote:plugin:' + pid) || '{}');
               return raw[key];
             } catch (_) { return undefined; }
           },
           set(key, value) {
             try {
-              const raw = JSON.parse(localStorage.getItem('race-ainote:plugin:' + pid) || '{}');
+              const raw = JSON.parse(storageGet('pluginData:' + pid, 'race-ainote:plugin:' + pid) || '{}');
               raw[key] = value;
-              localStorage.setItem('race-ainote:plugin:' + pid, JSON.stringify(raw));
+              storageSet('pluginData:' + pid, JSON.stringify(raw), 'race-ainote:plugin:' + pid);
             } catch (_) {}
           }
         }

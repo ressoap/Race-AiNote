@@ -1,6 +1,6 @@
 const fs=require('fs'), path=require('path');
 const { JSDOM } = require('jsdom');
-const html = fs.readFileSync(path.resolve(__dirname,'..','dist','Race-AiNote.html'),'utf8');
+const html = fs.readFileSync(path.resolve(__dirname,'..','dist','Wenmo-Notes.html'),'utf8');
 const errors=[];
 const dom = new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'https://local.test/',beforeParse(w){
   w.HTMLCanvasElement.prototype.getContext=function(){return new Proxy({},{get(t,k){if(k==='measureText')return()=>({width:10});return()=>{};},set(){return true;}})};

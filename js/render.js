@@ -211,7 +211,9 @@
       ctx.globalAlpha = alpha;
       ctx.font = '500 ' + fontSize + 'px ui-sans-serif, system-ui, "Segoe UI", sans-serif';
       ctx.fillStyle = emphasis ? colors.text : colors.text;
-      const label = node.title.length > 16 ? node.title.slice(0, 15) + '…' : node.title;
+      const favorite = opts.favoritePaths && typeof opts.favoritePaths.has === 'function' && opts.favoritePaths.has(node.path);
+      const rawLabel = (favorite ? '★ ' : '') + node.title;
+      const label = rawLabel.length > 16 ? rawLabel.slice(0, 15) + '…' : rawLabel;
       // 标签避让：与已绘制标签重叠则跳过，避免文字糊成一团
       const textWidth = ctx.measureText(label).width / scale;
       const box = {
