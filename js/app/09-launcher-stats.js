@@ -28,28 +28,50 @@
     return name.replace(/.md$/i, '');
   }
 
+  const STATS_UNFILED = '__unfiled__';
+
   /** 按 targetPath 归组，给下拉框列出「可以单独分析的那几篇笔记」 */
   function statsScopeOptions(records) {
     const map = new Map();
+    let unfiled = 0;
     for (const rec of records) {
       const path = String((rec && rec.targetPath) || '').trim();
-      if (!path) continue;
+      if (!path) {
+        unfiled += 1;
+        continue;
+      }
       if (!map.has(path)) map.set(path, { path: path, label: statsScopeLabel(rec), count: 0 });
       map.get(path).count += 1;
     }
-    return [...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh-Hans-CN'));
+    // 库里已经存在的错题本笔记即使还没记录，也列出来，方便按笔记看
+    for (const file of (state.files || [])) {
+      const filePath = String((file && file.path) || '');
+      if (filePath.indexOf('10-错题本/') !== 0 || !/\.md$/i.test(filePath)) continue;
+      if (map.has(filePath)) continue;
+      map.set(filePath, { path: filePath, label: statsScopeLabel({ targetPath: filePath }), count: 0 });
+    }
+    const items = [...map.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh-Hans-CN'));
+    return { items: items, unfiled: unfiled };
   }
 
   function renderStatsScopeSelect(records, totalRecords) {
     const select = $('#stats-scope-select');
     if (!select) return;
-    const options = statsScopeOptions(records);
-    if (statsScopePath && !options.some(o => o.path === statsScopePath)) statsScopePath = '';
+    const built = statsScopeOptions(records);
+    const options = built.items;
+    const known = (path) => path === '' || path === STATS_UNFILED || options.some(o => o.path === path);
+    if (!known(statsScopePath)) statsScopePath = '';
     select.innerHTML = '';
     const all = document.createElement('option');
     all.value = '';
     all.textContent = '全部错题（总分析） · ' + totalRecords + ' 道';
     select.appendChild(all);
+    if (built.unfiled) {
+      const unfiled = document.createElement('option');
+      unfiled.value = STATS_UNFILED;
+      unfiled.textContent = '未归档错题 · ' + built.unfiled + ' 道';
+      select.appendChild(unfiled);
+    }
     for (const item of options) {
       const opt = document.createElement('option');
       opt.value = item.path;
@@ -57,7 +79,7 @@
       select.appendChild(opt);
     }
     select.value = statsScopePath;
-    select.disabled = options.length === 0;
+    select.disabled = false;
   }
 
   function initStatsScope() {
@@ -145,8 +167,11 @@
     const solvedEl = $('#stats-solved');
 
     if (scopeEl) {
-      scopeEl.textContent = statsScopePath
-        ? (statsScopeLabel({ targetPath: statsScopePath, targetTitle: '' }) + ' · ' + (state.vaultLabel || '当前笔记库'))
+      const scopedName = statsScopePath === STATS_UNFILED
+        ? '未归档'
+        : (statsScopePath ? statsScopeLabel({ targetPath: statsScopePath, targetTitle: '' }) : '');
+      scopeEl.textContent = scopedName
+        ? (scopedName + ' · ' + (state.vaultLabel || '当前笔记库'))
         : (state.vaultLabel || '当前笔记库');
     }
     pie.innerHTML = '';
@@ -158,14 +183,21 @@
     if (filterEl && filterEl.parentElement) filterEl.parentElement.hidden = false;
     initStatsScope();
     renderStatsScopeSelect(allRecords, allRecords.length);
-    const records = statsScopePath
-      ? allRecords.filter(r => String((r && r.targetPath) || '') === statsScopePath)
-      : allRecords;
-    if (!allRecords.length) {
+    const records = !statsScopePath
+      ? allRecords
+      : (statsScopePath === STATS_UNFILED
+        ? allRecords.filter(r => !String((r && r.targetPath) || '').trim())
+        : allRecords.filter(r => String((r && r.targetPath) || '') === statsScopePath));
+    if (!records.length) {
       if (chart) chart.hidden = true;
       if (legend) legend.hidden = true;
       if (pointsEl) pointsEl.hidden = true;
-      if (emptyEl) emptyEl.hidden = false;
+      if (emptyEl) {
+        emptyEl.hidden = false;
+        emptyEl.textContent = !allRecords.length
+          ? '还没有错题记录。去「答疑老师」问一道题，答完会自动归档并统计。'
+          : '这个范围还没有错题记录，换个笔记试试。';
+      }
       if (solvedEl) solvedEl.textContent = '';
       if (totalEl) totalEl.textContent = '0';
       return;
