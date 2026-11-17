@@ -1980,6 +1980,9 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         <button id="btn-new-folder" class="icon-btn" title="新建文件夹">
           <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M12 11.5v5M9.5 14h5"/></svg>
         </button>
+        <button id="btn-photo" class="icon-btn" title="拍题入库（需要视觉模型）">
+          <svg viewBox="0 0 24 24"><path d="M4 8h4l1.5-2h5L16 8h4v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+        </button>
         <button id="btn-clear" class="icon-btn" title="清空当前库">
           <svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M7 7l1 12h8l1-12"/></svg>
         </button>
@@ -2003,6 +2006,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     </div>
     <div id="file-tree" class="file-tree" role="tree" aria-label="文件树"></div>
     <input id="folder-input" type="file" multiple webkitdirectory directory hidden>
+    <input id="photo-input" type="file" accept="image/*" hidden>
     <div class="sidebar-foot">
       <span id="vault-stats">—</span>
       <span class="hint">拖入 .md 文件夹也可载入</span>
@@ -3274,25 +3278,79 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       const nodeSize = cfg('nodeSize');
       const bounds = cfg('bounds');
 
-      // 1) 两两排斥（带软化项，避免近距离爆炸）
-      for (let i = 0; i < nodes.length; i++) {
-        const a = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-          const b = nodes[j];
-          let dx = a.x - b.x;
-          let dy = a.y - b.y;
-          let d2 = dx * dx + dy * dy;
-          if (d2 < 0.01) {
-            dx = hash01(a.id + b.id) - 0.5;
-            dy = hash01(b.id + a.id) - 0.5;
-            d2 = dx * dx + dy * dy + 0.01;
+      // 1) 排斥力：小图精确两两；大图用 3×3 网格近似 + 远端质心近似
+      if (nodes.length > 360) {
+        const cellSize = Math.max(96, Math.sqrt(repel) * 3.4);
+        const { grid } = buildGrid(nodes, cellSize);
+        let gx = 0;
+        let gy = 0;
+        for (const n of nodes) { gx += n.x; gy += n.y; }
+        gx /= nodes.length;
+        gy /= nodes.length;
+        for (const a of nodes) {
+          const cx = Math.floor(a.x / cellSize);
+          const cy = Math.floor(a.y / cellSize);
+          let nearCount = 0;
+          for (let ox = -1; ox <= 1; ox++) {
+            for (let oy = -1; oy <= 1; oy++) {
+              const cell = grid.get((cx + ox) + ',' + (cy + oy));
+              if (!cell) continue;
+              for (const b of cell) {
+                if (b === a) continue;
+                let dx = a.x - b.x;
+                let dy = a.y - b.y;
+                let d2 = dx * dx + dy * dy;
+                if (d2 < 0.01) {
+                  dx = hash01(a.id + b.id) - 0.5;
+                  dy = hash01(b.id + a.id) - 0.5;
+                  d2 = dx * dx + dy * dy + 0.01;
+                }
+                const d = Math.sqrt(d2);
+                const f = (repel * alpha) / (d2 + 240) * 0.5;
+                const ux = dx / d;
+                const uy = dy / d;
+                a.vx += ux * f; a.vy += uy * f;
+                b.vx -= ux * f; b.vy -= uy * f;
+                nearCount += 1;
+              }
+            }
           }
-          const d = Math.sqrt(d2);
-          const f = (repel * alpha) / (d2 + 240);
-          const ux = dx / d;
-          const uy = dy / d;
-          a.vx += ux * f; a.vy += uy * f;
-          b.vx -= ux * f; b.vy -= uy * f;
+          const farCount = nodes.length - 1 - nearCount;
+          if (farCount > 0) {
+            let dx = a.x - gx;
+            let dy = a.y - gy;
+            let d2 = dx * dx + dy * dy;
+            if (d2 < 0.01) {
+              dx = hash01(a.id + ':far') - 0.5;
+              dy = hash01('far:' + a.id) - 0.5;
+              d2 = dx * dx + dy * dy + 0.01;
+            }
+            const d = Math.sqrt(d2);
+            const f = (repel * alpha * farCount) / (d2 + 240);
+            a.vx += (dx / d) * f;
+            a.vy += (dy / d) * f;
+          }
+        }
+      } else {
+        for (let i = 0; i < nodes.length; i++) {
+          const a = nodes[i];
+          for (let j = i + 1; j < nodes.length; j++) {
+            const b = nodes[j];
+            let dx = a.x - b.x;
+            let dy = a.y - b.y;
+            let d2 = dx * dx + dy * dy;
+            if (d2 < 0.01) {
+              dx = hash01(a.id + b.id) - 0.5;
+              dy = hash01(b.id + a.id) - 0.5;
+              d2 = dx * dx + dy * dy + 0.01;
+            }
+            const d = Math.sqrt(d2);
+            const f = (repel * alpha) / (d2 + 240);
+            const ux = dx / d;
+            const uy = dy / d;
+            a.vx += ux * f; a.vy += uy * f;
+            b.vx -= ux * f; b.vy -= uy * f;
+          }
         }
       }
 
@@ -5499,6 +5557,30 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       return images;
     }
 
+    /** 拍题入库：只识别题目，不回答；返回图片中的题目纯文本。 */
+    async function recognizeImage(file) {
+      if (state.mode === 'local') {
+        return { ok: false, error: '拍题入库需要接入支持视觉的模型，请先在设置里配置视觉模型' };
+      }
+      let dataUrl = '';
+      try {
+        dataUrl = await readImageDataUrl(file);
+      } catch (err) {
+        return { ok: false, error: '图片读取失败：' + (err && err.message ? err.message : err) };
+      }
+      const prompt = '请识别这张图片中的题目，只原样输出题干、选项、公式和已知条件，不要解答，不要总结，不要改写。若图片里有多道题，用单独一行 --- 分隔。';
+      try {
+        const result = state.mode === 'direct'
+          ? await callDirect(Object.assign({}, state.config, { askMode: 'notes' }), prompt, '', [dataUrl], undefined, '')
+          : await callProxy(prompt, '', 'notes', [], [dataUrl], state.config.visionModel, undefined, '');
+        const text = String((result && result.answer) || '').trim();
+        if (!text) return { ok: false, error: '模型没有识别到题目文字' };
+        return { ok: true, text: text };
+      } catch (err) {
+        return { ok: false, error: '识别失败：' + (err && err.message ? err.message : err) };
+      }
+    }
+
     // 两个独立会话：答疑老师 / 笔记问答，互不共享历史
     const state = { threads: { tutor: [], notes: [] }, mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
 
@@ -6447,7 +6529,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       greet();
     }
 
-    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
@@ -6559,6 +6641,9 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     openTabs: [],
     activeTab: null,
     favorites: new Set(),
+    rootHandle: null,
+    diskContents: new Map(),
+    diskReadOnly: false,
     drag: null,
     pan: null,
     pointerDown: null,
@@ -6685,6 +6770,111 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     window.addEventListener('resize', syncSidebarWidth);
   }
 
+  /* ── 本地文件夹读写同步（File System Access API） ───────── */
+  let diskSyncTimer = 0;
+  let diskSyncBusy = false;
+  let diskSyncPending = false;
+
+  function resetDiskBinding() {
+    state.rootHandle = null;
+    state.diskContents = new Map();
+    state.diskReadOnly = false;
+    clearTimeout(diskSyncTimer);
+    diskSyncTimer = 0;
+  }
+
+  function bindDiskRoot(handle, files) {
+    state.rootHandle = handle || null;
+    state.diskReadOnly = false;
+    state.diskContents = new Map();
+    for (const file of files || []) {
+      if (vault.MD_EXT.test(String(file.path || ''))) {
+        state.diskContents.set(file.path, String(file.content || ''));
+      }
+    }
+    return Boolean(handle);
+  }
+
+  async function diskDirForPath(root, path, create) {
+    const parts = String(path || '').split('/').filter(Boolean);
+    const name = parts.pop();
+    if (!name) throw new Error('空文件路径');
+    let dir = root;
+    for (const part of parts) {
+      dir = await dir.getDirectoryHandle(part, { create: Boolean(create) });
+    }
+    return { dir, name };
+  }
+
+  async function writeDiskFile(root, path, content) {
+    const target = await diskDirForPath(root, path, true);
+    const fileHandle = await target.dir.getFileHandle(target.name, { create: true });
+    const writable = await fileHandle.createWritable();
+    try {
+      await writable.write(String(content == null ? '' : content));
+    } finally {
+      await writable.close();
+    }
+  }
+
+  async function removeDiskFile(root, path) {
+    const target = await diskDirForPath(root, path, false);
+    await target.dir.removeEntry(target.name);
+  }
+
+  async function syncDiskNow() {
+    if (!state.rootHandle || state.diskReadOnly) return { wrote: 0, removed: 0, skipped: true };
+    if (diskSyncBusy) {
+      diskSyncPending = true;
+      return { wrote: 0, removed: 0, pending: true };
+    }
+    diskSyncBusy = true;
+    diskSyncPending = false;
+    const root = state.rootHandle;
+    const next = new Map();
+    for (const file of state.files) {
+      if (vault.MD_EXT.test(String(file.path || ''))) next.set(file.path, String(file.content || ''));
+    }
+    let wrote = 0;
+    let removed = 0;
+    let failed = false;
+    try {
+      for (const [path, content] of next) {
+        if (state.diskContents.get(path) === content) continue;
+        try {
+          await writeDiskFile(root, path, content);
+          wrote += 1;
+        } catch (err) {
+          failed = true;
+        }
+      }
+      for (const path of [...state.diskContents.keys()]) {
+        if (next.has(path)) continue;
+        try {
+          await removeDiskFile(root, path);
+          removed += 1;
+        } catch (err) {
+          failed = true;
+        }
+      }
+      if (!failed) state.diskContents = next;
+      if (wrote || removed) toast('已写回磁盘：' + wrote + ' 个修改，' + removed + ' 个删除');
+      return { wrote, removed, failed };
+    } finally {
+      diskSyncBusy = false;
+      if (diskSyncPending) {
+        diskSyncPending = false;
+        setTimeout(() => { syncDiskNow(); }, 0);
+      }
+    }
+  }
+
+  function scheduleDiskSync() {
+    if (!state.rootHandle || state.diskReadOnly) return;
+    clearTimeout(diskSyncTimer);
+    diskSyncTimer = setTimeout(() => { diskSyncNow(); }, 350);
+  }
+
   function toast(message) {
     const el = $('#toast');
     el.textContent = message;
@@ -6706,6 +6896,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   /* ── 载入数据 ───────────────────────────────────────────── */
   function loadFiles(files, label) {
+    if (typeof resetDiskBinding === 'function') resetDiskBinding();
     state.files = files;
     state.vaultLabel = label || '本地库';
     state.graph = vault.buildVault(files);
@@ -6757,12 +6948,27 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   async function openViaPicker() {
     if (!window.showDirectoryPicker) return openViaInput();
     try {
-      const dir = await window.showDirectoryPicker({ mode: 'read' });
+      let dir = null;
+      let writable = false;
+      try {
+        dir = await window.showDirectoryPicker({ mode: 'readwrite' });
+        writable = true;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        dir = await window.showDirectoryPicker({ mode: 'read' });
+      }
+      if (writable && dir.queryPermission) {
+        try {
+          const permission = await dir.queryPermission({ mode: 'readwrite' });
+          writable = permission === 'granted';
+        } catch (_) {}
+      }
       const files = [];
       await walkDirectory(dir, '', files);
       if (!files.length) return toast('这个文件夹里没有 Markdown 笔记');
       loadFiles(files, dir.name);
-      toast('已读取 ' + dir.name + '：' + files.length + ' 个文件');
+      if (writable && typeof bindDiskRoot === 'function') bindDiskRoot(dir, files);
+      toast('已读取 ' + dir.name + '：' + files.length + ' 个文件' + (writable ? '，修改会写回磁盘' : '（只读）'));
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       toast('读取失败：' + (err && err.message ? err.message : err));
@@ -7254,6 +7460,95 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 /* ── 笔记视图（主视图） ─────────────────────────────────── */
   let currentNoteId = null;
   let editing = false;
+
+  /* ── 拍题入库：图片识别成题目笔记 ───────────────────────── */
+  const photoBtn = $('#btn-photo');
+  const photoInput = $('#photo-input');
+  let photoBusy = false;
+
+  function photoStamp(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate())
+      + '-' + pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds());
+  }
+
+  async function importPhoto(file) {
+    if (photoBusy || !file) return;
+    if (!/^image\//i.test(file.type || '') && !/\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name || '')) {
+      return toast('请选择图片文件');
+    }
+    photoBusy = true;
+    if (photoBtn) photoBtn.disabled = true;
+    try {
+      toast('正在识别题目…');
+      const result = await ai.recognizeImage(file);
+      if (!result || !result.ok) {
+        toast(result && result.error ? result.error : '识别失败');
+        return;
+      }
+      const text = String(result.text || '').trim();
+      if (!text) {
+        toast('没有识别到题目，换一张更清晰的图片试试');
+        return;
+      }
+      const analysis = RG.ai.classifyLocally(text, '');
+      const subject = RG.ai.normalizeSubject(analysis.subject || '其他');
+      const points = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+      const now = new Date();
+      const title = subject + '拍题-' + photoStamp(now);
+      const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';
+      const path = uniquePath('10-错题本/' + safeSubject, title);
+      const quoted = text.replace(/\r\n/g, '\n').split('\n').map(line => line ? '> ' + line : '>').join('\n');
+      const content = [
+        '---',
+        'title: ' + title,
+        'tags: [错题, 拍题, ' + subject + ']',
+        '---',
+        '',
+        '# ' + title,
+        '',
+        '## 原题目',
+        '',
+        quoted,
+        '',
+        '## 学科与知识点',
+        '',
+        '- 学科：' + subject,
+        '- 知识点：' + (points.length ? points.join('、') : '待整理'),
+        '',
+        '## 我的错因',
+        '',
+        '（待补充）',
+        '',
+        '## 正确思路',
+        '',
+        '（待补充）',
+        ''
+      ].join('\n');
+      state.files.push({ path: path, content: content });
+      refreshVault('已拍题入库：' + title);
+      const node = state.graph && state.graph.notes.find(n => n.path === path);
+      if (node) openNote(node.id);
+      showView('note');
+      toast('已拍题入库，可继续向 AI 追问');
+    } catch (err) {
+      toast('拍题失败：' + (err && err.message ? err.message : err));
+    } finally {
+      photoBusy = false;
+      if (photoBtn) photoBtn.disabled = false;
+    }
+  }
+
+  if (photoBtn && photoInput) {
+    photoBtn.addEventListener('click', () => {
+      if (!photoBusy) photoInput.click();
+    });
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files && photoInput.files[0];
+      photoInput.value = '';
+      if (file) await importPhoto(file);
+    });
+  }
 
   /* ── 关系图谱右键菜单 ───────────────────────────────────── */
   const graphMenu = $('#graph-menu');
@@ -8268,6 +8563,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         files: state.files
       });
     } catch (_) {}
+    if (typeof scheduleDiskSync === 'function') scheduleDiskSync();
   }
 
   function loadLocalVault() {
@@ -10469,7 +10765,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
-    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
