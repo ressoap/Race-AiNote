@@ -2329,7 +2329,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
           <option value="github">GitHub（官方 Contents API）</option>
           <option value="gitee">Gitee（官方 OpenAPI v5）</option>
           <option value="baidu">百度网盘（官方 xpan 开放接口）</option>
-          <option value="quark">夸克网盘（官方无开放接口·不支持）</option>
         </select>
       </label>
       <div id="cloud-fields"></div>
@@ -4253,7 +4252,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
    · GitHub  Contents API  https://docs.github.com/rest/repos/contents
    · Gitee   OpenAPI v5    https://gitee.com/api/v5/swagger
    · 百度网盘 开放平台 xpan https://pan.baidu.com/union/doc
-   夸克网盘目前没有对第三方开放的官方接口，故不提供。
    凭据只存在本机 localStorage，绝不进入仓库。
    ============================================================ */
 (function (root) {
@@ -4278,8 +4276,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   const PROVIDERS = {
     github: { name: 'GitHub', official: true, needs: ['token', 'owner', 'repo', 'path'] },
     gitee: { name: 'Gitee', official: true, needs: ['token', 'owner', 'repo', 'path'] },
-    baidu: { name: '百度网盘', official: true, needs: ['accessToken', 'path'] },
-    quark: { name: '夸克网盘', official: false, needs: [] }
+    baidu: { name: '百度网盘', official: true, needs: ['accessToken', 'path'] }
   };
 
   function defaultConfig() {
@@ -4458,7 +4455,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   async function testConnection(cfg) {
     const provider = cfg.provider;
-    if (provider === 'quark') throw new Error('夸克网盘没有官方开放接口，暂不支持');
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     return driver.test(cfg[provider]);
@@ -4466,7 +4462,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   async function backup(cfg, files, label) {
     const provider = cfg.provider;
-    if (provider === 'quark') throw new Error('夸克网盘没有官方开放接口，暂不支持');
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     const snapshot = buildSnapshot(files, label);
@@ -4476,7 +4471,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   async function restore(cfg) {
     const provider = cfg.provider;
-    if (provider === 'quark') throw new Error('夸克网盘没有官方开放接口，暂不支持');
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     const data = await driver.read(cfg[provider]);
@@ -9560,15 +9554,13 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     baidu: [
       { key: 'accessToken', label: 'access_token', type: 'password', placeholder: '百度网盘开放平台授权后获得' },
       { key: 'path', label: '网盘路径', type: 'text', placeholder: '/apps/wenmo-notes/backup.json' }
-    ],
-    quark: []
+    ]
   };
 
   const CLOUD_HINTS = {
     github: '用官方 Contents API：填一个有 repo 权限的 token 即可，备份文件会作为普通提交写进仓库。',
     gitee: '用官方 OpenAPI v5：私人令牌需要 projects 权限，更新时自动带上文件 sha。',
-    baidu: '用官方 xpan 开放接口：需要先在百度网盘开放平台创建应用并完成 OAuth 授权拿到 access_token；上传经本地服务中转，避开浏览器跨域。',
-    quark: '夸克网盘没有对第三方开放的官方接口（市面上的方案都是逆向 cookie），按「有官方接口才做」的原则这里不做。'
+    baidu: '用官方 xpan 开放接口：需要先在百度网盘开放平台创建应用并完成 OAuth 授权拿到 access_token；上传经本地服务中转，避开浏览器跨域。'
   };
 
   function renderCloudFields() {
@@ -9592,11 +9584,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       box.appendChild(label);
     }
     $('#cloud-hint').textContent = CLOUD_HINTS[provider] || '';
-    const disabled = provider === 'quark';
-    for (const id of ['cloud-test', 'cloud-backup', 'cloud-restore']) {
-      $('#' + id).disabled = disabled;
-      $('#' + id).style.opacity = disabled ? 0.5 : 1;
-    }
     if (cloudConfig.lastSync) {
       const when = new Date(cloudConfig.lastSync.at);
       $('#cloud-status').textContent = '上次备份：' + when.toLocaleString('zh-CN') + '（' + cloudConfig.lastSync.provider + '）';

@@ -4,7 +4,6 @@
    · GitHub  Contents API  https://docs.github.com/rest/repos/contents
    · Gitee   OpenAPI v5    https://gitee.com/api/v5/swagger
    · 百度网盘 开放平台 xpan https://pan.baidu.com/union/doc
-   夸克网盘目前没有对第三方开放的官方接口，故不提供。
    凭据只存在本机 localStorage，绝不进入仓库。
    ============================================================ */
 (function (root) {
@@ -29,8 +28,7 @@
   const PROVIDERS = {
     github: { name: 'GitHub', official: true, needs: ['token', 'owner', 'repo', 'path'] },
     gitee: { name: 'Gitee', official: true, needs: ['token', 'owner', 'repo', 'path'] },
-    baidu: { name: '百度网盘', official: true, needs: ['accessToken', 'path'] },
-    quark: { name: '夸克网盘', official: false, needs: [] }
+    baidu: { name: '百度网盘', official: true, needs: ['accessToken', 'path'] }
   };
 
   function defaultConfig() {
@@ -209,7 +207,6 @@
 
   async function testConnection(cfg) {
     const provider = cfg.provider;
-    if (provider === 'quark') throw new Error('夸克网盘没有官方开放接口，暂不支持');
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     return driver.test(cfg[provider]);
@@ -217,7 +214,6 @@
 
   async function backup(cfg, files, label) {
     const provider = cfg.provider;
-    if (provider === 'quark') throw new Error('夸克网盘没有官方开放接口，暂不支持');
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     const snapshot = buildSnapshot(files, label);
@@ -227,7 +223,6 @@
 
   async function restore(cfg) {
     const provider = cfg.provider;
-    if (provider === 'quark') throw new Error('夸克网盘没有官方开放接口，暂不支持');
     const driver = DRIVERS[provider];
     if (!driver) throw new Error('未知的云盘类型');
     const data = await driver.read(cfg[provider]);

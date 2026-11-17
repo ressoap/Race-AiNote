@@ -14,6 +14,10 @@ global.localStorage = dom.window.localStorage;
 require(path.join(root, 'js', 'cloud.js'));
 const cloud = global.RG.cloud;
 
+test('云同步只保留有官方开放接口的提供方', () => {
+  assert.deepEqual(Object.keys(cloud.PROVIDERS).sort(), ['baidu', 'gitee', 'github']);
+});
+
 /* 简易 GitHub / Gitee 兼容 mock：内存里存一个文件 */
 function startMock() {
   const store = new Map();
@@ -64,13 +68,6 @@ test('备份包：非法内容给出明确报错', () => {
 test('base64 往返：中文与 emoji 都不丢', () => {
   const text = '导数 📘 f(x)=x²';
   assert.equal(cloud.fromBase64Utf8(cloud.toBase64Utf8(text)), text);
-});
-
-test('夸克网盘：官方无接口，直接拒绝而不是假装能用', async () => {
-  const cfg = { provider: 'quark', quark: {} };
-  await assert.rejects(() => cloud.testConnection(cfg), /没有官方开放接口/);
-  await assert.rejects(() => cloud.backup(cfg, [], 'x'), /没有官方开放接口/);
-  await assert.rejects(() => cloud.restore(cfg), /没有官方开放接口/);
 });
 
 test('GitHub 驱动：首次创建、再次更新带 sha、能读回内容', async (t) => {

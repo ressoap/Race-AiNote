@@ -3005,15 +3005,13 @@
     baidu: [
       { key: 'accessToken', label: 'access_token', type: 'password', placeholder: '百度网盘开放平台授权后获得' },
       { key: 'path', label: '网盘路径', type: 'text', placeholder: '/apps/wenmo-notes/backup.json' }
-    ],
-    quark: []
+    ]
   };
 
   const CLOUD_HINTS = {
     github: '用官方 Contents API：填一个有 repo 权限的 token 即可，备份文件会作为普通提交写进仓库。',
     gitee: '用官方 OpenAPI v5：私人令牌需要 projects 权限，更新时自动带上文件 sha。',
-    baidu: '用官方 xpan 开放接口：需要先在百度网盘开放平台创建应用并完成 OAuth 授权拿到 access_token；上传经本地服务中转，避开浏览器跨域。',
-    quark: '夸克网盘没有对第三方开放的官方接口（市面上的方案都是逆向 cookie），按「有官方接口才做」的原则这里不做。'
+    baidu: '用官方 xpan 开放接口：需要先在百度网盘开放平台创建应用并完成 OAuth 授权拿到 access_token；上传经本地服务中转，避开浏览器跨域。'
   };
 
   function renderCloudFields() {
@@ -3037,11 +3035,6 @@
       box.appendChild(label);
     }
     $('#cloud-hint').textContent = CLOUD_HINTS[provider] || '';
-    const disabled = provider === 'quark';
-    for (const id of ['cloud-test', 'cloud-backup', 'cloud-restore']) {
-      $('#' + id).disabled = disabled;
-      $('#' + id).style.opacity = disabled ? 0.5 : 1;
-    }
     if (cloudConfig.lastSync) {
       const when = new Date(cloudConfig.lastSync.at);
       $('#cloud-status').textContent = '上次备份：' + when.toLocaleString('zh-CN') + '（' + cloudConfig.lastSync.provider + '）';

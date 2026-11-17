@@ -409,7 +409,6 @@ Wenmo-Notes/
 | GitHub | Contents API（`/repos/{owner}/{repo}/contents/{path}`） | ✅ 支持 |
 | Gitee | OpenAPI v5（同名 contents 接口，带 sha 更新） | ✅ 支持 |
 | 百度网盘 | xpan 开放接口（precreate → superfile2 → create，经本地服务中转避开跨域） | ✅ 支持（需 access_token） |
-| 夸克网盘 | 官方没有对第三方开放的接口 | ❌ 不做 |
 
 ### 怎么用
 
