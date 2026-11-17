@@ -17,6 +17,7 @@ git remote -v
 ```
 
 > 远程仓库需先在 Gitee / GitHub 网页端改名为 wenmo-notes；改名后再用下面的地址。
+> 当前本地 remote 仍指向 `https://gitee.com/ressoap/race-ai-note.git` 与 `https://github.com/ressoap/Race-AiNote.git`，最新提交已推送；网页端改名后再执行 `git remote set-url gitee https://gitee.com/ressoap/wenmo-notes.git` / `git remote set-url github https://github.com/ressoap/wenmo-notes.git`。
 > 本仓库实际地址见 README 第 12 节。
 > 凭据交给系统的凭据管理器（Windows 的「凭据管理器」/ Git Credential Manager），
 > **不要**把 token 写进 remote URL，更不要提交到仓库。

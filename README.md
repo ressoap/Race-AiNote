@@ -109,8 +109,8 @@ node scripts/build-electron.js --app-only
 ### 2.4 从源码运行与构建（约 3 分钟）
 
 ```bash
-git clone https://gitee.com/ressoap/wenmo-notes.git
-cd Wenmo-Notes
+git clone https://gitee.com/ressoap/race-ai-note.git
+cd race-ai-note
 npm install            # 只装 jsdom（冒烟测试）、postject（exe 注入）、resedit（exe 图标）三个开发依赖
 npm test               # 100 项单元测试（解析 / 查询 / 物理 / 服务端 / store 等）
 npm run build          # 拼接 app/ai 片段并内联成 dist/Wenmo-Notes.html
@@ -485,10 +485,10 @@ api.registerCommand({
 
 | 用途 | 地址 |
 | --- | --- |
-| 主仓（Gitee，Public） | https://gitee.com/ressoap/wenmo-notes |
-| 镜像（GitHub，Public） | https://github.com/ressoap/wenmo-notes |
+| 主仓（Gitee，Public） | https://gitee.com/ressoap/race-ai-note |
+| 镜像（GitHub，Public） | https://github.com/ressoap/Race-AiNote |
 
-> 远程仓库需在 Gitee / GitHub 网页端把旧仓库改名为 `wenmo-notes`；改名后旧地址通常会自动跳转。
+> 当前两个仓库已推送最新提交。提交前建议在 Gitee / GitHub 网页端把仓库改名为 `wenmo-notes`；改名后旧地址通常会自动跳转，再把上表地址换成新地址即可。
 
 双远程配置、一键推两边的命令与常见坑见 `docs/REPO-MIRROR.md`。
 
