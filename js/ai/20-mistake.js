@@ -301,6 +301,10 @@
     const title = primary + ' · ' + date;
     const question = String(record.question || '').replace(/\r\n/g, '\n').trim();
     const answer = String(record.answer || '').trim();
+    const imagePaths = Array.isArray(a.imagePaths) ? a.imagePaths.filter(Boolean).slice(0, 3) : [];
+    const imageBlock = imagePaths.length
+      ? ['### 原题图片', '', imagePaths.map(p => '![原题图片](' + p + ')').join(String.fromCharCode(10, 10)), '']
+      : [];
     return [
       '',
       '## ' + title,
@@ -312,12 +316,13 @@
       '### 原题目',
       '',
       question ? quoteLines(question) : '> （没有记录到原题目）',
-      '',
+      ''
+    ].concat(imageBlock).concat([
       '### 解析',
       '',
       answer || '（无解析）',
       '',
       '> 由答疑老师自动记录，原题目与解析均已保留；建议手工补一行「我的错因」。',
       ''
-    ].join('\n');
+    ]).join('\n');
   }

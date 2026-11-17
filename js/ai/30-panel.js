@@ -66,6 +66,32 @@
       });
     }
 
+    /** 存档用的轻量版：缩到 760px、质量 0.7，控制 localStorage 体积 */
+    function shrinkImage(dataUrl, maxSide, quality) {
+      return new Promise(resolve => {
+        try {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const side = Math.max(img.width || 1, img.height || 1);
+              const scale = Math.min(1, (maxSide || 760) / side);
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round((img.width || 1) * scale));
+              canvas.height = Math.max(1, Math.round((img.height || 1) * scale));
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', quality || 0.7));
+            } catch (_) {
+              resolve(dataUrl);
+            }
+          };
+          img.onerror = () => resolve(dataUrl);
+          img.src = dataUrl;
+        } catch (_) {
+          resolve(dataUrl);
+        }
+      });
+    }
+
     async function addImageFiles(files) {
       const list = [...(files || [])].filter(f => /^image\//i.test(f.type || '') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name || ''));
       if (!list.length) return 0;
@@ -288,6 +314,10 @@
       const history = threadAtSend.filter(m => !m.archived && (m.role === 'user' || m.role === 'assistant')).slice(-8).map(m => ({ role: m.role, content: m.text }));
       const teacherPrompt = askModeAtSend === 'tutor' ? buildTeacherPrompt(state.config) : '';
       addMessage('user', question, [], images);
+      const recordImages = [];
+      for (const src of images.slice(0, 2)) {
+        try { recordImages.push(await shrinkImage(src, 760, 0.7)); } catch (_) {}
+      }
       const visionReady = hasVisionModel();
       const sendImages = (state.mode === 'local' || visionReady) ? images : [];
       const imageSkipped = images.length > 0 && sendImages.length === 0;
@@ -365,6 +395,7 @@
             knowledgePoints: knowledgePoints,
             knowledgePoint: knowledgePoints[0] || '',
             mistakeType: analysis.mistakeType || '',
+            images: recordImages,
             analysisSource: analysis.source || 'local'
           });
           if (run.cancelled) return false;

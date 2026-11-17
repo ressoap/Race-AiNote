@@ -4933,6 +4933,23 @@
     if (record) toggleRecordMistake(record);
   });
 
+  /** 把记录里的原题图片写成库内附件，返回可被 Markdown 引用的路径 */
+  function saveRecordImages(record) {
+    const list = Array.isArray(record && record.images) ? record.images.slice(0, 2) : [];
+    const out = [];
+    let index = 0;
+    for (const dataUrl of list) {
+      if (String(dataUrl || '').indexOf('data:image/') !== 0) continue;
+      index += 1;
+      const imgPath = '10-错题本/图片/' + String(record.id || 'rec') + '-' + index + '.jpg';
+      if (!state.files.some(f => f.path === imgPath)) {
+        state.files.push({ path: imgPath, content: dataUrl, mtime: Date.now() });
+      }
+      out.push(imgPath);
+    }
+    return out;
+  }
+
   /** 自动归档：按 API/本地分析出的学科建错题本，并写入知识点+日期标题 */
   function autoFileRecord(record, analysis, force) {
     if (!record) return null;
@@ -4976,7 +4993,11 @@
       return { targetId: node ? node.id : null, targetTitle: bookTitle, targetPath: bookPath };
     }
 
-    const snippet = RG.ai.mistakeSnippet(Object.assign({}, record, { subject, knowledgePoints: points }), analysis);
+    const imagePaths = saveRecordImages(record);
+    const snippet = RG.ai.mistakeSnippet(
+      Object.assign({}, record, { subject: subject, knowledgePoints: points }),
+      Object.assign({}, analysis, { imagePaths: imagePaths })
+    );
     file.content = String(file.content || '').replace(/\s*$/, '') + snippet;
     state.graph = vault.buildVault(state.files);
     renderTree();
@@ -5280,6 +5301,16 @@
     for (const item of list) add(item.files, item.id);
     add((RG.demoVault && RG.demoVault.files) || [], 'demo');
     return owners;
+  }
+
+  /* 笔记里的图片：把库内附件路径换成 data URL 才能显示 */
+  if (RG.markdown && typeof RG.markdown.setImageResolver === 'function') {
+    RG.markdown.setImageResolver(function (src) {
+      const path = String(src || '').trim();
+      if (!path) return null;
+      const hit = (state.files || []).find(f => f.path === path || f.path.slice(-path.length - 1) === '/' + path);
+      return hit && String(hit.content || '').indexOf('data:image/') === 0 ? hit.content : null;
+    });
   }
 
   const ai = RG.ai.create({
@@ -5590,7 +5621,7 @@
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    buildRecordOwners, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
+    buildRecordOwners, saveRecordImages, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

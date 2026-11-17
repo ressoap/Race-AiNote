@@ -2419,3 +2419,14 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   border: 1px solid rgba(239, 159, 39, 0.35);
 }
 :root[data-theme="dark"] .ai-record-type { color: #f0c27b; }
+
+/* 笔记正文里的图片 */
+.md-img {
+  display: block;
+  max-width: 100%;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+}
+.md-img-missing { font-size: 12px; color: var(--text-dim); }

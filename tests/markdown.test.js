@@ -109,3 +109,12 @@ test('AI 输出清洗不破坏代码块里的原始反斜杠', () => {
   const html = md.renderAi('```' + String.fromCharCode(10) + String.raw`\[` + String.fromCharCode(10) + String.raw`\]` + String.fromCharCode(10) + '```');
   assert.ok(html.includes(String.raw`\[`), '代码块里应原样保留');
 });
+
+test('图片：库内路径通过解析器换成 data URL，解析不到给占位提示', () => {
+  md.setImageResolver(src => (src === '10-错题本/图片/a.jpg' ? 'data:image/jpeg;base64,AAA' : null));
+  const ok = md.render('![原题](10-错题本/图片/a.jpg)');
+  assert.match(ok, /<img class="md-img" src="data:image\/jpeg;base64,AAA"/);
+  const missing = md.render('![原题](10-错题本/图片/b.jpg)');
+  assert.match(missing, /md-img-missing/);
+  md.setImageResolver(null);
+});

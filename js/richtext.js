@@ -18,6 +18,11 @@
     if (node.nodeType !== 1) return '';
 
     const tag = node.tagName;
+    if (tag === 'IMG') {
+      const src = node.getAttribute('src') || '';
+      const alt = node.getAttribute('alt') || '';
+      return '![' + alt + '](' + src + ')';
+    }
     const inner = inlineChildren(node);
 
     if (tag === 'BR') return '\n';

@@ -2431,6 +2431,17 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 }
 :root[data-theme="dark"] .ai-record-type { color: #f0c27b; }
 
+/* 笔记正文里的图片 */
+.md-img {
+  display: block;
+  max-width: 100%;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+}
+.md-img-missing { font-size: 12px; color: var(--text-dim); }
+
 </style>
 </head>
 <body>
@@ -4298,8 +4309,22 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       .replace(/"/g, '&quot;');
   }
 
+  let imageResolver = null;
+
+  /** 外部注册：把库内图片路径（如 10-错题本/图片/x.jpg）换成 data URL */
+  function setImageResolver(fn) {
+    imageResolver = typeof fn === 'function' ? fn : null;
+  }
+
   function inline(text) {
     let s = escapeHtml(text);
+
+  // 图片先抽成占位符，避免 ![](x) 被后面的链接规则吃掉
+  const images = [];
+  s = s.replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g, function (_, alt, src) {
+    images.push({ alt: alt || '图片', src: src });
+    return '\u0001' + (images.length - 1) + '\u0001';
+  });
 
     const codes = [];
     s = s.replace(/`([^`\n]+)`/g, function (_, code) {
@@ -4329,6 +4354,14 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
     s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+
+    s = s.replace(/\u0001(\d+)\u0001/g, function (_, i) {
+      const item = images[Number(i)] || { alt: '图片', src: '' };
+      const resolved = typeof imageResolver === 'function' ? imageResolver(item.src) : null;
+      const finalSrc = resolved || (/^(data:image\/|https?:)/i.test(item.src) ? item.src : '');
+      if (!finalSrc) return '<span class="md-img-missing">［图片：' + item.alt + '］</span>';
+      return '<img class="md-img" src="' + finalSrc + '" alt="' + item.alt + '" loading="lazy">';
+    });
 
     s = s.replace(/\u0000(\d+)\u0000/g, function (_, i) { return codes[Number(i)]; });
     // 只允许这几个排版标签从编辑器带进来，其余 HTML 一律保持转义状态
@@ -4495,7 +4528,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     return render(normalizeAiText(text));
   }
 
-  return { render: render, renderAi: renderAi, normalizeAiText: normalizeAiText, inline: inline, escapeHtml: escapeHtml, toText: toText };
+  return { render: render, renderAi: renderAi, normalizeAiText: normalizeAiText, inline: inline, escapeHtml: escapeHtml, toText: toText, setImageResolver: setImageResolver };
 });
 
 </script>
@@ -4520,6 +4553,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     if (node.nodeType !== 1) return '';
 
     const tag = node.tagName;
+    if (tag === 'IMG') {
+      const src = node.getAttribute('src') || '';
+      const alt = node.getAttribute('alt') || '';
+      return '![' + alt + '](' + src + ')';
+    }
     const inner = inlineChildren(node);
 
     if (tag === 'BR') return '\n';
@@ -6187,6 +6225,10 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const title = primary + ' · ' + date;
     const question = String(record.question || '').replace(/\r\n/g, '\n').trim();
     const answer = String(record.answer || '').trim();
+    const imagePaths = Array.isArray(a.imagePaths) ? a.imagePaths.filter(Boolean).slice(0, 3) : [];
+    const imageBlock = imagePaths.length
+      ? ['### 原题图片', '', imagePaths.map(p => '![原题图片](' + p + ')').join(String.fromCharCode(10, 10)), '']
+      : [];
     return [
       '',
       '## ' + title,
@@ -6198,14 +6240,15 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       '### 原题目',
       '',
       question ? quoteLines(question) : '> （没有记录到原题目）',
-      '',
+      ''
+    ].concat(imageBlock).concat([
       '### 解析',
       '',
       answer || '（无解析）',
       '',
       '> 由答疑老师自动记录，原题目与解析均已保留；建议手工补一行「我的错因」。',
       ''
-    ].join('\n');
+    ]).join('\n');
   }
 
   /* ── 面板控制器 ───────────────────────────────────────────── */
@@ -6273,6 +6316,32 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
           img.src = src;
         };
         reader.readAsDataURL(file);
+      });
+    }
+
+    /** 存档用的轻量版：缩到 760px、质量 0.7，控制 localStorage 体积 */
+    function shrinkImage(dataUrl, maxSide, quality) {
+      return new Promise(resolve => {
+        try {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const side = Math.max(img.width || 1, img.height || 1);
+              const scale = Math.min(1, (maxSide || 760) / side);
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round((img.width || 1) * scale));
+              canvas.height = Math.max(1, Math.round((img.height || 1) * scale));
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', quality || 0.7));
+            } catch (_) {
+              resolve(dataUrl);
+            }
+          };
+          img.onerror = () => resolve(dataUrl);
+          img.src = dataUrl;
+        } catch (_) {
+          resolve(dataUrl);
+        }
       });
     }
 
@@ -6498,6 +6567,10 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       const history = threadAtSend.filter(m => !m.archived && (m.role === 'user' || m.role === 'assistant')).slice(-8).map(m => ({ role: m.role, content: m.text }));
       const teacherPrompt = askModeAtSend === 'tutor' ? buildTeacherPrompt(state.config) : '';
       addMessage('user', question, [], images);
+      const recordImages = [];
+      for (const src of images.slice(0, 2)) {
+        try { recordImages.push(await shrinkImage(src, 760, 0.7)); } catch (_) {}
+      }
       const visionReady = hasVisionModel();
       const sendImages = (state.mode === 'local' || visionReady) ? images : [];
       const imageSkipped = images.length > 0 && sendImages.length === 0;
@@ -6575,6 +6648,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
             knowledgePoints: knowledgePoints,
             knowledgePoint: knowledgePoints[0] || '',
             mistakeType: analysis.mistakeType || '',
+            images: recordImages,
             analysisSource: analysis.source || 'local'
           });
           if (run.cancelled) return false;
@@ -12332,6 +12406,23 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     if (record) toggleRecordMistake(record);
   });
 
+  /** 把记录里的原题图片写成库内附件，返回可被 Markdown 引用的路径 */
+  function saveRecordImages(record) {
+    const list = Array.isArray(record && record.images) ? record.images.slice(0, 2) : [];
+    const out = [];
+    let index = 0;
+    for (const dataUrl of list) {
+      if (String(dataUrl || '').indexOf('data:image/') !== 0) continue;
+      index += 1;
+      const imgPath = '10-错题本/图片/' + String(record.id || 'rec') + '-' + index + '.jpg';
+      if (!state.files.some(f => f.path === imgPath)) {
+        state.files.push({ path: imgPath, content: dataUrl, mtime: Date.now() });
+      }
+      out.push(imgPath);
+    }
+    return out;
+  }
+
   /** 自动归档：按 API/本地分析出的学科建错题本，并写入知识点+日期标题 */
   function autoFileRecord(record, analysis, force) {
     if (!record) return null;
@@ -12375,7 +12466,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       return { targetId: node ? node.id : null, targetTitle: bookTitle, targetPath: bookPath };
     }
 
-    const snippet = RG.ai.mistakeSnippet(Object.assign({}, record, { subject, knowledgePoints: points }), analysis);
+    const imagePaths = saveRecordImages(record);
+    const snippet = RG.ai.mistakeSnippet(
+      Object.assign({}, record, { subject: subject, knowledgePoints: points }),
+      Object.assign({}, analysis, { imagePaths: imagePaths })
+    );
     file.content = String(file.content || '').replace(/\s*$/, '') + snippet;
     state.graph = vault.buildVault(state.files);
     renderTree();
@@ -12679,6 +12774,16 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     for (const item of list) add(item.files, item.id);
     add((RG.demoVault && RG.demoVault.files) || [], 'demo');
     return owners;
+  }
+
+  /* 笔记里的图片：把库内附件路径换成 data URL 才能显示 */
+  if (RG.markdown && typeof RG.markdown.setImageResolver === 'function') {
+    RG.markdown.setImageResolver(function (src) {
+      const path = String(src || '').trim();
+      if (!path) return null;
+      const hit = (state.files || []).find(f => f.path === path || f.path.slice(-path.length - 1) === '/' + path);
+      return hit && String(hit.content || '').indexOf('data:image/') === 0 ? hit.content : null;
+    });
   }
 
   const ai = RG.ai.create({
@@ -12989,7 +13094,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    buildRecordOwners, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
+    buildRecordOwners, saveRecordImages, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

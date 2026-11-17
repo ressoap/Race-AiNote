@@ -18,8 +18,22 @@
       .replace(/"/g, '&quot;');
   }
 
+  let imageResolver = null;
+
+  /** 外部注册：把库内图片路径（如 10-错题本/图片/x.jpg）换成 data URL */
+  function setImageResolver(fn) {
+    imageResolver = typeof fn === 'function' ? fn : null;
+  }
+
   function inline(text) {
     let s = escapeHtml(text);
+
+  // 图片先抽成占位符，避免 ![](x) 被后面的链接规则吃掉
+  const images = [];
+  s = s.replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g, function (_, alt, src) {
+    images.push({ alt: alt || '图片', src: src });
+    return '\u0001' + (images.length - 1) + '\u0001';
+  });
 
     const codes = [];
     s = s.replace(/`([^`\n]+)`/g, function (_, code) {
@@ -49,6 +63,14 @@
     s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
     s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+
+    s = s.replace(/\u0001(\d+)\u0001/g, function (_, i) {
+      const item = images[Number(i)] || { alt: '图片', src: '' };
+      const resolved = typeof imageResolver === 'function' ? imageResolver(item.src) : null;
+      const finalSrc = resolved || (/^(data:image\/|https?:)/i.test(item.src) ? item.src : '');
+      if (!finalSrc) return '<span class="md-img-missing">［图片：' + item.alt + '］</span>';
+      return '<img class="md-img" src="' + finalSrc + '" alt="' + item.alt + '" loading="lazy">';
+    });
 
     s = s.replace(/\u0000(\d+)\u0000/g, function (_, i) { return codes[Number(i)]; });
     // 只允许这几个排版标签从编辑器带进来，其余 HTML 一律保持转义状态
@@ -215,5 +237,5 @@
     return render(normalizeAiText(text));
   }
 
-  return { render: render, renderAi: renderAi, normalizeAiText: normalizeAiText, inline: inline, escapeHtml: escapeHtml, toText: toText };
+  return { render: render, renderAi: renderAi, normalizeAiText: normalizeAiText, inline: inline, escapeHtml: escapeHtml, toText: toText, setImageResolver: setImageResolver };
 });
