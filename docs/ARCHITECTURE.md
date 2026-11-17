@@ -1,26 +1,42 @@
-# 架构说明
+# 问墨笔记 · 架构说明
 
-## 1. 设计约束（先定死，再让 AI 写代码）
+## 1. 设计约束
 
 | 约束 | 原因 |
 | --- | --- |
 | 零第三方运行时依赖 | 评委双击就跑，不需要 `npm install`，也不会半年后因为依赖升级跑不起来 |
 | 数据层纯函数、无 DOM | 能在 Node 里直接跑单测，也能被 AI 脚本复用 |
 | 初始布局确定性（哈希，不用随机数） | 「重新布局」可复现，录像、截图、单测才有意义 |
-| 单文件交付由构建脚本产生 | 源码可读、交付可跑，两者不再手工同步 |
-| AI 能力放脚本侧，不放前端 | 纯前端打包后密钥明文可见，属于安全红线 |
+| 单文件交付由构建脚本产生 | 源码可读、交付可跑，两者不手工同步 |
+| AI 能力默认放服务端；学科/知识点分类走 `/api/analyze`，失败时客户端本地兜底 | 纯前端打包后密钥明文可见；浏览器直连只作为可选降级项 |
+| 本地服务默认只绑 127.0.0.1 | 不把 AI 代理、记录接口和源码目录暴露给局域网 |
 
 ## 2. 分层
 
 ```
-js/vault.js    Markdown → 图模型（notes / attachments / unresolved / tag 节点 + links）
-js/query.js    Obsidian 风格查询 → 匹配函数
-js/physics.js  图模型 → 位置（排斥 / 弹簧 / 中心引力 / 网格碰撞）
-js/render.js   位置 → Canvas 像素（纯绘制，不碰数据）
-js/app.js      状态编排：载入、筛选、交互、持久化
+数据层      js/vault.js       Markdown → 图模型（notes / attachments / unresolved / tag 节点 + links）
+            js/query.js       Obsidian 风格查询 → 匹配函数
+            js/markdown.js    轻量 Markdown 渲染
+            js/richtext.js    富文本 ⇄ Markdown 转换
+
+仿真/渲染   js/physics.js     图模型 → 位置（排斥 / 弹簧 / 中心引力 / 网格碰撞）
+            js/render.js      位置 → Canvas 像素（纯绘制，不碰数据）
+
+界面层      js/app/*.js       源码片段，构建成 js/app.js
+            js/ai/*.js        AI 面板源码片段，构建成 js/ai.js
+            js/store.js       本地存储统一入口 + schema 迁移
+            js/cloud.js       云备份驱动
+            js/plugins.js     插件宿主
+
+服务端      scripts/server-core.cjs   静态资源 + AI / 网盘 / 记录接口的唯一实现
+            （/api/chat 支持文本模型 + 可选视觉模型；/api/analyze 负责学科与知识点标签）
+            scripts/serve.mjs         开发入口（读 .env、解析参数、启动）
+            scripts/desktop.js        桌面窗口启动器
+            scripts/build-exe.js      Node SEA 单文件 exe
+            scripts/build-electron.js Electron 打包
 ```
 
-依赖方向单向向下：`app → render/physics/query/vault`，下层不反向依赖上层，
+依赖方向保持单向：`app → render/physics/query/vault`，下层不反向依赖上层，
 也不依赖 DOM（`render.js` 只要求传入 `CanvasRenderingContext2D`）。
 
 ## 3. 数据流
@@ -43,38 +59,60 @@ File API / 拖放 / 内置示例
 - 查询层：给定一个节点与一个表达式，断言布尔值；
 - 物理层：给定初值跑 N 个 tick，断言距离、边界、无 NaN。
 
-## 4. 关键取舍
+## 4. 源码拆分与构建链
 
-**为什么自己写力导向，而不是抄 d3-force？**
-赛题考核「架构掌控力」。自己写才能解释清楚每个参数的量纲、alpha 衰减节奏，
-以及在重合、拖拽冻结、边界这些边界条件下如何不崩。
+`app.js` 和 `ai.js` 原先各是一个 1000～2600 行的大 IIFE。为了先降低单文件查找成本，
+现在把源码按功能拆成片段，由构建脚本按文件名顺序拼接：
 
-**为什么碰撞用网格而不是四叉树？**
-节点规模在几百量级时，网格实现只要 20 行且没有指针追逐开销；
-真正需要四叉树/Barnes-Hut 的是 1000+ 节点，这一版明确标注为「已知限制」。
+- `js/app/*.js` → `js/app.js`（`scripts/build-app.js`）
+- `js/ai/*.js` → `js/ai.js`（`scripts/build-ai.js`）
 
-**为什么未创建链接要建节点？**
-Obsidian 里 `[[还不存在的笔记]]` 是会出现在图谱里的幽灵节点。
-它恰好是最有价值的信号——告诉你哪些知识点被引用了但还没写。
+这一步是**纯搬运**：片段仍然共享同一个 IIFE 闭包，行为、测试和单文件构建都不变。
+后续若要继续提升模块化，可逐步引入显式 `ctx` / store，再把闭包依赖改成接口调用。
 
-**为什么标签节点默认开启？**
-标签是 Obsidian 里最便宜的「概念聚合器」。示例库 23 篇笔记靠 16 个标签节点
-把分散的知识卡连成骨架，否则图谱就是一团乱线。
+交付链：
+
+```
+源码
+  ├─ build-app + build-ai + build.js → dist/Wenmo-Notes.html
+  ├─ build-exe.js                    → dist/Wenmo-Notes.exe（Node SEA）
+  └─ build-electron.js               → dist/Wenmo-Notes-Electron/
+```
+
+`serve.mjs`、SEA exe、Electron 三端共用 `server-core.cjs`，不再各自复制一份服务端逻辑。
 
 ## 5. 安全边界
 
-- 前端不发起任何网络请求，笔记内容不出本机；
-- AI 脚本从 `COMMAND_CODE_API_KEY` / `AI_API_KEY` 读密钥，只在内存中使用，
-  运行日志落盘时把 `apiKey` 替换成 `***`；
-- AI 只写 `_ai-建议稿/` 目录，原笔记只读不写，符合可行性分析里「只增不删 + 可回滚」的原则；
-- `.gitignore` 覆盖 `.env*`、`*.pem`、`*.key`、`secrets/`、`credentials*.json`。
+- 本地服务默认 `listen(PORT, '127.0.0.1')`，不监听局域网地址；
+- 静态资源白名单：只开放 `index.html`、`styles.css`、`js/**/*.js`；
+  `.env`、`.git`、`data/`、`_tmp/`、`node_modules/` 一律 404；
+- API 请求校验 Host 与 Origin，只接受本机页面；POST 还要求 `Content-Type: application/json`；
+- AI Key 默认从 `COMMAND_CODE_API_KEY` / `AI_API_KEY` 读取，只在服务端内存中使用；
+- `.gitignore` 覆盖 `.env*`、`*.pem`、`*.key`、`secrets/`、`credentials*.json`；
+- 插件代码以页面权限运行，宿主只提供受控 API，但**不是安全沙箱**，只安装可信插件。
 
-## 6. 测试策略
+## 6. 本地存储与迁移
 
-- 29 项 Node 原生单测覆盖解析 / 查询 / 物理三层的边界条件；
-- jsdom 冒烟测试加载构建产物，断言「无运行时错误 + 关键 DOM 有内容」；
-- 构建脚本在发现残留外部引用时以非零码退出。
+`js/store.js` 统一管理键名和 schema 版本：
 
-真实缺陷清单（由测试抓出，全部已修）：
-完全重合节点 NaN 分离、拖拽冻结节点被碰撞推开、`linkStrength` 量纲除两次、
-`hidden` 属性被 CSS `display` 覆盖、模拟未收敛就自适应、标签阈值判定维度错误。
+- `race-ainote:settings`、`race-ainote:vault`、`race-ainote:records` 等；
+  前缀暂时保留 `race-ainote:`，用于兼容旧版 localStorage 数据；
+- 旧版键（`race-ainote:v1`、`race-ainote:mistakes`、`race-ainote:plugin:*`）
+  在启动时迁移到新键并删除旧键，避免凭据和笔记各存两份；
+- 当前 schema 版本为 2；后续结构变更在 `MIGRATIONS` 中追加迁移函数。
+
+## 7. 测试策略
+
+- Node 原生单测覆盖解析 / 查询 / 物理 / Markdown / 富文本 / 插件 / 云同步 /
+  本地服务安全 / store 迁移；
+- 本地服务测试覆盖静态白名单、Host/Origin 校验、JSON Content-Type 和百度网盘上传；
+- jsdom 冒烟测试加载源码与构建产物，断言新建/重命名/删除、记录、插件、快捷键等关键流程；
+- 冒烟测试现在会在关键断言失败时以非零码退出，不再只打印日志。
+
+## 8. 已知限制
+
+- `app.js` / `ai.js` 的片段仍共享闭包，模块边界是物理拆分，不是运行时隔离；
+- 插件没有沙箱，第三方插件等同于页面脚本；
+- 浏览器里改的笔记只写 localStorage 缓存，写回磁盘仍靠 `Ctrl+S` 下载；
+- 全局排斥力仍是 O(n²)，1000+ 节点需要 Barnes-Hut 或更激进的渲染裁剪；
+- 浏览器直连 AI 模式受服务商 CORS 限制，且 Key 会留在本机 localStorage，默认不推荐。

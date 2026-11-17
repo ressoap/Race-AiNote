@@ -1,8 +1,12 @@
-# Race-AiNote · AI 笔记工作台
+# 问墨笔记 · AI 笔记工作台
 
+![问墨笔记图标](assets/wenmo-icon-256.png)
+
+> 问墨笔记：会回答的本地 AI 笔记本
+>
 > 2026 第九届传智杯全国大学生数智创新与 AI 应用大赛 · AI 创新应用挑战赛参赛作品
 >
-> 一句话：**一个以 AI 答疑为特色的本地笔记软件 —— 读你自己的 Markdown 库，把不会的题直接问「答疑老师」，解决完一键记入错题本，关系图谱只作辅助视图。**
+> 一句话：**问墨笔记是一个以 AI 答疑为特色的本地笔记软件 —— 读你自己的 Markdown 库，把不会的题直接问「答疑老师」，解决完一键记入错题本，关系图谱只作辅助视图。**
 
 ![笔记视图](docs/screenshot-note.png)
 ![关系图谱](docs/screenshot-graph.png)
@@ -17,12 +21,13 @@
 - **AI 答疑是特色**：右侧常驻面板，两个独立会话：
   - 「答疑老师」—— 像老师一样讲题，按考点 → 思路 → 分步推导 → 易错点输出，条件不足会先追问，支持多轮追问；
   - 「笔记问答」—— 只依据你的笔记回答，笔记里没有就明说。
-- **错题闭环**：答疑结束后一键记入错题本，AI 按学科推荐目标错题本；同一题不会重复记入，记入或标记解决后自动置为已解决、不再作为上下文。
+- **错题闭环**：每次答疑后自动分析学科与知识点，自动归档到对应科目的错题本，标题写成「知识点 · 日期」；没有模型时用本地规则兜底；同一题不会重复记入。
+  所有学科（含其他兜底）都会按需建立 10-错题本/<学科>/ 文件夹；旧版平铺错题本启动时自动迁入。
 - **图谱是辅助**：随时切到关系图谱看结构，选中节点再回到笔记。
 
 - **真数据**：读取真实 Markdown 库，解析 `[[双链]]`、`![[嵌入]]`、`#标签`、frontmatter 的 `title/tags/aliases`，生成节点与连线（不是硬编码的假数据）。
 - **零运行时依赖**：纯 HTML + CSS + 原生 JavaScript + Canvas 2D，不用框架、不用打包器。
-- **单文件交付**：`dist/Race-AiNote.html` 双击就能跑；笔记阅读、编辑、图谱全程离线，
+- **单文件交付**：`dist/Wenmo-Notes.html` 双击就能跑；笔记阅读、编辑、图谱全程离线，
   只有你主动使用 AI 答疑时，才会把相关笔记片段发给你自己配置的模型接口。
 - **配套 AI 整理脚本**：按「只出建议稿、不改原文」的原则批量生成摘要 / 标签 / 双链建议。
 
@@ -44,25 +49,26 @@
 **A. 桌面窗口模式（推荐，脱离浏览器）**
 
 ```
-双击仓库根目录的：启动Race-AiNote.bat
+双击仓库根目录的：启动问墨笔记.bat
 ```
 
 它会起一个本地服务，并用系统的 Edge / Chrome 以「应用模式」打开独立窗口：
-没有地址栏、没有标签页、任务栏是独立图标，和日常浏览器互不干扰（用独立 profile 目录）。
+没有浏览器地址栏和浏览器标签页、任务栏是独立图标，和日常浏览器互不干扰（用独立 profile 目录；应用内的笔记标签见功能清单）。
 
 **B. Windows 单文件 exe（推荐分发用）**
 
 ```bash
-npm run build:exe        # 生成 dist/Race-AiNote.exe
+npm run build:exe        # 生成 dist/Wenmo-Notes.exe
 ```
 
-双击 `dist/Race-AiNote.exe` 即可：内置 Node 运行时，**目标机器不需要装 Node、也不需要浏览器命令行**。
-它会起本地服务并自动打开 Edge/Chrome 应用窗口（找不到浏览器时打印地址）。
+双击 `dist/Wenmo-Notes.exe` 即可：内置 Node 运行时，**目标机器不需要装 Node、也不需要浏览器命令行**。
+它会起本地服务并自动打开 Edge/Chrome 应用窗口；exe 已切换为 GUI 子系统，双击不会弹黑色控制台窗口（找不到 Edge/Chrome 时自动调系统默认浏览器，启动信息写到 exe 同级 `data/startup.log`）。
 
-- 用 Node 官方 SEA（Single Executable Application）打包，不依赖 Electron；
-- 页面本体内嵌在 exe 里，记录写在 exe 同级的 `data/records.json`，浏览器 profile 在 `dist/profile/`；
+- 用 Node 官方 SEA（Single Executable Application）打包，不依赖 Electron；构建后自动把 PE 子系统改成 GUI，避免黑框；
+- 如果旧 `Wenmo-Notes.exe` 正在运行，`npm run build:exe` 会自动退到 `dist/Wenmo-Notes-NoConsole.exe`，不覆盖运行中的文件；
+- 页面本体内嵌在 exe 里，记录写在 exe 同级的 `data/records.json`，浏览器 profile 在 `%LOCALAPPDATA%/Wenmo-Notes/browser-profile`，不再写进项目 `dist/profile/`；
 - 端口被占用会自动往后找空闲端口；
-- 想换浏览器：`set RACE_BROWSER=C:/.../chrome.exe` 再运行。
+- 想换浏览器：`set WENMO_BROWSER=C:/.../chrome.exe` 再运行。
 
 **B2. Electron 桌面版（Obsidian 同款技术栈）**
 
@@ -76,22 +82,25 @@ unzip electron.zip -d _tmp/electron
 
 # 2) 打包
 npm run build:electron
+
+# 已安装过，只更新页面代码（不重建运行时，应用运行中也可执行）
+node scripts/build-electron.js --app-only
 ```
 
-产物 `dist/Race-AiNote-Electron/Race-AiNote.exe`：真正的桌面窗口（无浏览器外壳、无地址栏），
-内置 Node 主进程托管本地服务，数据写在 `resources/app/app-data/`。整包约 268MB（Electron 本身就有 180MB）。
+产物 `dist/Wenmo-Notes-Electron/Wenmo-Notes.exe`：真正的桌面窗口（无浏览器外壳、无地址栏），
+内置 Node 主进程托管本地服务，数据写在 `%APPDATA%/Wenmo-Notes/data/`（旧版 `resources/app/app-data/` 会自动迁移）。整包约 268MB（Electron 本身就有 180MB）。
 
 **C. 单文件 HTML（完全不启动服务）**
 
 ```
-双击 dist/Race-AiNote.html
+双击 dist/Wenmo-Notes.html
 ```
 
 浏览器里打开，加载内置 50 篇示例库。AI 只能走本地分析，云同步与百度网盘代理不可用。
 
 ### 2.3 看自己的笔记（约 1 分钟）
 
-1. 双击 `dist/Race-AiNote.html`；
+1. 双击 `dist/Wenmo-Notes.html`；
 2. 点左上角 **文件夹图标** → 选中你的 Markdown 笔记库目录（任何装着 `.md` 的目录都行）；
 3. 浏览器授权后立即出图。
 
@@ -100,11 +109,11 @@ npm run build:electron
 ### 2.4 从源码运行与构建（约 3 分钟）
 
 ```bash
-git clone https://gitee.com/ressoap/race-ai-note.git
-cd Race-AiNote
-npm install            # 只装 jsdom 一个开发依赖，用于冒烟测试
-npm test               # 29 项单元测试（解析层 / 查询层 / 物理层）
-npm run build          # 内联成 dist/Race-AiNote.html
+git clone https://gitee.com/ressoap/wenmo-notes.git
+cd Wenmo-Notes
+npm install            # 只装 jsdom（冒烟测试）、postject（exe 注入）、resedit（exe 图标）三个开发依赖
+npm test               # 100 项单元测试（解析 / 查询 / 物理 / 服务端 / store 等）
+npm run build          # 拼接 app/ai 片段并内联成 dist/Wenmo-Notes.html
 ```
 
 打开 `index.html` 也能直接开发调试（浏览器直接加载 `js/*.js`，无打包器）。
@@ -120,7 +129,7 @@ npm run build          # 内联成 dist/Race-AiNote.html
 
 **A. 本地分析模式（零配置，开箱即用）**
 
-直接双击 `dist/Race-AiNote.html`，问答面板默认就是本地分析：不联网、不要密钥，
+直接双击 `dist/Wenmo-Notes.html`，问答面板默认就是本地分析：不联网、不要密钥，
 能回答「哪些笔记没被链接」「我的薄弱环节」「把这篇整理成知识卡」这类问题。
 
 **B. 模型模式（需要密钥，密钥只在服务端）**
@@ -132,6 +141,9 @@ cp .env.example .env      # 然后编辑 .env，填入 COMMAND_CODE_API_KEY
 node scripts/serve.mjs    # 默认端口 4321，自动读取 .env
 # 浏览器打开 http://localhost:4321
 ```
+
+要识别图片，需要在 `.env` 里填 `AI_VISION_MODEL`（如 `gpt-4o` / `qwen-vl-max`），
+或在设置窗口的「视觉模型」里填写；留空时会沿用文本模型，但文本模型通常无法识图。
 
 也可以临时用环境变量（不落盘）：
 
@@ -180,23 +192,25 @@ node scripts/ai-organize.mjs --vault ./vault-example --limit 3   # 正式跑
 
 | 方式 | 命令 | 特点 |
 | --- | --- | --- |
-| 桌面窗口（推荐） | 双击 `启动Race-AiNote.bat` | 独立窗口、无地址栏、独立 profile、右键完全交给应用、AI 与云同步全可用 |
+| 桌面窗口（推荐） | 双击 `启动问墨笔记.bat` | 独立窗口、无地址栏、独立 profile、右键完全交给应用、AI 与云同步全可用 |
 | 命令行启动 | `npm run desktop` | 同上，可加 `--port 4399` 换端口 |
-| Electron 桌面版 | 双击 `dist/Race-AiNote-Electron/Race-AiNote.exe` | Obsidian 同款技术栈，真桌面窗口，整包 ~268MB |
-| Windows exe（SEA） | 双击 `dist/Race-AiNote.exe` | 内置 Node，双击即用，体积 ~89MB |
-| 单文件 HTML | 双击 `dist/Race-AiNote.html` | 零依赖零服务，但 AI 只能本地分析 |
+| Electron 桌面版 | 双击 `dist/Wenmo-Notes-Electron/Wenmo-Notes.exe` | Obsidian 同款技术栈，真桌面窗口，整包 ~268MB |
+| Windows exe（SEA） | 双击 `dist/Wenmo-Notes.exe` | 内置 Node，双击即用，体积 ~89MB |
+| 单文件 HTML | 双击 `dist/Wenmo-Notes.html` | 零依赖零服务，但 AI 只能本地分析 |
+
+> 从旧版升级：先退出正在运行的旧 Electron 实例，再双击新版；新版会沿用旧 userData 里的 localStorage，并把旧错题记录迁移到 `%APPDATA%/Wenmo-Notes/data/`。
 
 `scripts/desktop.js` 做的事：
 
 1. 起一个本地服务（`scripts/serve.mjs`，默认 4399 端口）；
 2. 等它可用后，用 Edge/Chrome 的 `--app=` 模式打开，窗口独立；
-3. 用 `%LOCALAPPDATA%/Race-AiNote/profile` 作为独立 profile，不污染日常浏览器；
+3. 用 `%LOCALAPPDATA%/Race-AiNote/profile` 作为独立 profile（沿用旧目录名，避免丢掉浏览器里的本地数据）；
 4. 关掉窗口时顺手把本地服务一起关掉。
 
 找不到浏览器时可以用环境变量指定：
 
 ```bash
-set RACE_BROWSER=C:/Program Files/Google/Chrome/Application/chrome.exe
+set WENMO_BROWSER=C:/Program Files/Google/Chrome/Application/chrome.exe
 node scripts/desktop.js
 ```
 
@@ -208,25 +222,29 @@ node scripts/desktop.js
 ## 4. 目录结构
 
 ```
-Race-AiNote/
+Wenmo-Notes/
 ├─ index.html               开发版页面（外部引用 css/js）
 ├─ styles.css               明暗双主题样式
 ├─ js/
 │  ├─ vault.js              Markdown 库解析：frontmatter / 双链 / 标签 / 附件
 │  ├─ query.js              双链笔记风格的查询语法
 │  ├─ markdown.js           轻量 Markdown 渲染（正文/问答共用）
-│  ├─ ai.js                 AI 问答面板：本地规则分析 + 模型代理适配
 │  ├─ richtext.js           富文本 ⇄ Markdown 转换与选区格式化
+│  ├─ store.js              本地存储统一入口：键名、schema 版本、迁移
+│  ├─ physics.js            自定义力导向引擎（哈希初始化、网格碰撞）
+│  ├─ render.js             Canvas 2D 渲染层
 │  ├─ cloud.js              云备份：GitHub / Gitee / 百度网盘官方接口
 │  ├─ plugins.js            插件宿主：安装/启停/卸载与受限 API
 │  ├─ sample-plugins.js     3 个内置示例插件
-│  ├─ physics.js            自定义力导向引擎（哈希初始化、网格碰撞）
-│  ├─ render.js             Canvas 2D 渲染层
 │  ├─ demo-vault.js         内置示例库（真实 Markdown 文本）
-│  └─ app.js                界面装配与交互
+│  ├─ app/*.js              界面源码片段，构建为 js/app.js
+│  └─ ai/*.js               AI 面板源码片段，构建为 js/ai.js
 ├─ scripts/
-│  ├─ build.js              内联构建 → dist/Race-AiNote.html
-│  ├─ serve.mjs             本地服务器 + AI / 网盘代理（密钥只在服务端）
+│  ├─ server-core.cjs       本地服务唯一实现：静态白名单 + AI / 网盘 / 记录接口
+│  ├─ serve.mjs             开发入口：读 .env、解析参数、启动 server-core
+│  ├─ build-app.js          js/app/*.js → js/app.js
+│  ├─ build-ai.js           js/ai/*.js → js/ai.js
+│  ├─ build.js              内联构建 → dist/Wenmo-Notes.html
 │  ├─ desktop.js            桌面窗口启动器（Edge/Chrome --app 模式）
 │  ├─ build-exe.js          用 Node SEA 打包成单文件 exe
 │  ├─ build-electron.js     打包 Electron 桌面版（Obsidian 同款技术栈）
@@ -234,13 +252,16 @@ Race-AiNote/
 │  └─ ai-organize.mjs       AI 整理脚本（建议稿模式）
 ├─ tests/                   Node 原生 test runner 单元测试
 ├─ vault-example/           可直接打开的示例 Markdown 库
-├─ dist/Race-AiNote.html    ★ 单文件交付物
-├─ 启动Race-AiNote.bat       双击以桌面窗口方式启动
+├─ dist/Wenmo-Notes.html    ★ 单文件交付物
+├─ 启动问墨笔记.bat       双击以桌面窗口方式启动
 ├─ docs/                    技术文档与 Prompt 演进记录
 ├─ PROMPT.md                原始功能规格 Prompt
 ├─ 可行性分析.md             立项论证
 └─ 2026传智杯-…赛道详情.md    赛题原文存档
 ```
+
+> `js/app.js` 与 `js/ai.js` 是由片段生成的产物，不要直接改；
+> 改完 `js/app/*.js` 或 `js/ai/*.js` 后运行 `npm run build:app` / `npm run build:ai`。
 
 ---
 
@@ -253,9 +274,17 @@ Race-AiNote/
   保存时自动转回 Markdown 存储，双链与图谱同步更新；编辑中按 `Ctrl+S` 可随时存盘且不打断输入
 - **AI 优化格式**：一键把随手写的文字整理成带小标题和列表的干净排版（不改内容语义）
 - **多级目录 + 增删改查**：文件夹可无限嵌套；新建笔记 / 新建文件夹 / 重命名 / 删除 / 拖拽移动，
+  侧栏提供「全部收起 / 全部展开」按钮，一键控制整棵树
+  顶层文件夹用深一点的灰底，子文件夹逐级变浅，深层目录一眼能分清层级
+  通过「打开本地文件夹」授权读写后，编辑、新建、改名、删除会自动回写到真实 Markdown 文件
   右键菜单与侧栏按钮都能操作，改动即时重解析双链并落本机缓存
+- **左侧栏可拖动调宽**：拖动侧栏右边缘的分割线左右调整宽度，双击恢复 268px，宽度会记住；
+  打开 AI 面板或窗口变窄时自动收缩，避免把中间笔记区挤没
 - **排序**：侧栏排序器支持「使用频率（默认）/ 更新日期 / 名称 / 手动」；
   笔记和文件夹都能直接拖动排序，拖过一次自动切到手动顺序并记住（按文件夹分别记录）
+- **浏览器式笔记标签页**：顶部「笔记 / 关系图谱」右侧保留打开过的笔记，
+  可点选切换、点 × 或中键关闭、拖动调整顺序；标签与当前选中项会记住，重启后自动恢复；
+  标签过多时横向滚动，当前标签自动滚入视野，关闭最后一个标签回到空白状态
 - 反向链接：底部列出所有链接到这篇笔记的笔记，点击即可跳转
 - 一键「在图谱中定位」/「让 AI 分析」
 - **外观**：主题三档（白日 / 黑夜 / 跟随系统，跟随时随系统明暗实时切换，黑夜自动浅色文字）；
@@ -271,6 +300,14 @@ Race-AiNote/
   - 「答疑老师」：按 ①考点定位 ②解题思路 ③分步推导 ④易错提醒 ⑤一句话拓展 讲题，条件不足会追问，可超出笔记范围（真讲课，不是检索）
   - 「笔记问答」：只依据你的笔记作答，笔记里没有就明说
 - 支持多轮追问：最近 8 条对话作为上下文发给模型
+- 每次答疑后自动调用 `/api/analyze` 分析问题学科与知识点（API 不可用时本地规则兜底），并按学科自动写入对应错题本
+- **每道错题保留完整原题目**：归档时把原题全文按引用块写入错题本，保留换行、多问和公式原貌，不截断、不压平成一行；重复归档按完整原题比对，不会因为开头相同就误判
+- 输入框可像 QQ / 微信一样拖动上边缘放大，双击恢复默认高度，高度会记住
+- **拍题入库**：侧栏相机按钮选一张题目图片，视觉模型只识别题目原文，自动按学科建到 10-错题本/<学科>/，原题用引用块保留，后续可继续追问 AI（需要接入视觉模型）
+- **老师性格**：设置按钮左侧有独立的「老师性格」入口，可载入自己的 `.md` 讲课约束（类似 AGENTS.md），并用四根滑杆调「活泼↔严厉 / 简洁↔详细 / 启发↔直接 / 鼓励↔严格」；支持「恢复默认」清空自定义约束并把四根滑杆复位；保存后编译进答疑老师的系统提示词，代理模式与直连模式都生效（本地分析模式只保存，接入模型后生效）
+- **问答可中断**：AI 回答中发送按钮会暂时禁用，输入区右侧出现「停止」按钮（在发送按钮上方，两个按钮改为紧凑尺寸）；点击或按 Esc 立即中止当前请求，输入框恢复可用；被中断的这一轮不会自动记入问题记录
+- AI 面板左侧分割线可左右拖动扩宽 / 收窄，双击恢复 560px，宽度会记住
+- 图片/截图可直接拖入 AI 面板，生成缩略图随问题发送；即使勾选「带上当前笔记」，图片也会和笔记一起发给视觉模型，并明确要求优先识图；不支持时会提示，且不会再触发全库载入
 - **两个模式各自独立的历史会话**，切换模式不会串台，清空按钮只清当前这一侧
 - 四个一键提问：讲题 / 核心考点 / 薄弱环节 / 孤立笔记 / 整理成知识卡
 - **答疑结束一键记入错题本**：答完后出现操作条（记入错题本 / 标记已解决 / 稍后再说），
@@ -280,9 +317,13 @@ Race-AiNote/
 - **状态标记**：记入错题本或点「标记已解决」后自动置为已解决，
   并把本轮问答标记归档 —— 之后不再作为上下文发给模型
 - **右侧问题记录**：
-  - 按日期分块（今天 / 昨天 / 具体日期），标题栏显示待解决条数；
+  - 按日期分块（今天 / 昨天 / 具体日期），最新记录排最上；标题栏显示待解决条数；
+  - 加宽记录栏 + 可见纵向滚动条，记录多时可上下浏览历史；
   - 顶部搜索框按关键词过滤问题、答案与目标错题本；
-  - **左键**某条 → 打开详情，能看到完整问答、状态与目标；
+  - 搜索框下方有日期下拉（全部日期 / 今天 / 昨天 / 具体日期），快速定位某一天；
+  - 已记入错题本的记录，可点目标标签或详情里的「定位错题笔记」，自动打开对应笔记并滚动高亮到具体问答段落；
+  - 英语题会按英语学科归档，不会因为识别不到科目而落进数学；数据结构、信号与系统也有独立错题本；
+  - **左键**某条 → 从模式标签右侧滑出「记录子选项卡」，完整问答直接显示在 AI 面板内，不再弹到最前；
   - **右键**某条 → 记入 / 取消记入错题本、继续询问、删除此条记录；
   - 记录可以直接拖动排序（顺序会记住）
 - 设置窗口：三种连接方式（服务端代理 / 浏览器直连 / 纯本地）、测试连接、一键拉取模型列表、清除 Key
@@ -294,6 +335,7 @@ Race-AiNote/
 - 自定义力导向：排斥力、连线弹簧力、中心引力、碰撞分离，四个滑杆实时生效
 - 节点拖拽、画布平移、滚轮以鼠标为中心缩放、双击进入笔记、适应画布、重新布局
 - 悬停 / 选中高亮邻居（带渐变过渡），无关节点自动淡化
+- **节点右键菜单**：新标签页 / 新窗口打开、移动到文件夹、收藏、合并到另一篇笔记、复制相对路径 / Wiki 链接 / 标题、展开所在文件夹、查看反向链接、图谱定位、导出 .md、文件树定位、删除；收藏后文件树与图谱标题会显示 ★
 - 搜索语法：
   - 通用：普通文本、`"带空格"`、`-排除`、`OR`、`/正则/`（可带 `i` 等 flags）
   - 字段：`path:`、`file:`、`tag:`、`content:`、`section:`（按标题小节）、`line:`（同一行内多词）、`block:`（`^块id`）
@@ -321,35 +363,38 @@ Race-AiNote/
 
 ## 7. 安全与隐私
 
-- 没有配置任何 Key 时，应用**不发任何网络请求**，笔记全程留在本机浏览器内存里。
-- 密钥三种归宿，都可控：
-  1. `.env`（推荐）—— 服务端读取，前端完全不接触 Key，`.env` 在 `.gitignore` 里；
-  2. 浏览器 localStorage —— 设置窗口手填，只存你这台机器，可一键清除；
-  3. 环境变量 —— 临时启动时用，不落盘。
-- 说明：纯前端项目**不适合**内嵌任何 API Key（打包后明文可见），所以默认走 `scripts/serve.mjs` 代理，AI 逻辑一律在本地 Node 侧。
+- **默认不联网**：没有配置任何 Key 时，应用不发任何模型请求，笔记全程留在本机浏览器内存里。
+- **密钥默认在服务端**：代理模式从 `.env` 或环境变量读 `COMMAND_CODE_API_KEY`，只在 Node 内存中使用，前端不接触。
+- **直连模式是可选降级**：只有服务商允许 CORS 时才可用，Key 会留在本机 localStorage，不建议在共享机器上使用。
+- **本地服务有边界**：默认只监听 `127.0.0.1`；静态资源白名单只开放页面、样式和 `js/*.js`；
+  `.env`、`.git`、`data/`、`_tmp/`、`node_modules/` 一律无法通过 HTTP 读取。
+- **API 有来源校验**：Host 必须是本机，Origin 必须是本机页面，POST 必须是 JSON；跨站页面不能借用本地代理。
 - 发出去的只有「当前笔记 + 关键词检索出的少数相关笔记片段」，且只发给你自己填的接口地址。
-- 云同步的 token 与 AI Key 同样只存本机 localStorage；备份包只写进你自己指定的仓库/网盘。
+- 云同步 token 与直连模式的 Key 只存本机 localStorage；备份包只写进你自己指定的仓库/网盘。
 - 问题记录除了浏览器 localStorage，还会通过本地服务写到 `data/records.json`（已在 `.gitignore` 里），
   所以换端口、换浏览器、重装都不丢；启动时会把服务端与本地两份按 id 合并。
+- 插件代码以页面权限运行，宿主只提供受控 API，但**不是安全沙箱**；只安装可信插件。
 
 ---
 
 ## 8. 已知限制
 
-- 浏览器里新建 / 改名的笔记会存进本机 localStorage 缓存，换机器不同步；要写回磁盘请用 `Ctrl+S` 下载。
+- 通过「打开本地文件夹」并授权读写后，笔记改动会自动回写磁盘；拖入文件夹或普通文件选择仍是只读，需用 `Ctrl+S` 下载。
 - 不提供多人协作与实时同步；跨设备请用第 9 节的云同步做快照备份。
 - 浏览器不保证文件读取性能，超大库（>5000 篇）建议先用脚本预生成 JSON。
 - 搜索暂不支持括号分组（与主流实现一致），复杂的与或组合请拆成多次查询。
-- 全局排斥力仍是 O(n²)，中大型库建议关闭标签节点以获得更好帧率。
-- 浏览器里改的笔记只存在当前会话（可 Ctrl+S 下载 .md 覆盖原文件），不会直接写回磁盘。
+- 小图使用精确两两排斥；超过 360 个节点自动切到 3×3 网格 + 远端质心近似，1000+ 节点仍建议实际压测。
+- 浏览器重启后文件夹句柄不会自动恢复，需要重新打开一次文件夹；未授权读写的库保持只读。
 - 浏览器直连模式受服务商 CORS 限制，被拦时请改用本地代理模式。
+- `app.js` / `ai.js` 的源码片段仍共享同一个闭包，当前是物理拆分，不是运行时模块隔离。
+- 插件没有安全沙箱，第三方插件等同于页面脚本。
 
 ---
 
 ## 9. 文档与演进记录
 
 - `docs/PROMPT-LOG.md`：Prompt 链快照（需求 → AI 产出 → 人工纠偏 → 验收）
-- `docs/ARCHITECTURE.md`：架构与关键决策说明
+- `docs/ARCHITECTURE.md`：架构与关键决策说明（含源码拆分、server-core、store schema 与安全边界）
 - `PROMPT.md`：最初的单条规格 Prompt
 - `可行性分析.md`：立项前的可行性论证与 MVP 排序
 
@@ -380,7 +425,7 @@ Race-AiNote/
 单个 JSON 文件，含所有笔记的 Markdown 原文：
 
 ```json
-{ "app": "Race-AiNote", "version": 1, "savedAt": "…", "vault": "示例库", "count": 50,
+{ "app": "问墨笔记", "version": 1, "savedAt": "…", "vault": "示例库", "count": 50,
   "files": [{ "path": "20-数学/导数及其应用.md", "content": "# 导数…" }] }
 ```
 
@@ -440,8 +485,10 @@ api.registerCommand({
 
 | 用途 | 地址 |
 | --- | --- |
-| 主仓（Gitee，Public） | https://gitee.com/ressoap/race-ai-note |
-| 镜像（GitHub，Public） | https://github.com/ressoap/Race-AiNote |
+| 主仓（Gitee，Public） | https://gitee.com/ressoap/wenmo-notes |
+| 镜像（GitHub，Public） | https://github.com/ressoap/wenmo-notes |
+
+> 远程仓库需在 Gitee / GitHub 网页端把旧仓库改名为 `wenmo-notes`；改名后旧地址通常会自动跳转。
 
 双远程配置、一键推两边的命令与常见坑见 `docs/REPO-MIRROR.md`。
 

@@ -6,17 +6,18 @@
 ## 1. 一次性配置双远程
 
 ```bash
-cd Race-AiNote
+cd wenmo-notes
 # 主仓
-git remote add gitee  https://gitee.com/ressoap/race-ai-note.git
+git remote add gitee  https://gitee.com/ressoap/wenmo-notes.git
 # 镜像
-git remote add github https://github.com/ressoap/Race-AiNote.git
+git remote add github https://github.com/ressoap/wenmo-notes.git
 
 # 校验：应当看到两个远程
 git remote -v
 ```
 
-> 本仓库实际地址见 README 第 9 节。
+> 远程仓库需先在 Gitee / GitHub 网页端改名为 wenmo-notes；改名后再用下面的地址。
+> 本仓库实际地址见 README 第 12 节。
 > 凭据交给系统的凭据管理器（Windows 的「凭据管理器」/ Git Credential Manager），
 > **不要**把 token 写进 remote URL，更不要提交到仓库。
 
@@ -30,8 +31,8 @@ git push github main
 或者一条命令推两边：
 
 ```bash
-git remote set-url --add --push origin https://gitee.com/ressoap/race-ai-note.git
-git remote set-url --add --push origin https://github.com/ressoap/Race-AiNote.git
+git remote set-url --add --push origin https://gitee.com/ressoap/wenmo-notes.git
+git remote set-url --add --push origin https://github.com/ressoap/wenmo-notes.git
 git push origin main        # 一次推两个仓库
 ```
 
