@@ -740,32 +740,27 @@ const acceptConfirm = async () => {
   out.statsPoints = w.document.querySelectorAll('#stats-points .stats-point-row').length >= 1;
   out.statsEmptyHidden = w.document.querySelector('#stats-empty').hidden;
 
-  // 分析范围：整库总分析 / 单篇错题本
+  // 分析范围：按笔记库（全部 / 示例库 / 当前库）
   const scopeSelect = w.document.querySelector('#stats-scope-select');
-  out.statsScopeSelect = Boolean(scopeSelect) && scopeSelect.options.length === 3;
-  const mathOption = [...scopeSelect.options].find(o => o.textContent.indexOf('数学-错题索引') === 0);
-  scopeSelect.value = mathOption ? mathOption.value : '';
+  const optionTexts = [...scopeSelect.options].map(o => o.textContent);
+  out.statsScopeSelect = scopeSelect.options.length === 3
+    && optionTexts[0].indexOf('全部错题') === 0;
+  out.statsScopeVaultOnly = optionTexts.every(t => t.indexOf('错题索引') < 0);
+  const allRecordsNow = JSON.parse(w.localStorage.getItem(STORE.records) || '[]');
+  const demoCount = allRecordsNow.filter(r => (r.vaultId || 'demo') === 'demo').length;
+  const smokeCount = allRecordsNow.filter(r => r.vaultId === smokeVaultId).length;
+  const smokeScopeOption = [...scopeSelect.options].find(o => o.value === smokeVaultId);
+  out.statsScopeHasVaults = Boolean(smokeScopeOption)
+    && scopeSelect.options.length === 3
+    && Boolean([...scopeSelect.options].find(o => o.value === 'demo'));
+  scopeSelect.value = smokeVaultId;
   scopeSelect.dispatchEvent(new w.Event('change'));
   await sleep(80);
-  out.statsScopeSingle = w.document.querySelector('#stats-total').textContent === '2'
-    && w.document.querySelectorAll('#stats-subjects li').length === 1;
+  out.statsScopeSingle = w.document.querySelector('#stats-total').textContent === String(smokeCount);
   scopeSelect.value = '';
   scopeSelect.dispatchEvent(new w.Event('change'));
   await sleep(80);
-  out.statsScopeAll = w.document.querySelector('#stats-total').textContent === '3'
-    && w.document.querySelectorAll('#stats-subjects li').length === 2;
-
-  // 未归档错题单独成一项
-  const withUnfiled = JSON.parse(w.localStorage.getItem(STORE.records) || '[]');
-  withUnfiled.push({
-    id: 'seed-unfiled', question: '还没归档的题', answer: 'a', at: Date.now(),
-    subject: '化学', knowledgePoints: ['氧化还原'], status: 'open', vaultId: smokeVaultId
-  });
-  w.localStorage.setItem(STORE.records, JSON.stringify(withUnfiled));
-  api.renderLauncher();
-  await sleep(90);
-  const unfiledOpt = [...w.document.querySelectorAll('#stats-scope-select option')].find(o => o.textContent.indexOf('未归档') === 0);
-  out.statsScopeUnfiled = Boolean(unfiledOpt) && unfiledOpt.textContent.indexOf('1 道') > 0;
+  out.statsScopeAll = w.document.querySelector('#stats-total').textContent === String(demoCount + smokeCount);
 
   // 书本右键菜单：复制 / 改名 / 删除 / 备份 / 查看详情
   const smokeBook = [...w.document.querySelectorAll('#launcher .book')].find(el =>
@@ -899,7 +894,7 @@ const acceptConfirm = async () => {
   out.statsEmptyState = !w.document.querySelector('#stats-empty').hidden && w.document.querySelector('#stats-chart').hidden;
   api.closeLauncher();
 
-  const required = ['createdNote', 'renamed', 'deleted', 'pluginMenuNearSettings', 'diskWriteBack', 'diskBindingReset', 'graphMenuVisible', 'graphMenuTitle', 'graphMenuGroups', 'graphMenuItemCount', 'graphFavorite', 'graphFavoriteStar', 'graphFavoriteToggle', 'graphMovePicker', 'graphPickClosed', 'teacherButtonLeftOfSettings', 'teacherModalOpened', 'teacherModule', 'teacherTraitSliders', 'teacherSaved', 'teacherConfigSaved', 'teacherPromptApplied', 'teacherResetButton', 'teacherResetConfirm', 'teacherReset', 'teacherModalClosed', 'sidebarResizer', 'sidebarDragResized', 'sidebarWidthSaved', 'sidebarReset', 'noteTabStrip', 'noteTabFirst', 'noteTabActive', 'noteTabSecond', 'noteTabClickSwitches', 'noteTabReordered', 'noteTabsSaved', 'noteTabCloseSwitches', 'noteTabCloseCount', 'recordDeleted', 'quickSaveStaysEditing', 'quickSaveWroteContent', 'quickSavePersisted', 'nestedFolderDepth', 'stopApi', 'stopButtonVisible', 'sendDisabledWhileBusy', 'stopAboveSend', 'stopInterrupted', 'stopMessage', 'stopButtonHidden', 'sendEnabledAfterStop', 'stopNoRecord', 'noQuark', 'keyClearedInLocalMode', 'newApiAlias', 'recordDateFilter', 'recordDateOptions', 'recordDateFiltered', 'recordDetailOpen', 'recordSubtabOpen', 'recordInlineView', 'recordInlineQuestion', 'recordDetailClosed', 'useNoteDefaultOff', 'collapseExpandButtons', 'expandWorked', 'mistakeSubjectFolders', 'aiPanelResizer', 'aiPanelResized', 'aiPanelWidthSaved', 'aiPanelReset', 'imageAttachApi', 'photoButton', 'photoApi', 'photoLocalGuard', 'imageEmptyAdd', 'attachmentBox', 'savedVisionModel', 'visionModelField', 'imageDropNoVaultChange', 'imageDropPreview', 'imageDropCleared', 'inputResizer', 'inputInitialHeight', 'inputResetHeight', 'inputDragResized', 'inputHeightSaved', 'recordLocateButton', 'recordLocated', 'recordLocateHighlight', 'initialOpenWithTarget', 'autoFiledBar', 'autoFiledAll', 'autoTaggedAll', 'englishAutoFiled', 'englishBookCreated', 'autoHeading', 'autoEnglishTag', 'allOriginalQuestionsArchived', 'originalQuestionHeading', 'autoResolved', 'recordsNewestFirst', 'recordDragDisabled', 'recordReorderApiRemoved', 'recordTimeSorted', 'recordUnfiled', 'vaultRecordsIsolated', 'usageIsolated', 'launcherApi', 'launcherVisible', 'launcherBooks', 'launcherAddCard', 'launcherDemoBook', 'launcherDemoNoRemove', 'launcherClosedOnEnter', 'launcherEnteredDemo', 'launcherSidebarButton', 'launcherEscOnBody', 'launcherEscClosed', 'launcherVaultBookSaved', 'launcherVaultBookRendered', 'statsTotal', 'statsPieArcs', 'statsLegend', 'statsPercentSum', 'statsPoints', 'mistakePointTags', 'sanitizePoints', 'multiPointSnippet', 'statsEmptyHidden', 'statsEmptyState', 'statsScopeSelect', 'statsScopeSingle', 'statsScopeAll', 'statsScopeUnfiled', 'vaultMenuOpened', 'vaultMenuItemCount', 'vaultMenuBackup', 'vaultDetailOpened', 'vaultDetailRows', 'vaultDetailClosed', 'vaultRenamed', 'vaultDuplicated', 'vaultDeleted', 'vaultWentToTrash', 'noHoverDelete', 'vaultRestored', 'vaultMenuDemoLimited', 'vaultMenuClosed', 'pickCancelStaysOnLauncher', 'pickSuccessEntersVault', 'pickSuccessLoadedNote', 'newVaultCard', 'newVaultCreated', 'newVaultEntered', 'newVaultStarter', 'newVaultGraph', 'newVaultContent', 'recordOwnerRepaired'];
+  const required = ['createdNote', 'renamed', 'deleted', 'pluginMenuNearSettings', 'diskWriteBack', 'diskBindingReset', 'graphMenuVisible', 'graphMenuTitle', 'graphMenuGroups', 'graphMenuItemCount', 'graphFavorite', 'graphFavoriteStar', 'graphFavoriteToggle', 'graphMovePicker', 'graphPickClosed', 'teacherButtonLeftOfSettings', 'teacherModalOpened', 'teacherModule', 'teacherTraitSliders', 'teacherSaved', 'teacherConfigSaved', 'teacherPromptApplied', 'teacherResetButton', 'teacherResetConfirm', 'teacherReset', 'teacherModalClosed', 'sidebarResizer', 'sidebarDragResized', 'sidebarWidthSaved', 'sidebarReset', 'noteTabStrip', 'noteTabFirst', 'noteTabActive', 'noteTabSecond', 'noteTabClickSwitches', 'noteTabReordered', 'noteTabsSaved', 'noteTabCloseSwitches', 'noteTabCloseCount', 'recordDeleted', 'quickSaveStaysEditing', 'quickSaveWroteContent', 'quickSavePersisted', 'nestedFolderDepth', 'stopApi', 'stopButtonVisible', 'sendDisabledWhileBusy', 'stopAboveSend', 'stopInterrupted', 'stopMessage', 'stopButtonHidden', 'sendEnabledAfterStop', 'stopNoRecord', 'noQuark', 'keyClearedInLocalMode', 'newApiAlias', 'recordDateFilter', 'recordDateOptions', 'recordDateFiltered', 'recordDetailOpen', 'recordSubtabOpen', 'recordInlineView', 'recordInlineQuestion', 'recordDetailClosed', 'useNoteDefaultOff', 'collapseExpandButtons', 'expandWorked', 'mistakeSubjectFolders', 'aiPanelResizer', 'aiPanelResized', 'aiPanelWidthSaved', 'aiPanelReset', 'imageAttachApi', 'photoButton', 'photoApi', 'photoLocalGuard', 'imageEmptyAdd', 'attachmentBox', 'savedVisionModel', 'visionModelField', 'imageDropNoVaultChange', 'imageDropPreview', 'imageDropCleared', 'inputResizer', 'inputInitialHeight', 'inputResetHeight', 'inputDragResized', 'inputHeightSaved', 'recordLocateButton', 'recordLocated', 'recordLocateHighlight', 'initialOpenWithTarget', 'autoFiledBar', 'autoFiledAll', 'autoTaggedAll', 'englishAutoFiled', 'englishBookCreated', 'autoHeading', 'autoEnglishTag', 'allOriginalQuestionsArchived', 'originalQuestionHeading', 'autoResolved', 'recordsNewestFirst', 'recordDragDisabled', 'recordReorderApiRemoved', 'recordTimeSorted', 'recordUnfiled', 'vaultRecordsIsolated', 'usageIsolated', 'launcherApi', 'launcherVisible', 'launcherBooks', 'launcherAddCard', 'launcherDemoBook', 'launcherDemoNoRemove', 'launcherClosedOnEnter', 'launcherEnteredDemo', 'launcherSidebarButton', 'launcherEscOnBody', 'launcherEscClosed', 'launcherVaultBookSaved', 'launcherVaultBookRendered', 'statsTotal', 'statsPieArcs', 'statsLegend', 'statsPercentSum', 'statsPoints', 'mistakePointTags', 'sanitizePoints', 'multiPointSnippet', 'statsEmptyHidden', 'statsEmptyState', 'statsScopeSelect', 'statsScopeVaultOnly', 'statsScopeHasVaults', 'statsScopeSingle', 'statsScopeAll', 'vaultMenuOpened', 'vaultMenuItemCount', 'vaultMenuBackup', 'vaultDetailOpened', 'vaultDetailRows', 'vaultDetailClosed', 'vaultRenamed', 'vaultDuplicated', 'vaultDeleted', 'vaultWentToTrash', 'noHoverDelete', 'vaultRestored', 'vaultMenuDemoLimited', 'vaultMenuClosed', 'pickCancelStaysOnLauncher', 'pickSuccessEntersVault', 'pickSuccessLoadedNote', 'newVaultCard', 'newVaultCreated', 'newVaultEntered', 'newVaultStarter', 'newVaultGraph', 'newVaultContent', 'recordOwnerRepaired'];
   const failed = required.filter(key => !out[key]);
   if (failed.length) errors.push('smoke assertions failed: ' + failed.join(', '));
   if (out.afterUninstall !== 0) errors.push('plugins not fully uninstalled: ' + out.afterUninstall);
