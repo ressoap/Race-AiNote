@@ -20,6 +20,7 @@
     order: PREFIX + 'order',
     sort: PREFIX + 'sort',
     vault: PREFIX + 'vault',
+    vaults: PREFIX + 'vaults',
     aiConfig: PREFIX + 'ai-config',
     cloudConfig: PREFIX + 'cloud',
     records: PREFIX + 'records',

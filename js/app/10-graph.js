@@ -19,6 +19,8 @@
 
   /* ── 载入数据 ───────────────────────────────────────────── */
   function loadFiles(files, label) {
+    const prevLabel = state.vaultLabel;
+    if (typeof commitActiveVault === 'function' && state.files && state.files.length) commitActiveVault();
     if (typeof resetDiskBinding === 'function') resetDiskBinding();
     state.files = files;
     state.vaultLabel = label || '本地库';
@@ -42,6 +44,7 @@
     if (wantedTab && state.graph.notes.some(n => n.id === wantedTab)) openNote(wantedTab);
     else if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
+    if (typeof adoptVault === 'function') adoptVault(label || '本地库', files, prevLabel);
     if (typeof saveLocalVault === 'function') saveLocalVault();
   }
 
@@ -90,7 +93,10 @@
       await walkDirectory(dir, '', files);
       if (!files.length) return toast('这个文件夹里没有 Markdown 笔记');
       loadFiles(files, dir.name);
-      if (writable && typeof bindDiskRoot === 'function') bindDiskRoot(dir, files);
+      if (writable && typeof bindDiskRoot === 'function') {
+        bindDiskRoot(dir, files);
+        if (typeof attachVaultHandle === 'function') attachVaultHandle(dir);
+      }
       toast('已读取 ' + dir.name + '：' + files.length + ' 个文件' + (writable ? '，修改会写回磁盘' : '（只读）'));
     } catch (err) {
       if (err && err.name === 'AbortError') return;

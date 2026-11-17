@@ -79,6 +79,7 @@
   function saveLocalVault() {
     try {
       store.setJSON(VAULT_KEY, {
+        id: state.vaultId || null,
         label: state.vaultLabel,
         savedAt: Date.now(),
         files: state.files
@@ -91,6 +92,9 @@
     try {
       const raw = store.getJSON(VAULT_KEY, null);
       if (!raw || !Array.isArray(raw.files) || !raw.files.length) return null;
+      if (raw.id && raw.id !== 'demo' && typeof pendingVaultEntry !== 'undefined') {
+        pendingVaultEntry = { id: raw.id, label: raw.label || '本地库' };
+      }
       return raw;
     } catch (_) {
       return null;

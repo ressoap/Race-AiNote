@@ -95,7 +95,9 @@
     usage: {},
     manualOrder: {},
     linkAnim: new Map(),
-    vaultLabel: '示例库'
+    vaultLabel: '示例库',
+    vaultId: null,
+    vaultSavedAt: 0
   };
 
   // 支持 ?theme=dark 强制主题（用于文档截图与演示录像）

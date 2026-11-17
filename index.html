@@ -21,6 +21,9 @@
         <span id="vault-name" title="当前库">示例库</span>
       </div>
       <div class="sidebar-actions">
+        <button id="btn-vaults" class="icon-btn" title="切换笔记库（打开进入页）">
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="7" height="14" rx="1.6"/><rect x="12" y="5" width="8.5" height="6.2" rx="1.6"/><rect x="12" y="13.2" width="8.5" height="5.8" rx="1.6"/></svg>
+        </button>
         <button id="btn-open-folder" class="icon-btn" title="打开本地文件夹（读取真实 Markdown）">
           <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10h-17z"/><path d="M12 11v5M9.5 13.5h5"/></svg>
         </button>
@@ -576,6 +579,41 @@
       <button id="confirm-dialog-cancel" class="ghost-btn">取消</button>
       <button id="confirm-dialog-ok" class="primary-btn">确定</button>
     </div>
+  </div>
+</div>
+
+<!-- ── 进入页：选择笔记库（书本平铺） ───────────────────── -->
+<div id="launcher" class="launcher" hidden aria-label="选择笔记库">
+  <div class="launcher-bg" aria-hidden="true"></div>
+  <div class="launcher-inner">
+    <header class="launcher-head">
+      <div class="launcher-brand">
+        <span class="launcher-logo">墨</span>
+        <div class="launcher-brand-text">
+          <h1 class="launcher-title">问墨笔记</h1>
+          <p class="launcher-sub">选择一个笔记库开始 · 笔记是主体，AI 是助手</p>
+        </div>
+      </div>
+      <div class="launcher-tools">
+        <button id="launcher-open" class="launcher-btn primary" type="button">打开本地文件夹</button>
+        <button id="launcher-demo" class="launcher-btn" type="button">示例库</button>
+        <button id="launcher-close" class="icon-btn" type="button" title="返回当前笔记库（Esc）">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="launcher-scroll">
+      <div class="launcher-shelf-head">
+        <h2 class="launcher-section-title">我的笔记库</h2>
+        <span id="launcher-count" class="launcher-count"></span>
+      </div>
+      <div id="launcher-shelf" class="shelf" role="list"></div>
+    </div>
+
+    <footer class="launcher-foot">
+      <span>点击书本进入 · Esc 返回当前笔记库 · 所有数据只留在本机</span>
+    </footer>
   </div>
 </div>
 

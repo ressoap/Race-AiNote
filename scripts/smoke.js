@@ -58,6 +58,8 @@ const acceptConfirm = async () => {
 (async () => {
   await sleep(400);
   const api = w.__raceAiNote;
+  // 启动即停在进入页：先关掉，后面的快捷键与工作区断言才和真实使用一致
+  if (api && api.closeLauncher) api.closeLauncher();
   const out = { errors };
   if (!api) {
     console.log(JSON.stringify({ errors, api: 'MISSING' }, null, 2));
@@ -675,7 +677,37 @@ const acceptConfirm = async () => {
   w.fetch = realFetch;
   api.ai.state.mode = previousMode;
 
-  const required = ['createdNote', 'renamed', 'deleted', 'pluginMenuNearSettings', 'diskWriteBack', 'diskBindingReset', 'graphMenuVisible', 'graphMenuTitle', 'graphMenuGroups', 'graphMenuItemCount', 'graphFavorite', 'graphFavoriteStar', 'graphFavoriteToggle', 'graphMovePicker', 'graphPickClosed', 'teacherButtonLeftOfSettings', 'teacherModalOpened', 'teacherModule', 'teacherTraitSliders', 'teacherSaved', 'teacherConfigSaved', 'teacherPromptApplied', 'teacherResetButton', 'teacherResetConfirm', 'teacherReset', 'teacherModalClosed', 'sidebarResizer', 'sidebarDragResized', 'sidebarWidthSaved', 'sidebarReset', 'noteTabStrip', 'noteTabFirst', 'noteTabActive', 'noteTabSecond', 'noteTabClickSwitches', 'noteTabReordered', 'noteTabsSaved', 'noteTabCloseSwitches', 'noteTabCloseCount', 'recordDeleted', 'quickSaveStaysEditing', 'quickSaveWroteContent', 'quickSavePersisted', 'nestedFolderDepth', 'stopApi', 'stopButtonVisible', 'sendDisabledWhileBusy', 'stopAboveSend', 'stopInterrupted', 'stopMessage', 'stopButtonHidden', 'sendEnabledAfterStop', 'stopNoRecord', 'noQuark', 'keyClearedInLocalMode', 'newApiAlias', 'recordDateFilter', 'recordDateOptions', 'recordDateFiltered', 'recordDetailOpen', 'recordSubtabOpen', 'recordInlineView', 'recordInlineQuestion', 'recordDetailClosed', 'useNoteDefaultOff', 'collapseExpandButtons', 'expandWorked', 'mistakeSubjectFolders', 'aiPanelResizer', 'aiPanelResized', 'aiPanelWidthSaved', 'aiPanelReset', 'imageAttachApi', 'photoButton', 'photoApi', 'photoLocalGuard', 'imageEmptyAdd', 'attachmentBox', 'savedVisionModel', 'visionModelField', 'imageDropNoVaultChange', 'imageDropPreview', 'imageDropCleared', 'inputResizer', 'inputInitialHeight', 'inputResetHeight', 'inputDragResized', 'inputHeightSaved', 'recordLocateButton', 'recordLocated', 'recordLocateHighlight', 'initialOpenWithTarget', 'autoFiledBar', 'autoFiledAll', 'autoTaggedAll', 'englishAutoFiled', 'englishBookCreated', 'autoHeading', 'autoEnglishTag', 'allOriginalQuestionsArchived', 'originalQuestionHeading', 'autoResolved', 'recordsNewestFirst', 'recordDragDisabled', 'recordReorderApiRemoved', 'recordTimeSorted', 'recordUnfiled'];
+  // ── 进入页：笔记库书本平铺 ──
+  out.launcherApi = typeof api.openLauncher === 'function' && typeof api.enterVault === 'function' && typeof api.vaultLibrary === 'function';
+  api.openLauncher();
+  await sleep(80);
+  const launcherEl = w.document.querySelector('#launcher');
+  out.launcherVisible = Boolean(launcherEl) && !launcherEl.hidden;
+  out.launcherBooks = w.document.querySelectorAll('#launcher .book').length >= 2;
+  out.launcherAddCard = Boolean(w.document.querySelector('#launcher .book-add'));
+  out.launcherDemoBook = Boolean(w.document.querySelector('#launcher .book[data-id="demo"]'));
+  out.launcherDemoNoRemove = !w.document.querySelector('#launcher .book[data-id="demo"] .book-remove');
+  const demoBookEl = w.document.querySelector('#launcher .book[data-id="demo"]');
+  if (demoBookEl) demoBookEl.click();
+  await sleep(150);
+  out.launcherClosedOnEnter = launcherEl.hidden;
+  out.launcherEnteredDemo = api.state.vaultId === 'demo' && api.state.files.length > 0;
+  w.document.querySelector('#btn-vaults').click();
+  await sleep(80);
+  out.launcherSidebarButton = !launcherEl.hidden;
+  w.document.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(60);
+  out.launcherEscOnBody = launcherEl.hidden;
+  api.closeLauncher();
+  out.launcherEscClosed = launcherEl.hidden;
+  api.loadFiles([{ path: 'a.md', content: '# A' }, { path: 'b.md', content: '# B' }], 'Smoke 测试库');
+  out.launcherVaultBookSaved = api.vaultLibrary().some(v => v.label === 'Smoke 测试库');
+  api.openLauncher();
+  await sleep(80);
+  out.launcherVaultBookRendered = Boolean([...w.document.querySelectorAll('#launcher .book .book-title')].find(el => el.textContent === 'Smoke 测试库'));
+  api.closeLauncher();
+
+  const required = ['createdNote', 'renamed', 'deleted', 'pluginMenuNearSettings', 'diskWriteBack', 'diskBindingReset', 'graphMenuVisible', 'graphMenuTitle', 'graphMenuGroups', 'graphMenuItemCount', 'graphFavorite', 'graphFavoriteStar', 'graphFavoriteToggle', 'graphMovePicker', 'graphPickClosed', 'teacherButtonLeftOfSettings', 'teacherModalOpened', 'teacherModule', 'teacherTraitSliders', 'teacherSaved', 'teacherConfigSaved', 'teacherPromptApplied', 'teacherResetButton', 'teacherResetConfirm', 'teacherReset', 'teacherModalClosed', 'sidebarResizer', 'sidebarDragResized', 'sidebarWidthSaved', 'sidebarReset', 'noteTabStrip', 'noteTabFirst', 'noteTabActive', 'noteTabSecond', 'noteTabClickSwitches', 'noteTabReordered', 'noteTabsSaved', 'noteTabCloseSwitches', 'noteTabCloseCount', 'recordDeleted', 'quickSaveStaysEditing', 'quickSaveWroteContent', 'quickSavePersisted', 'nestedFolderDepth', 'stopApi', 'stopButtonVisible', 'sendDisabledWhileBusy', 'stopAboveSend', 'stopInterrupted', 'stopMessage', 'stopButtonHidden', 'sendEnabledAfterStop', 'stopNoRecord', 'noQuark', 'keyClearedInLocalMode', 'newApiAlias', 'recordDateFilter', 'recordDateOptions', 'recordDateFiltered', 'recordDetailOpen', 'recordSubtabOpen', 'recordInlineView', 'recordInlineQuestion', 'recordDetailClosed', 'useNoteDefaultOff', 'collapseExpandButtons', 'expandWorked', 'mistakeSubjectFolders', 'aiPanelResizer', 'aiPanelResized', 'aiPanelWidthSaved', 'aiPanelReset', 'imageAttachApi', 'photoButton', 'photoApi', 'photoLocalGuard', 'imageEmptyAdd', 'attachmentBox', 'savedVisionModel', 'visionModelField', 'imageDropNoVaultChange', 'imageDropPreview', 'imageDropCleared', 'inputResizer', 'inputInitialHeight', 'inputResetHeight', 'inputDragResized', 'inputHeightSaved', 'recordLocateButton', 'recordLocated', 'recordLocateHighlight', 'initialOpenWithTarget', 'autoFiledBar', 'autoFiledAll', 'autoTaggedAll', 'englishAutoFiled', 'englishBookCreated', 'autoHeading', 'autoEnglishTag', 'allOriginalQuestionsArchived', 'originalQuestionHeading', 'autoResolved', 'recordsNewestFirst', 'recordDragDisabled', 'recordReorderApiRemoved', 'recordTimeSorted', 'recordUnfiled', 'launcherApi', 'launcherVisible', 'launcherBooks', 'launcherAddCard', 'launcherDemoBook', 'launcherDemoNoRemove', 'launcherClosedOnEnter', 'launcherEnteredDemo', 'launcherSidebarButton', 'launcherEscOnBody', 'launcherEscClosed', 'launcherVaultBookSaved', 'launcherVaultBookRendered'];
   const failed = required.filter(key => !out[key]);
   if (failed.length) errors.push('smoke assertions failed: ' + failed.join(', '));
   if (out.afterUninstall !== 0) errors.push('plugins not fully uninstalled: ' + out.afterUninstall);

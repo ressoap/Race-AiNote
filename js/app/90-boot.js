@@ -58,10 +58,12 @@
   renderPluginUI();
   refreshNoteWidgets();
   pluginHost.emit('app:ready', { notes: state.graph ? state.graph.notes.length : 0 });
+  if (typeof initLauncher === 'function') initLauncher();
   requestAnimationFrame(frame);
 
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
+    openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
