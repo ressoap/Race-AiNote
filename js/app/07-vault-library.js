@@ -578,6 +578,91 @@
     return true;
   }
 
+  /* ── 导入别人发来的备份 JSON ─────────────────────────────── */
+
+  function importVaultData(raw, options) {
+    const opts = options || {};
+    let data = raw;
+    if (typeof raw === 'string') {
+      try { data = JSON.parse(raw); } catch (_) { return null; }
+    }
+    if (!data || typeof data !== 'object') return null;
+    const files = Array.isArray(data.files)
+      ? data.files
+      : (data.vault && Array.isArray(data.vault.files) ? data.vault.files : null);
+    if (!files || !files.length) {
+      toast('这个文件里没有笔记内容');
+      return null;
+    }
+    const clean = files
+      .filter(f => f && typeof f.path === 'string' && f.path)
+      .map(f => ({ path: f.path, content: String(f.content == null ? '' : f.content), mtime: Number(f.mtime) || 0 }));
+    if (!clean.length) {
+      toast('这个文件里没有可用的笔记');
+      return null;
+    }
+    const baseLabel = String(data.label || (data.vault && data.vault.label) || '导入的笔记库').trim().slice(0, 40) || '导入的笔记库';
+    const id = newVaultId();
+    let label = baseLabel;
+    const existing = readVaultList().map(v => v.label);
+    if (existing.indexOf(label) >= 0) {
+      let n = 2;
+      while (existing.indexOf(label + ' (' + n + ')') >= 0) n += 1;
+      label = label + ' (' + n + ')';
+    }
+    commitActiveVault();
+    const list = readVaultList();
+    list.unshift({
+      id: id,
+      label: label,
+      savedAt: Date.now(),
+      noteCount: vaultNoteCount(clean),
+      hasHandle: false,
+      stale: false,
+      files: clean
+    });
+    writeVaultList(list);
+
+    // 备份里的错题记录也一起并进来，归属到新库
+    const incoming = Array.isArray(data.records) ? data.records : [];
+    if (incoming.length) {
+      try {
+        const all = (store.getJSON('records', []) || []).slice();
+        const ids = new Set(all.map(r => r && r.id));
+        for (const rec of incoming) {
+          if (!rec || typeof rec !== 'object') continue;
+          const next = Object.assign({}, rec, { vaultId: id });
+          if (ids.has(next.id)) next.id = 'imp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5);
+          ids.add(next.id);
+          all.unshift(next);
+        }
+        store.setJSON('records', all.slice(0, 600));
+      } catch (_) {}
+    }
+
+    renderLauncher();
+    if (opts.enter !== false) {
+      pendingVaultEntry = { id: id, label: label };
+      closeLauncher();
+      loadFiles(clean.map(f => Object.assign({}, f)), label);
+      toast('已导入《' + label + '》：' + clean.length + ' 个文件');
+    } else {
+      toast('已导入《' + label + '》');
+    }
+    return id;
+  }
+
+  async function importVaultFile(file) {
+    if (!file) return null;
+    try {
+      const text = await file.text();
+      return importVaultData(text);
+    } catch (err) {
+      toast('读取备份失败：' + (err && err.message ? err.message : err));
+      return null;
+    }
+  }
+
   /* ── 回收站：移出的笔记库还能拿回来 ─────────────────────── */
 
   function restoreVaultBook(id) {
@@ -714,6 +799,16 @@
       const menu = $('#vault-menu');
       if (menu && !menu.hidden && !ev.target.closest('#vault-menu')) closeVaultMenu();
     });
+    const importBtn = $('#launcher-import');
+    const importInput = $('#vault-import-input');
+    if (importBtn && importInput) {
+      importBtn.addEventListener('click', () => importInput.click());
+      importInput.addEventListener('change', async () => {
+        const file = (importInput.files || [])[0];
+        importInput.value = '';
+        if (file) await importVaultFile(file);
+      });
+    }
     const trashBtn = $('#launcher-trash');
     if (trashBtn) trashBtn.addEventListener('click', () => { openTrashModal(); });
     const trashClose = $('#vault-trash-close');
