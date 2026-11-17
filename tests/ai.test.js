@@ -120,7 +120,7 @@ test('错题片段标题包含知识点与日期', () => {
   const snippet = ai.mistakeSnippet(record, { subject: '英语', knowledgePoints: ['虚拟语气', '条件句'] });
   assert.match(snippet, /^## 虚拟语气 · \d{4}-\d{2}-\d{2}$/m);
   assert.match(snippet, /\*\*学科\*\*：英语/);
-  assert.match(snippet, /\*\*知识点\*\*：虚拟语气、条件句/);
+  assert.match(snippet, /\*\*知识点\*\*：#虚拟语气 #条件句/);
 });
 
 test('错题片段完整保留原题目：不截断、不压平换行', () => {
@@ -164,4 +164,27 @@ test('泛问靠答案文本也能识别数学，而不是落入其他', () => {
   const c = ai.classifyLocally('这题怎么做', '求导得 f(x)=2x，属于导数与函数单调性问题。');
   assert.equal(c.subject, '数学');
   assert.ok(c.knowledgePoints.some(x => /导数|函数/.test(x)));
+});
+
+test('知识点可直接当标签：清洗、去重、最多 5 个', () => {
+  assert.deepEqual(ai.sanitizeKnowledgePoints(['导数', '#导数', '数列 递推', '', '点、线', 'a/b'], 5), ['导数', '数列-递推', '点线', 'a/b']);
+  assert.equal(ai.sanitizeKnowledgePoints(['a1', 'b2', 'c3', 'd4', 'e5', 'f6']).length, 5, '最多保留 5 个');
+  assert.deepEqual(ai.sanitizeKnowledgePoints([]), []);
+  assert.equal(ai.MAX_KNOWLEDGE_POINTS, 5);
+});
+
+test('一道题多个知识点全部写进错题标签', () => {
+  const snippet = ai.mistakeSnippet(
+    { question: '求导后讨论数列单调性', answer: '解析', at: Date.now() },
+    { subject: '数学', knowledgePoints: ['导数与函数单调性', '数列递推', '三角函数'] }
+  );
+  assert.match(snippet, /^\*\*知识点\*\*：#导数与函数单调性 #数列递推 #三角函数$/m);
+  assert.match(snippet, /^## 导数与函数单调性 · \d{4}-\d{2}-\d{2}$/m);
+});
+
+test('本地兜底也能给出多个知识点', () => {
+  const c = ai.classifyLocally('求导数并讨论数列的单调性与极值', '');
+  assert.equal(c.subject, '数学');
+  assert.ok(c.knowledgePoints.length >= 2, JSON.stringify(c.knowledgePoints));
+  assert.ok(c.knowledgePoints.every(x => !/[\s#、，]/.test(x)), JSON.stringify(c.knowledgePoints));
 });

@@ -185,9 +185,11 @@
     const isMeta = /哪些笔记.*链接|薄弱环节|复习计划|核心考点|知识卡|整体结构|分析.*笔记|整理.*笔记|这个库.*怎么样|怎么用|介绍一下|你是谁/.test(questionText);
     const subject = RG.ai.normalizeSubject((analysis && analysis.subject) || record.subject || '其他');
     if (!force && isMeta) return null;
-    const points = Array.isArray(analysis && analysis.knowledgePoints)
-      ? analysis.knowledgePoints.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3)
-      : (Array.isArray(record.knowledgePoints) ? record.knowledgePoints.slice(0, 3) : []);
+    const points = RG.ai.sanitizeKnowledgePoints(
+      (analysis && analysis.knowledgePoints && analysis.knowledgePoints.length)
+        ? analysis.knowledgePoints
+        : (record.knowledgePoints || [])
+    );
     const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';
     const bookTitle = safeSubject + '-错题索引';
     const bookPath = '10-错题本/' + safeSubject + '/' + bookTitle + '.md';

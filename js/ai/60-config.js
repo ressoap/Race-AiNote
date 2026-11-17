@@ -129,9 +129,7 @@
         if (!res.ok) return local;
         const data = await res.json();
         if (!data || !data.subject) return local;
-        const points = Array.isArray(data.knowledgePoints)
-          ? data.knowledgePoints.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3)
-          : [];
+        const points = sanitizeKnowledgePoints(data.knowledgePoints);
         const subject = normalizeSubject(data.subject);
         if (!subject || subject === '其他') return local;
         return {
@@ -189,4 +187,4 @@
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, sanitizePoint, sanitizeKnowledgePoints, MAX_KNOWLEDGE_POINTS, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };

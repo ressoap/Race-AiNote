@@ -30,7 +30,7 @@
       }
       const analysis = RG.ai.classifyLocally(text, '');
       const subject = RG.ai.normalizeSubject(analysis.subject || '其他');
-      const points = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+      const points = RG.ai.sanitizeKnowledgePoints(analysis.knowledgePoints);
       const now = new Date();
       const title = subject + '拍题-' + photoStamp(now);
       const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';

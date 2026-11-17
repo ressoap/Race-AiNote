@@ -330,7 +330,7 @@
           }
           if (run.cancelled) return false;
           const subject = normalizeSubject(analysis.subject || '其他');
-          const knowledgePoints = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+          const knowledgePoints = sanitizeKnowledgePoints(analysis.knowledgePoints);
           upsertRecord({
             question: question,
             answer: loading.text,

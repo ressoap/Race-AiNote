@@ -2963,7 +2963,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         </div>
         <ul id="stats-subjects" class="stats-legend"></ul>
         <div class="stats-subhead">
-          <span>知识点分布比例</span>
+          <span>知识点覆盖（可多选）</span>
           <span id="stats-solved" class="stats-solved"></span>
         </div>
         <ul id="stats-points" class="stats-points"></ul>
@@ -5782,6 +5782,37 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     return s.slice(0, 12);
   }
 
+  const MAX_KNOWLEDGE_POINTS = 5;
+
+  /** 知识点要能直接当 Markdown 标签用：去 #、去标点、空格转 -，最长 16 字。 */
+  function sanitizePoint(value) {
+    return String(value == null ? '' : value)
+      .replace(/^#+/, '')
+      .replace(/[\s\u3000]+/g, '-')
+      .replace(/[^\p{L}\p{N}_\/-]/gu, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^[-/]+|[-/]+$/g, '')
+      .slice(0, 16);
+  }
+
+  /** 一道题可以有多个知识点：统一清洗、按原顺序去重、最多 5 个。 */
+  function sanitizeKnowledgePoints(list, max) {
+    const limit = Number(max) > 0 ? Math.min(Number(max), MAX_KNOWLEDGE_POINTS) : MAX_KNOWLEDGE_POINTS;
+    const source = Array.isArray(list) ? list : (list == null ? [] : [list]);
+    const out = [];
+    const seen = new Set();
+    for (const item of source) {
+      const label = sanitizePoint(item);
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(label);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   function knowledgePointsOf(subject, text) {
     const q = String(text || '');
     const rules = KNOWLEDGE_RULES[subject] || [];
@@ -5793,7 +5824,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const points = [];
     for (const item of scored) {
       if (!points.includes(item.label)) points.push(item.label);
-      if (points.length >= 3) break;
+      if (points.length >= 4) break;
     }
     return points;
   }
@@ -5806,7 +5837,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const byQuestion = guessSubject(q).subject;
     const byCombined = guessSubject(q + nl + a).subject;
     const subject = byQuestion || byCombined || (looksLikeEnglish(q) ? '英语' : '其他');
-    const points = knowledgePointsOf(subject, q + nl + a);
+    const points = sanitizeKnowledgePoints(knowledgePointsOf(subject, q + nl + a));
     return { subject, knowledgePoints: points.length ? points : [subject + '综合'], source: 'local' };
   }
 
@@ -5886,8 +5917,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const subject = normalizeSubject(a.subject || record.subject || '其他');
     const points = Array.isArray(a.knowledgePoints) ? a.knowledgePoints
       : (Array.isArray(record.knowledgePoints) ? record.knowledgePoints : []);
-    const cleanPoints = points.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
-    const primary = cleanPoints[0] || record.knowledgePoint || subject + '综合';
+    const cleanPoints = sanitizeKnowledgePoints(points);
+    const primary = cleanPoints[0] || sanitizePoint(record.knowledgePoint) || subject + '综合';
+    const pointLine = cleanPoints.length
+      ? cleanPoints.map(x => '#' + x).join(' ')
+      : '#' + primary;
     const title = primary + ' · ' + date;
     const question = String(record.question || '').replace(/\r\n/g, '\n').trim();
     const answer = String(record.answer || '').trim();
@@ -5896,7 +5930,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       '## ' + title,
       '',
       '**学科**：' + subject,
-      '**知识点**：' + (cleanPoints.length ? cleanPoints.join('、') : primary),
+      '**知识点**：' + pointLine,
       '',
       '### 原题目',
       '',
@@ -6243,7 +6277,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
           }
           if (run.cancelled) return false;
           const subject = normalizeSubject(analysis.subject || '其他');
-          const knowledgePoints = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+          const knowledgePoints = sanitizeKnowledgePoints(analysis.knowledgePoints);
           upsertRecord({
             question: question,
             answer: loading.text,
@@ -6886,9 +6920,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         if (!res.ok) return local;
         const data = await res.json();
         if (!data || !data.subject) return local;
-        const points = Array.isArray(data.knowledgePoints)
-          ? data.knowledgePoints.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3)
-          : [];
+        const points = sanitizeKnowledgePoints(data.knowledgePoints);
         const subject = normalizeSubject(data.subject);
         if (!subject || subject === '其他') return local;
         return {
@@ -6946,7 +6978,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, sanitizePoint, sanitizeKnowledgePoints, MAX_KNOWLEDGE_POINTS, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -7811,14 +7843,33 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     return raw.slice(0, 8);
   }
 
-  function statsPointOf(record) {
+  /** 一道题可以有多个知识点：一条记录会把它的每个知识点各算一次 */
+  function statsPointsOf(record) {
+    const out = [];
     const list = record && record.knowledgePoints;
-    if (Array.isArray(list) && list.length) {
-      const first = String(list[0] || '').trim();
-      if (first) return first;
+    if (Array.isArray(list)) {
+      for (const item of list) {
+        const label = String(item == null ? '' : item).trim();
+        if (label && out.indexOf(label) < 0) out.push(label);
+      }
     }
-    const single = String((record && record.knowledgePoint) || '').trim();
-    return single || '未分类';
+    if (!out.length) {
+      const single = String((record && record.knowledgePoint) || '').trim();
+      if (single) out.push(single);
+    }
+    return out.length ? out : ['未分类'];
+  }
+
+  /** 多知识点计数：百分比 = 提到该知识点的错题数 / 总错题数（可多选，合计会超过 100%） */
+  function statsGroupMulti(records, pick) {
+    const totals = new Map();
+    for (const rec of records) {
+      for (const label of pick(rec)) totals.set(label, (totals.get(label) || 0) + 1);
+    }
+    const base = records.length || 1;
+    return [...totals.entries()]
+      .map(([label, count]) => ({ label: label, count: count, pct: Math.round((count / base) * 100) }))
+      .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hans-CN'));
   }
 
   /** 计数 → 百分比（最大余数法，保证相加正好 100） */
@@ -7935,7 +7986,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     });
 
     if (!pointsEl) return;
-    const allPoints = statsGroup(records, statsPointOf);
+    const allPoints = statsGroupMulti(records, statsPointsOf);
     const points = allPoints.slice(0, 8);
     for (const item of points) {
       const row = document.createElement('li');
@@ -7966,10 +8017,9 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
     if (allPoints.length > points.length) {
       const rest = allPoints.slice(points.length);
-      const restPct = rest.reduce((sum, it) => sum + it.pct, 0);
       const tail = document.createElement('li');
       tail.className = 'stats-point-rest';
-      tail.textContent = '其余 ' + rest.length + ' 个知识点 · ' + restPct + '%';
+      tail.textContent = '其余 ' + rest.length + ' 个知识点' + (rest[0] ? '（最高 ' + rest[0].pct + '%）' : '');
       pointsEl.appendChild(tail);
     }
   }
@@ -8598,7 +8648,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       }
       const analysis = RG.ai.classifyLocally(text, '');
       const subject = RG.ai.normalizeSubject(analysis.subject || '其他');
-      const points = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+      const points = RG.ai.sanitizeKnowledgePoints(analysis.knowledgePoints);
       const now = new Date();
       const title = subject + '拍题-' + photoStamp(now);
       const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';
@@ -11299,9 +11349,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const isMeta = /哪些笔记.*链接|薄弱环节|复习计划|核心考点|知识卡|整体结构|分析.*笔记|整理.*笔记|这个库.*怎么样|怎么用|介绍一下|你是谁/.test(questionText);
     const subject = RG.ai.normalizeSubject((analysis && analysis.subject) || record.subject || '其他');
     if (!force && isMeta) return null;
-    const points = Array.isArray(analysis && analysis.knowledgePoints)
-      ? analysis.knowledgePoints.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3)
-      : (Array.isArray(record.knowledgePoints) ? record.knowledgePoints.slice(0, 3) : []);
+    const points = RG.ai.sanitizeKnowledgePoints(
+      (analysis && analysis.knowledgePoints && analysis.knowledgePoints.length)
+        ? analysis.knowledgePoints
+        : (record.knowledgePoints || [])
+    );
     const safeSubject = subject.replace(/[\/:*?"<>|]/g, '-').trim() || '其他';
     const bookTitle = safeSubject + '-错题索引';
     const bookPath = '10-错题本/' + safeSubject + '/' + bookTitle + '.md';

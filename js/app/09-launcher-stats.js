@@ -22,14 +22,33 @@
     return raw.slice(0, 8);
   }
 
-  function statsPointOf(record) {
+  /** 一道题可以有多个知识点：一条记录会把它的每个知识点各算一次 */
+  function statsPointsOf(record) {
+    const out = [];
     const list = record && record.knowledgePoints;
-    if (Array.isArray(list) && list.length) {
-      const first = String(list[0] || '').trim();
-      if (first) return first;
+    if (Array.isArray(list)) {
+      for (const item of list) {
+        const label = String(item == null ? '' : item).trim();
+        if (label && out.indexOf(label) < 0) out.push(label);
+      }
     }
-    const single = String((record && record.knowledgePoint) || '').trim();
-    return single || '未分类';
+    if (!out.length) {
+      const single = String((record && record.knowledgePoint) || '').trim();
+      if (single) out.push(single);
+    }
+    return out.length ? out : ['未分类'];
+  }
+
+  /** 多知识点计数：百分比 = 提到该知识点的错题数 / 总错题数（可多选，合计会超过 100%） */
+  function statsGroupMulti(records, pick) {
+    const totals = new Map();
+    for (const rec of records) {
+      for (const label of pick(rec)) totals.set(label, (totals.get(label) || 0) + 1);
+    }
+    const base = records.length || 1;
+    return [...totals.entries()]
+      .map(([label, count]) => ({ label: label, count: count, pct: Math.round((count / base) * 100) }))
+      .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hans-CN'));
   }
 
   /** 计数 → 百分比（最大余数法，保证相加正好 100） */
@@ -146,7 +165,7 @@
     });
 
     if (!pointsEl) return;
-    const allPoints = statsGroup(records, statsPointOf);
+    const allPoints = statsGroupMulti(records, statsPointsOf);
     const points = allPoints.slice(0, 8);
     for (const item of points) {
       const row = document.createElement('li');
@@ -177,10 +196,9 @@
 
     if (allPoints.length > points.length) {
       const rest = allPoints.slice(points.length);
-      const restPct = rest.reduce((sum, it) => sum + it.pct, 0);
       const tail = document.createElement('li');
       tail.className = 'stats-point-rest';
-      tail.textContent = '其余 ' + rest.length + ' 个知识点 · ' + restPct + '%';
+      tail.textContent = '其余 ' + rest.length + ' 个知识点' + (rest[0] ? '（最高 ' + rest[0].pct + '%）' : '');
       pointsEl.appendChild(tail);
     }
   }

@@ -480,6 +480,37 @@
     return s.slice(0, 12);
   }
 
+  const MAX_KNOWLEDGE_POINTS = 5;
+
+  /** 知识点要能直接当 Markdown 标签用：去 #、去标点、空格转 -，最长 16 字。 */
+  function sanitizePoint(value) {
+    return String(value == null ? '' : value)
+      .replace(/^#+/, '')
+      .replace(/[\s\u3000]+/g, '-')
+      .replace(/[^\p{L}\p{N}_\/-]/gu, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^[-/]+|[-/]+$/g, '')
+      .slice(0, 16);
+  }
+
+  /** 一道题可以有多个知识点：统一清洗、按原顺序去重、最多 5 个。 */
+  function sanitizeKnowledgePoints(list, max) {
+    const limit = Number(max) > 0 ? Math.min(Number(max), MAX_KNOWLEDGE_POINTS) : MAX_KNOWLEDGE_POINTS;
+    const source = Array.isArray(list) ? list : (list == null ? [] : [list]);
+    const out = [];
+    const seen = new Set();
+    for (const item of source) {
+      const label = sanitizePoint(item);
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(label);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
   function knowledgePointsOf(subject, text) {
     const q = String(text || '');
     const rules = KNOWLEDGE_RULES[subject] || [];
@@ -491,7 +522,7 @@
     const points = [];
     for (const item of scored) {
       if (!points.includes(item.label)) points.push(item.label);
-      if (points.length >= 3) break;
+      if (points.length >= 4) break;
     }
     return points;
   }
@@ -504,7 +535,7 @@
     const byQuestion = guessSubject(q).subject;
     const byCombined = guessSubject(q + nl + a).subject;
     const subject = byQuestion || byCombined || (looksLikeEnglish(q) ? '英语' : '其他');
-    const points = knowledgePointsOf(subject, q + nl + a);
+    const points = sanitizeKnowledgePoints(knowledgePointsOf(subject, q + nl + a));
     return { subject, knowledgePoints: points.length ? points : [subject + '综合'], source: 'local' };
   }
 
@@ -584,8 +615,11 @@
     const subject = normalizeSubject(a.subject || record.subject || '其他');
     const points = Array.isArray(a.knowledgePoints) ? a.knowledgePoints
       : (Array.isArray(record.knowledgePoints) ? record.knowledgePoints : []);
-    const cleanPoints = points.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
-    const primary = cleanPoints[0] || record.knowledgePoint || subject + '综合';
+    const cleanPoints = sanitizeKnowledgePoints(points);
+    const primary = cleanPoints[0] || sanitizePoint(record.knowledgePoint) || subject + '综合';
+    const pointLine = cleanPoints.length
+      ? cleanPoints.map(x => '#' + x).join(' ')
+      : '#' + primary;
     const title = primary + ' · ' + date;
     const question = String(record.question || '').replace(/\r\n/g, '\n').trim();
     const answer = String(record.answer || '').trim();
@@ -594,7 +628,7 @@
       '## ' + title,
       '',
       '**学科**：' + subject,
-      '**知识点**：' + (cleanPoints.length ? cleanPoints.join('、') : primary),
+      '**知识点**：' + pointLine,
       '',
       '### 原题目',
       '',
@@ -941,7 +975,7 @@
           }
           if (run.cancelled) return false;
           const subject = normalizeSubject(analysis.subject || '其他');
-          const knowledgePoints = Array.isArray(analysis.knowledgePoints) ? analysis.knowledgePoints.slice(0, 3) : [];
+          const knowledgePoints = sanitizeKnowledgePoints(analysis.knowledgePoints);
           upsertRecord({
             question: question,
             answer: loading.text,
@@ -1584,9 +1618,7 @@
         if (!res.ok) return local;
         const data = await res.json();
         if (!data || !data.subject) return local;
-        const points = Array.isArray(data.knowledgePoints)
-          ? data.knowledgePoints.map(x => String(x || '').trim()).filter(Boolean).slice(0, 3)
-          : [];
+        const points = sanitizeKnowledgePoints(data.knowledgePoints);
         const subject = normalizeSubject(data.subject);
         if (!subject || subject === '其他') return local;
         return {
@@ -1644,5 +1676,5 @@
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, sanitizePoint, sanitizeKnowledgePoints, MAX_KNOWLEDGE_POINTS, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

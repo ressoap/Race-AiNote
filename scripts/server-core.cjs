@@ -47,9 +47,11 @@ const PROMPTS = {
   analyze: [
     '你是错题归档助手。根据用户的问题和答案，判断学科和知识点。',
     '只输出 JSON，不要 Markdown，不要解释。格式：',
-    '{"subject":"数学","knowledgePoints":["知识点1","知识点2"]}',
+    '{"subject":"数学","knowledgePoints":["导数与函数单调性","数列递推"]}',
     '学科只能从这些里选一个：数学、物理、化学、生物、英语、语文、数据结构、信号与系统、其他。',
-    'knowledgePoints 给 1-3 个，每个 2-12 个字，按重要性排序。',
+    'knowledgePoints 给 1-4 个，每个 2-12 个字，按重要性排序。',
+    '一道题可以有多个知识点：跨章节、跨方法的题必须把涉及的点都列出来，不要只给一个。',
+    '知识点会被直接当作标签用于错题本分类和统计，只能含中文/字母/数字/下划线/斜杠，不要空格、标点、# 号。',
     '如果题目涉及英语句子、语法、完形、阅读、写作，学科必须是英语，不要归到数学。'
   ].join('\n'),
   tutor: [
@@ -240,7 +242,24 @@ function parseLooseJson(text) {
 
 function normalizeKnowledgePoints(value) {
   const raw = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(/[、,，;；]/) : []);
-  return raw.map(item => String(item || '').trim()).filter(Boolean).slice(0, 3);
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const label = String(item == null ? '' : item)
+      .replace(/^#+/, '')
+      .replace(/[\s\u3000]+/g, '-')
+      .replace(/[^\p{L}\p{N}_\/-]/gu, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^[-/]+|[-/]+$/g, '')
+      .slice(0, 16);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 
