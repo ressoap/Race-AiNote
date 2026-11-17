@@ -67,7 +67,8 @@ npm run build:exe        # 生成 dist/Wenmo-Notes.exe
 - 用 Node 官方 SEA（Single Executable Application）打包，不依赖 Electron；构建后自动把 PE 子系统改成 GUI，避免黑框；
 - 如果旧 `Wenmo-Notes.exe` 正在运行，`npm run build:exe` 会自动退到 `dist/Wenmo-Notes-NoConsole.exe`，不覆盖运行中的文件；
 - 页面本体内嵌在 exe 里，记录写在 exe 同级的 `data/records.json`，浏览器 profile 在 `%LOCALAPPDATA%/Wenmo-Notes/browser-profile`，不再写进项目 `dist/profile/`；
-- 端口被占用会自动往后找空闲端口；
+- 端口被占用会自动往后找空闲端口；如果占用者是已经运行的问墨笔记，会直接复用那个端口，不会再另起一个实例后误关服务；
+- 浏览器始终用带端口的完整地址 `http://127.0.0.1:<端口>/` 打开，当前地址也会写入 `data/app-url.txt`；
 - 想换浏览器：`set WENMO_BROWSER=C:/.../chrome.exe` 再运行。
 
 **B2. Electron 桌面版（Obsidian 同款技术栈）**
@@ -112,7 +113,7 @@ node scripts/build-electron.js --app-only
 git clone https://gitee.com/ressoap/race-ai-note.git
 cd race-ai-note
 npm install            # 只装 jsdom（冒烟测试）、postject（exe 注入）、resedit（exe 图标）三个开发依赖
-npm test               # 100 项单元测试（解析 / 查询 / 物理 / 服务端 / store 等）
+npm test               # 112 项单元测试（解析 / 查询 / 物理 / 服务端 / store 等）
 npm run build          # 拼接 app/ai 片段并内联成 dist/Wenmo-Notes.html
 ```
 
