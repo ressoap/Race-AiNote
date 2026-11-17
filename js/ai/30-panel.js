@@ -364,6 +364,7 @@
             subject: subject,
             knowledgePoints: knowledgePoints,
             knowledgePoint: knowledgePoints[0] || '',
+            mistakeType: analysis.mistakeType || '',
             analysisSource: analysis.source || 'local'
           });
           if (run.cancelled) return false;
@@ -380,7 +381,8 @@
                   status: saved.status || 'open',
                   subject: subject,
                   knowledgePoints: knowledgePoints,
-                  knowledgePoint: knowledgePoints[0] || ''
+                  knowledgePoint: knowledgePoints[0] || '',
+                  mistakeType: analysis.mistakeType || saved.mistakeType || ''
                 }));
                 loading.mistake = filed.targetTitle || null;
                 if (opts.onToast) opts.onToast('已自动归档到《' + filed.targetTitle + '》');

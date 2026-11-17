@@ -2408,3 +2408,14 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   border-radius: 999px;
 }
 :root[data-theme="dark"] .ai-vision-hint { color: #f0c27b; }
+
+/* 问题记录：错题类型小标签 */
+.ai-record-type {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(239, 159, 39, 0.16);
+  color: #a2670f;
+  border: 1px solid rgba(239, 159, 39, 0.35);
+}
+:root[data-theme="dark"] .ai-record-type { color: #f0c27b; }

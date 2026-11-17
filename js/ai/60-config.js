@@ -133,8 +133,9 @@
         const subject = normalizeSubject(data.subject);
         if (!subject || subject === '其他') return local;
         return {
-          subject,
+          subject: subject,
           knowledgePoints: points.length ? points : local.knowledgePoints,
+          mistakeType: normalizeMistakeType(data.mistakeType) || local.mistakeType || '',
           source: 'api'
         };
       } catch (_) {
@@ -187,4 +188,4 @@
   }
 
   root.RG = root.RG || {};
-  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, sanitizePoint, sanitizeKnowledgePoints, MAX_KNOWLEDGE_POINTS, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };
+  root.RG.ai = { create, answerLocal, answerTutorLocal, retrieve, tokenize, headingsOf, guessSubject, normalizeSubject, looksLikeEnglish, knowledgePointsOf, classifyLocally, recommendMistakeBook, mistakeSnippet, mistakeContentHasQuestion, sanitizePoint, sanitizeKnowledgePoints, MAX_KNOWLEDGE_POINTS, MISTAKE_TYPES, normalizeMistakeType, guessMistakeTypeLocally, buildTeacherPrompt, normalizeTeacherTraits, DEFAULT_TEACHER_TRAITS, TEACHER_TRAIT_DEFS, formatLocally, plainTextOf };

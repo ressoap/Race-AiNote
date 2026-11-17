@@ -246,7 +246,8 @@
       subject: record.subject || local.subject,
       knowledgePoints: (Array.isArray(record.knowledgePoints) && record.knowledgePoints.length)
         ? record.knowledgePoints
-        : local.knowledgePoints
+        : local.knowledgePoints,
+      mistakeType: record.mistakeType || local.mistakeType || ''
     };
     const filed = autoFileRecord(record, analysis, true);
     if (!filed || !filed.targetPath) return toast('自动归档失败，请检查错题本目录');
@@ -258,7 +259,8 @@
       resolvedAt: Date.now(),
       subject: analysis.subject,
       knowledgePoints: analysis.knowledgePoints,
-      knowledgePoint: (analysis.knowledgePoints && analysis.knowledgePoints[0]) || ''
+      knowledgePoint: (analysis.knowledgePoints && analysis.knowledgePoints[0]) || '',
+      mistakeType: analysis.mistakeType || record.mistakeType || ''
     });
     toast('已记入《' + filed.targetTitle + '》并标记为已解决');
     if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
@@ -541,9 +543,10 @@
       const points = (Array.isArray(record.knowledgePoints) && record.knowledgePoints.length)
         ? record.knowledgePoints
         : local.knowledgePoints;
+      const mistakeType = record.mistakeType || local.mistakeType || '';
       const chosenTitle = record.targetTitle || '';
       if (subject && subject !== '其他' && chosenTitle && !chosenTitle.includes(subject)) {
-        const filed = autoFileRecord(record, { subject, knowledgePoints: points }, true);
+        const filed = autoFileRecord(record, { subject, knowledgePoints: points, mistakeType }, true);
         if (filed && filed.targetPath) {
           ai.updateRecord(record.id, {
             targetId: filed.targetId || null,

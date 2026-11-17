@@ -134,6 +134,37 @@
     return out;
   }
 
+  const MISTAKE_TYPES = ['概念不清', '计算失误', '审题偏差', '方法不会', '公式记错', '步骤遗漏', '其他'];
+
+  /** 错题类型：固定几个选项，模型给的说法统一归一到这里 */
+  function normalizeMistakeType(value) {
+    const s = String(value == null ? '' : value).trim();
+    if (!s) return '';
+    for (const type of MISTAKE_TYPES) {
+      if (s === type || s.indexOf(type) >= 0) return type;
+    }
+    if (/(概念|定义|理解|混淆|本质)/.test(s)) return '概念不清';
+    if (/(计算|算错|粗心|算术|口算)/.test(s)) return '计算失误';
+    if (/(审题|看错|漏看|条件没看清|误解题意)/.test(s)) return '审题偏差';
+    if (/(公式|定理|记错|记混|背错)/.test(s)) return '公式记错';
+    if (/(步骤|漏步|跳步|没写全|过程不全)/.test(s)) return '步骤遗漏';
+    if (/(方法|思路|无从下手|不会|没入手)/.test(s)) return '方法不会';
+    return '其他';
+  }
+
+  /** 模型不可用时，用题目和解析里的关键词粗判错题类型 */
+  function guessMistakeTypeLocally(question, answer) {
+    const nl = String.fromCharCode(10);
+    const text = String(question || '') + nl + String(answer || '').slice(0, 2000);
+    if (/(审题|看错|漏看|没注意|条件看|误解题意)/.test(text)) return '审题偏差';
+    if (/(计算|算错|粗心|口算|算术)/.test(text)) return '计算失误';
+    if (/(公式|定理|记错|记混|背错)/.test(text)) return '公式记错';
+    if (/(漏了|少算|步骤|跳步|没写全|过程不全)/.test(text)) return '步骤遗漏';
+    if (/(不会|没思路|无从下手|方法|思路)/.test(text)) return '方法不会';
+    if (/(概念|定义|理解|混淆|本质)/.test(text)) return '概念不清';
+    return '其他';
+  }
+
   function knowledgePointsOf(subject, text) {
     const q = String(text || '');
     const rules = KNOWLEDGE_RULES[subject] || [];
@@ -159,7 +190,12 @@
     const byCombined = guessSubject(q + nl + a).subject;
     const subject = byQuestion || byCombined || (looksLikeEnglish(q) ? '英语' : '其他');
     const points = sanitizeKnowledgePoints(knowledgePointsOf(subject, q + nl + a));
-    return { subject, knowledgePoints: points.length ? points : [subject + '综合'], source: 'local' };
+    return {
+      subject: subject,
+      knowledgePoints: points.length ? points : [subject + '综合'],
+      mistakeType: guessMistakeTypeLocally(q, a),
+      source: 'local'
+    };
   }
 
   /** 在「错题」类笔记里挑一个最匹配的，返回候选与推荐 */
@@ -252,6 +288,7 @@
       '',
       '**学科**：' + subject,
       '**知识点**：' + pointLine,
+      '**错题类型**：' + (normalizeMistakeType(a.mistakeType) || guessMistakeTypeLocally(question, answer)),
       '',
       '### 原题目',
       '',

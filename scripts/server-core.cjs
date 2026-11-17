@@ -47,10 +47,12 @@ const PROMPTS = {
   analyze: [
     '你是错题归档助手。根据用户的问题和答案，判断学科和知识点。',
     '只输出 JSON，不要 Markdown，不要解释。格式：',
-    '{"subject":"数学","knowledgePoints":["导数与函数单调性","数列递推"]}',
+    '{"subject":"数学","knowledgePoints":["导数与函数单调性","数列递推"],"mistakeType":"方法不会"}',
     '学科只能从这些里选一个：数学、物理、化学、生物、英语、语文、数据结构、信号与系统、其他。',
     'knowledgePoints 给 1-4 个，每个 2-12 个字，按重要性排序。',
     '一道题可以有多个知识点：跨章节、跨方法的题必须把涉及的点都列出来，不要只给一个。',
+    'mistakeType 是错题类型，只能从这些里选一个：概念不清、计算失误、审题偏差、方法不会、公式记错、步骤遗漏、其他。',
+    '判断依据是学生卡在哪一步：定义理解错=概念不清，算错=计算失误，看漏条件=审题偏差，没思路=方法不会，公式记混=公式记错，过程缺步骤=步骤遗漏。',
     '知识点会被直接当作标签用于错题本分类和统计，只能含中文/字母/数字/下划线/斜杠，不要空格、标点、# 号。',
     '如果题目涉及英语句子、语法、完形、阅读、写作，学科必须是英语，不要归到数学。'
   ].join('\n'),
@@ -240,6 +242,24 @@ function parseLooseJson(text) {
   try { return JSON.parse(src.slice(start, end + 1)); } catch (_) { return null; }
 }
 
+const MISTAKE_TYPES = ['概念不清', '计算失误', '审题偏差', '方法不会', '公式记错', '步骤遗漏', '其他'];
+
+/** 错题类型归一：模型给的说法统一到固定选项 */
+function normalizeMistakeType(value) {
+  const s = String(value == null ? '' : value).trim();
+  if (!s) return '其他';
+  for (const type of MISTAKE_TYPES) {
+    if (s === type || s.indexOf(type) >= 0) return type;
+  }
+  if (/(概念|定义|理解|混淆|本质)/.test(s)) return '概念不清';
+  if (/(计算|算错|粗心|算术|口算)/.test(s)) return '计算失误';
+  if (/(审题|看错|漏看|没注意|条件看|误解题意)/.test(s)) return '审题偏差';
+  if (/(公式|定理|记错|记混|背错)/.test(s)) return '公式记错';
+  if (/(步骤|漏步|跳步|没写全|过程不全)/.test(s)) return '步骤遗漏';
+  if (/(方法|思路|无从下手|不会|没入手)/.test(s)) return '方法不会';
+  return '其他';
+}
+
 function normalizeKnowledgePoints(value) {
   const raw = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(/[、,，;；]/) : []);
   const out = [];
@@ -401,6 +421,7 @@ function createAiHandlers(config) {
       sendJson(res, 200, {
         subject: normalizeSubjectLabel(parsed.subject),
         knowledgePoints: normalizeKnowledgePoints(parsed.knowledgePoints),
+        mistakeType: normalizeMistakeType(parsed.mistakeType),
         source: 'api'
       });
     } catch (err) {

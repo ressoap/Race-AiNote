@@ -278,6 +278,13 @@
           badge.className = 'ai-record-badge' + (rec.status === 'resolved' ? ' is-resolved' : '');
           badge.textContent = rec.status === 'resolved' ? '已解决' : '待解决';
           head2.append(time, badge);
+          if (rec.mistakeType) {
+            const typeChip = document.createElement('span');
+            typeChip.className = 'ai-record-type';
+            typeChip.textContent = rec.mistakeType;
+            typeChip.title = 'AI 判定的错题类型';
+            head2.appendChild(typeChip);
+          }
 
           const title = document.createElement('span');
           title.className = 'ai-record-title';

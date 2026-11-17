@@ -188,3 +188,30 @@ test('本地兜底也能给出多个知识点', () => {
   assert.ok(c.knowledgePoints.length >= 2, JSON.stringify(c.knowledgePoints));
   assert.ok(c.knowledgePoints.every(x => !/[\s#、，]/.test(x)), JSON.stringify(c.knowledgePoints));
 });
+
+test('错题类型归一：固定选项 + 关键词兜底', () => {
+  assert.equal(ai.normalizeMistakeType('方法不会'), '方法不会');
+  assert.equal(ai.normalizeMistakeType('思路不清，无从下手'), '方法不会');
+  assert.equal(ai.normalizeMistakeType('算错了，粗心'), '计算失误');
+  assert.equal(ai.normalizeMistakeType('看错题了'), '审题偏差');
+  assert.equal(ai.normalizeMistakeType('公式记混'), '公式记错');
+  assert.equal(ai.normalizeMistakeType('步骤不全'), '步骤遗漏');
+  assert.equal(ai.normalizeMistakeType('定义理解错'), '概念不清');
+  assert.equal(ai.normalizeMistakeType('莫名其妙'), '其他');
+  assert.ok(ai.MISTAKE_TYPES.includes('方法不会'));
+});
+
+test('本地兜底也会给出错题类型', () => {
+  const c = ai.classifyLocally('这题我算错了好几遍，总是粗心', '');
+  assert.ok(ai.MISTAKE_TYPES.includes(c.mistakeType), JSON.stringify(c));
+  assert.equal(ai.guessMistakeTypeLocally('看错条件了', ''), '审题偏差');
+});
+
+test('错题片段带上错题类型', () => {
+  const snippet = ai.mistakeSnippet(
+    { question: '求 f(x) 的单调区间', answer: '解析', at: Date.now() },
+    { subject: '数学', knowledgePoints: ['导数与函数单调性'], mistakeType: '方法不会' }
+  );
+  assert.match(snippet, /^\*\*错题类型\*\*：方法不会$/m);
+  assert.match(snippet, /^\*\*知识点\*\*：#导数与函数单调性$/m);
+});
