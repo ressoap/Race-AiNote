@@ -2333,3 +2333,21 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   .launcher-body { grid-template-columns: minmax(0, 1fr); }
   .launcher-stats { display: none; }
 }
+
+/* ── 进入页：笔记库右键菜单与属性卡 ─────────────────────── */
+.vault-menu { min-width: 168px; }
+.vault-detail-card { width: min(480px, 100%); }
+.vault-detail-rows {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px 16px;
+  margin: 14px 0 2px;
+  font-size: 12.5px;
+}
+.vault-detail-rows dt { color: var(--text-dim); white-space: nowrap; }
+.vault-detail-rows dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}

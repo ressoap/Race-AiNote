@@ -488,6 +488,11 @@
 
     const go = () => { Promise.resolve(enterVault(book.id)).catch(() => {}); };
     card.addEventListener('click', go);
+    card.addEventListener('contextmenu', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      Promise.resolve(openVaultMenu(book.id, ev.clientX, ev.clientY)).catch(() => {});
+    });
     card.addEventListener('keydown', ev => {
       if (ev.key === 'Enter' || ev.key === ' ') {
         ev.preventDefault();
@@ -682,11 +687,44 @@
       vaultTitle.addEventListener('click', () => { openLauncher(); });
     }
 
+    const menuEl = $('#vault-menu');
+    if (menuEl) {
+      menuEl.addEventListener('click', ev => {
+        const btn = ev.target.closest('button');
+        if (!btn || !vaultMenuId) return;
+        const act = btn.dataset.act;
+        const id = vaultMenuId;
+        closeVaultMenu();
+        if (act === 'open') enterVault(id);
+        else if (act === 'duplicate') duplicateVaultBook(id);
+        else if (act === 'rename') renameVaultBook(id);
+        else if (act === 'backup') backupVaultBook(id);
+        else if (act === 'detail') showVaultDetail(id);
+        else if (act === 'delete') removeVaultBook(id);
+      });
+    }
+    document.addEventListener('mousedown', ev => {
+      const menu = $('#vault-menu');
+      if (menu && !menu.hidden && !ev.target.closest('#vault-menu')) closeVaultMenu();
+    });
+    const detailClose = $('#vault-detail-close');
+    if (detailClose) detailClose.addEventListener('click', () => { $('#vault-detail').hidden = true; });
+    const detailModal = $('#vault-detail');
+    if (detailModal) {
+      detailModal.addEventListener('click', ev => {
+        if (ev.target === detailModal) detailModal.hidden = true;
+      });
+    }
+
     // 进入页打开时把键盘事件留在这一层，别触发工作区快捷键
     root.addEventListener('keydown', ev => {
-      if (ev.key === 'Escape' && state.files && state.files.length) {
+      if (ev.key === 'Escape') {
         ev.preventDefault();
-        closeLauncher();
+        if (closeVaultMenu()) return;
+        const detail = $('#vault-detail');
+        if (detail && !detail.hidden) { detail.hidden = true; return; }
+        if (state.files && state.files.length) closeLauncher();
+        return;
       }
       ev.stopPropagation();
     });
@@ -696,6 +734,9 @@
       if (!shell || shell.hidden) return;
       if (shell.contains(ev.target)) return;
       ev.stopPropagation();
+      if (closeVaultMenu()) return;
+      const detail = $('#vault-detail');
+      if (detail && !detail.hidden) { detail.hidden = true; return; }
       if (ev.key === 'Escape' && state.files && state.files.length) closeLauncher();
     }, true);
 
@@ -711,6 +752,199 @@
       if (params.get('note') || params.get('vault') || params.get('view') === 'graph' || params.get('prefs') === '1') skip = true;
     } catch (_) {}
     if (!skip) openLauncher();
+    return true;
+  }
+
+  /* ── 书本右键菜单：复制 / 改名 / 删除 / 备份 / 查看详情 ───── */
+
+  let vaultMenuId = null;
+
+  function openVaultMenu(id, x, y) {
+    const menu = $('#vault-menu');
+    if (!menu) return false;
+    vaultMenuId = id;
+    const limited = id === 'demo';
+    for (const btn of menu.querySelectorAll('button')) {
+      const act = btn.dataset.act;
+      btn.hidden = limited && (act === 'rename' || act === 'duplicate' || act === 'delete');
+    }
+    menu.hidden = false;
+    const width = menu.offsetWidth || 168;
+    const height = menu.offsetHeight || 214;
+    menu.style.left = Math.max(8, Math.min(x, window.innerWidth - width - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(y, window.innerHeight - height - 8)) + 'px';
+    return true;
+  }
+
+  function closeVaultMenu() {
+    const menu = $('#vault-menu');
+    if (!menu || menu.hidden) return false;
+    menu.hidden = true;
+    vaultMenuId = null;
+    return true;
+  }
+
+  /** 取某个库当前可用的文件：正在编辑的库以内存为准，其它用快照 */
+  function vaultFilesOf(id) {
+    if (id === 'demo') return ((RG.demoVault && RG.demoVault.files) || []).map(f => Object.assign({}, f));
+    if (id === state.vaultId && Array.isArray(state.files) && state.files.length) return state.files;
+    const entry = vaultEntryOf(id);
+    return entry && Array.isArray(entry.files) ? entry.files : [];
+  }
+
+  function vaultStatsOf(files) {
+    let notes = 0;
+    let attachments = 0;
+    let words = 0;
+    for (const file of files || []) {
+      const filePath = String((file && file.path) || '');
+      if (vault.MD_EXT.test(filePath)) {
+        notes += 1;
+        words += String(file.content || '').replace(/\s+/g, '').length;
+      } else if (vault.ATTACH_EXT.test(filePath)) {
+        attachments += 1;
+      }
+    }
+    return { notes: notes, attachments: attachments, words: words };
+  }
+
+  function downloadJson(filename, data) {
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return true;
+    } catch (err) {
+      toast('导出失败：' + (err && err.message ? err.message : err));
+      return false;
+    }
+  }
+
+  async function renameVaultBook(id) {
+    const entry = vaultEntryOf(id);
+    if (!entry) return false;
+    const next = await askText({
+      title: '给笔记库改名',
+      desc: '只改进入页里显示的名字，磁盘上的文件夹名不会变。',
+      value: entry.label,
+      placeholder: '例如：考研数学'
+    });
+    if (next == null) return false;
+    const label = String(next).trim().slice(0, 40);
+    if (!label) {
+      toast('名字不能为空');
+      return false;
+    }
+    const list = readVaultList();
+    const hit = list.find(v => v.id === id);
+    if (!hit) return false;
+    hit.label = label;
+    writeVaultList(list);
+    if (state.vaultId === id) {
+      state.vaultLabel = label;
+      $('#vault-name').textContent = label;
+      $('#vault-name').title = label;
+      saveLocalVault();
+    }
+    renderLauncher();
+    toast('已改名为《' + label + '》');
+    return true;
+  }
+
+  function duplicateVaultBook(id) {
+    const entry = vaultEntryOf(id);
+    if (!entry) return false;
+    const files = vaultFilesOf(id);
+    const copy = {
+      id: newVaultId(),
+      label: (entry.label + ' 副本').slice(0, 40),
+      savedAt: Date.now(),
+      noteCount: vaultNoteCount(files),
+      hasHandle: false,
+      stale: files.length ? false : true,
+      files: files.length ? files.map(f => Object.assign({}, f)) : null
+    };
+    const list = readVaultList();
+    list.unshift(copy);
+    writeVaultList(list);
+    renderLauncher();
+    toast('已复制为《' + copy.label + '》');
+    return copy.id;
+  }
+
+  function backupVaultBook(id) {
+    const entry = vaultEntryOf(id);
+    const files = vaultFilesOf(id);
+    if (!files.length) {
+      toast('这个库还没有可备份的笔记');
+      return false;
+    }
+    const label = id === 'demo' ? '示例库' : (entry ? entry.label : '笔记库');
+    const paths = new Set(files.map(f => f.path));
+    const records = launcherRecordList().filter(r => !r.targetPath || paths.has(r.targetPath));
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes());
+    const ok = downloadJson(label + '-备份-' + stamp + '.json', {
+      app: '问墨笔记',
+      kind: 'vault-backup',
+      version: 1,
+      label: label,
+      exportedAt: now.toISOString(),
+      noteCount: vaultNoteCount(files),
+      files: files,
+      records: records
+    });
+    if (ok) toast('已导出《' + label + '》：' + files.length + ' 个文件');
+    return ok;
+  }
+
+  function showVaultDetail(id) {
+    const modal = $('#vault-detail');
+    if (!modal) return false;
+    const isDemo = id === 'demo';
+    const entry = isDemo ? null : vaultEntryOf(id);
+    if (!isDemo && !entry) return false;
+    const files = vaultFilesOf(id);
+    const stats = vaultStatsOf(files);
+    const label = isDemo ? '内置示例库' : entry.label;
+    const kind = isDemo
+      ? '内置示例库（随应用打包，不占磁盘）'
+      : (entry.hasHandle ? '本地文件夹 · 已连接磁盘，改动会写回' : (entry.files ? '本地快照 · 未连接磁盘，改动只存本机缓存' : '本地文件夹 · 需要重新授权'));
+    let bytes = 0;
+    try { bytes = JSON.stringify(files).length; } catch (_) { bytes = 0; }
+    const rows = [
+      ['类型', kind],
+      ['笔记', stats.notes + ' 篇'],
+      ['附件', stats.attachments + ' 个'],
+      ['正文规模', stats.words.toLocaleString('zh-CN') + ' 字'],
+      ['缓存占用', bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB'],
+      ['最近打开', isDemo ? '随时可用' : timeAgo(entry.savedAt)],
+      ['库 ID', isDemo ? 'demo' : entry.id]
+    ];
+    const titleEl = $('#vault-detail-title');
+    if (titleEl) titleEl.textContent = label;
+    const subEl = $('#vault-detail-sub');
+    if (subEl) subEl.textContent = isDemo ? '开箱即用 · 无需配置' : ('保存于 ' + new Date(entry.savedAt || Date.now()).toLocaleString('zh-CN'));
+    const box = $('#vault-detail-rows');
+    if (box) {
+      box.innerHTML = '';
+      for (const row of rows) {
+        const dt = document.createElement('dt');
+        dt.textContent = row[0];
+        const dd = document.createElement('dd');
+        dd.textContent = row[1];
+        box.appendChild(dt);
+        box.appendChild(dd);
+      }
+    }
+    modal.hidden = false;
     return true;
   }
 
@@ -4932,6 +5166,7 @@
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
+    openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
