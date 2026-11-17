@@ -1971,10 +1971,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 1180px;
   height: 100%;
-  margin: 0 auto;
-  padding: 24px 28px 14px;
+  padding: 24px 18px 14px 28px;
 }
 .launcher-head {
   display: flex;
@@ -2019,8 +2017,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
 .launcher-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 338px;
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) 318px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
   margin-top: 22px;
@@ -2211,6 +2209,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   display: flex;
   flex-direction: column;
   gap: 13px;
+  align-self: start;
+  max-height: 100%;
   min-height: 0;
   padding: 16px 16px 14px;
   border-radius: 16px;
