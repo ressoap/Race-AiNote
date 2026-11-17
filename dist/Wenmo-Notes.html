@@ -2992,6 +2992,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
 <div id="record-menu" class="tree-menu" hidden>
   <button data-act="toggle-mistake">记入错题本</button>
+  <button data-act="reanalyze">让 AI 重新判定并归档</button>
   <button data-act="ask-again">继续询问</button>
   <button data-act="delete" class="is-danger">删除此条记录</button>
 </div>
@@ -6010,6 +6011,18 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     return lower.some(w => ENGLISH_FUNCTION_WORDS.indexOf(w) >= 0);
   }
 
+  /** 数学味儿的符号/句式：用来兜住没有中文关键词的式子题 */
+  function looksLikeMath(text) {
+    const s = String(text || '');
+    if (!s) return false;
+    if (/[∫∑√²³π∞]/.test(s)) return true;
+    if (/f\s*\(\s*x\s*\)/.test(s)) return true;
+    if (/(lim|sin|cos|tan|cot|log|ln|dx|dy)\b/i.test(s)) return true;
+    if (/[=<>].*[0-9xX]/.test(s) && /[0-9]/.test(s) && /[+\-*/^]/.test(s)) return true;
+    if (/(已知|求|解|证明|化简|计算)[^。]{0,30}(值|范围|解集|单调|极值|导数|积分|极限|方程|不等式)/.test(s)) return true;
+    return false;
+  }
+
   /** 粗判题目学科（API 不可用时的本地兜底） */
   function guessSubject(text) {
     const q = String(text || '');
@@ -6030,7 +6043,15 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       }
       if (score > bestScore) { bestScore = score; best = rule.subject; }
     }
-    if (!best && looksLikeEnglish(q)) return { subject: '英语', score: 1 };
+    if (!best) {
+      if (looksLikeMath(q)) return { subject: '数学', score: 1 };
+      const words = q.match(/[A-Za-z]{2,}/g) || [];
+      const cjk = (q.match(/[一-龥]/g) || []).length;
+      const blank = q.indexOf('______') >= 0 || q.indexOf('____') >= 0;
+      if (looksLikeEnglish(q) || blank || (words.length >= 6 && cjk < 20)) {
+        return { subject: '英语', score: 1 };
+      }
+    }
     return { subject: best, score: bestScore };
   }
 
@@ -7372,7 +7393,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
             const subject = normalizeSubject(parsed.subject);
             const points = sanitizeKnowledgePoints(parsed.knowledgePoints);
             return {
-              subject: subject === '其他' ? local.subject : subject,
+              subject: subject,
               knowledgePoints: points.length ? points : local.knowledgePoints,
               mistakeType: normalizeMistakeType(parsed.mistakeType) || local.mistakeType || '',
               source: 'api'
@@ -7394,7 +7415,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         if (!data || !data.subject) return local;
         const points = sanitizeKnowledgePoints(data.knowledgePoints);
         const subject = normalizeSubject(data.subject);
-        if (!subject || subject === '其他') return local;
+        if (!subject) return local;
         return {
           subject: subject,
           knowledgePoints: points.length ? points : local.knowledgePoints,
@@ -12527,6 +12548,40 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   }
 
   /* 右键菜单 */
+  /** 让 AI 重新判定这条记录，并按新学科重新归档 */
+  async function reanalyzeRecord(record) {
+    if (!record) return;
+    toast('正在让 AI 重新判定…');
+    let analysis = null;
+    try {
+      analysis = await ai.analyzeQuestion(record.question || '', record.answer || '');
+    } catch (_) {
+      analysis = null;
+    }
+    if (!analysis || !analysis.subject) return toast('判定失败，请稍后再试');
+    const subject = RG.ai.normalizeSubject(analysis.subject);
+    const points = RG.ai.sanitizeKnowledgePoints(analysis.knowledgePoints);
+    const filed = autoFileRecord(Object.assign({}, record, { targetPath: null, targetTitle: null, targetId: null }), {
+      subject: subject,
+      knowledgePoints: points,
+      mistakeType: analysis.mistakeType || record.mistakeType || ''
+    }, true);
+    if (!filed || !filed.targetPath) return toast('归档失败，请检查错题本目录');
+    const fresh = ai.updateRecord(record.id, {
+      subject: subject,
+      knowledgePoints: points,
+      knowledgePoint: points[0] || '',
+      mistakeType: analysis.mistakeType || record.mistakeType || '',
+      targetId: filed.targetId || null,
+      targetTitle: filed.targetTitle,
+      targetPath: filed.targetPath,
+      status: 'resolved',
+      resolvedAt: Date.now()
+    });
+    toast('已重新判定为「' + subject + '」，记入《' + filed.targetTitle + '》');
+    if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
+  }
+
   function openRecordMenu(event, record) {
     recordMenuTarget = record;
     recordMenu.hidden = false;
@@ -12551,6 +12606,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const record = recordMenuTarget;
     closeRecordMenu();
     if (btn.dataset.act === 'toggle-mistake') toggleRecordMistake(record);
+    else if (btn.dataset.act === 'reanalyze') reanalyzeRecord(record);
     else if (btn.dataset.act === 'ask-again') continueAsking(record);
     else if (btn.dataset.act === 'delete') {
       const okDel = await askConfirm({ title: '删除记录', message: '只删除这条问题记录，不会删除错题本里的内容。', okText: '删除', danger: true });
@@ -13094,7 +13150,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    buildRecordOwners, saveRecordImages, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
+    buildRecordOwners, saveRecordImages, reanalyzeRecord, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

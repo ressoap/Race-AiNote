@@ -253,3 +253,10 @@ test('化学/语文/生物不会被物理的单字关键词抢走', () => {
   assert.ok(cn.knowledgePoints.some(x => /病句/.test(x)), JSON.stringify(cn.knowledgePoints));
   assert.equal(ai.classifyLocally('基因型 Aa 自交，后代性状分离比', '').subject, '生物');
 });
+
+test('纯符号数学题与英文题干数学题都判成数学', () => {
+  assert.equal(ai.classifyLocally('已知 f(x)=x^2+2x，求 f(3)', '').subject, '数学');
+  assert.equal(ai.classifyLocally('Given f(x) = sin x, find f prime at 0', '').subject, '数学');
+  assert.equal(ai.classifyLocally('The report ______ by the end of next week.', '').subject, '英语');
+  assert.equal(ai.classifyLocally('Which of the following sentences is correct? A. He go B. He goes', '').subject, '英语');
+});

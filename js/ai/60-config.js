@@ -135,7 +135,7 @@
             const subject = normalizeSubject(parsed.subject);
             const points = sanitizeKnowledgePoints(parsed.knowledgePoints);
             return {
-              subject: subject === '其他' ? local.subject : subject,
+              subject: subject,
               knowledgePoints: points.length ? points : local.knowledgePoints,
               mistakeType: normalizeMistakeType(parsed.mistakeType) || local.mistakeType || '',
               source: 'api'
@@ -157,7 +157,7 @@
         if (!data || !data.subject) return local;
         const points = sanitizeKnowledgePoints(data.knowledgePoints);
         const subject = normalizeSubject(data.subject);
-        if (!subject || subject === '其他') return local;
+        if (!subject) return local;
         return {
           subject: subject,
           knowledgePoints: points.length ? points : local.knowledgePoints,

@@ -479,6 +479,18 @@
     return lower.some(w => ENGLISH_FUNCTION_WORDS.indexOf(w) >= 0);
   }
 
+  /** 数学味儿的符号/句式：用来兜住没有中文关键词的式子题 */
+  function looksLikeMath(text) {
+    const s = String(text || '');
+    if (!s) return false;
+    if (/[∫∑√²³π∞]/.test(s)) return true;
+    if (/f\s*\(\s*x\s*\)/.test(s)) return true;
+    if (/(lim|sin|cos|tan|cot|log|ln|dx|dy)\b/i.test(s)) return true;
+    if (/[=<>].*[0-9xX]/.test(s) && /[0-9]/.test(s) && /[+\-*/^]/.test(s)) return true;
+    if (/(已知|求|解|证明|化简|计算)[^。]{0,30}(值|范围|解集|单调|极值|导数|积分|极限|方程|不等式)/.test(s)) return true;
+    return false;
+  }
+
   /** 粗判题目学科（API 不可用时的本地兜底） */
   function guessSubject(text) {
     const q = String(text || '');
@@ -499,7 +511,15 @@
       }
       if (score > bestScore) { bestScore = score; best = rule.subject; }
     }
-    if (!best && looksLikeEnglish(q)) return { subject: '英语', score: 1 };
+    if (!best) {
+      if (looksLikeMath(q)) return { subject: '数学', score: 1 };
+      const words = q.match(/[A-Za-z]{2,}/g) || [];
+      const cjk = (q.match(/[一-龥]/g) || []).length;
+      const blank = q.indexOf('______') >= 0 || q.indexOf('____') >= 0;
+      if (looksLikeEnglish(q) || blank || (words.length >= 6 && cjk < 20)) {
+        return { subject: '英语', score: 1 };
+      }
+    }
     return { subject: best, score: bestScore };
   }
 
@@ -1841,7 +1861,7 @@
             const subject = normalizeSubject(parsed.subject);
             const points = sanitizeKnowledgePoints(parsed.knowledgePoints);
             return {
-              subject: subject === '其他' ? local.subject : subject,
+              subject: subject,
               knowledgePoints: points.length ? points : local.knowledgePoints,
               mistakeType: normalizeMistakeType(parsed.mistakeType) || local.mistakeType || '',
               source: 'api'
@@ -1863,7 +1883,7 @@
         if (!data || !data.subject) return local;
         const points = sanitizeKnowledgePoints(data.knowledgePoints);
         const subject = normalizeSubject(data.subject);
-        if (!subject || subject === '其他') return local;
+        if (!subject) return local;
         return {
           subject: subject,
           knowledgePoints: points.length ? points : local.knowledgePoints,

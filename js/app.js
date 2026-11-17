@@ -5054,6 +5054,40 @@
   }
 
   /* 右键菜单 */
+  /** 让 AI 重新判定这条记录，并按新学科重新归档 */
+  async function reanalyzeRecord(record) {
+    if (!record) return;
+    toast('正在让 AI 重新判定…');
+    let analysis = null;
+    try {
+      analysis = await ai.analyzeQuestion(record.question || '', record.answer || '');
+    } catch (_) {
+      analysis = null;
+    }
+    if (!analysis || !analysis.subject) return toast('判定失败，请稍后再试');
+    const subject = RG.ai.normalizeSubject(analysis.subject);
+    const points = RG.ai.sanitizeKnowledgePoints(analysis.knowledgePoints);
+    const filed = autoFileRecord(Object.assign({}, record, { targetPath: null, targetTitle: null, targetId: null }), {
+      subject: subject,
+      knowledgePoints: points,
+      mistakeType: analysis.mistakeType || record.mistakeType || ''
+    }, true);
+    if (!filed || !filed.targetPath) return toast('归档失败，请检查错题本目录');
+    const fresh = ai.updateRecord(record.id, {
+      subject: subject,
+      knowledgePoints: points,
+      knowledgePoint: points[0] || '',
+      mistakeType: analysis.mistakeType || record.mistakeType || '',
+      targetId: filed.targetId || null,
+      targetTitle: filed.targetTitle,
+      targetPath: filed.targetPath,
+      status: 'resolved',
+      resolvedAt: Date.now()
+    });
+    toast('已重新判定为「' + subject + '」，记入《' + filed.targetTitle + '》');
+    if (recordOpenId === record.id && fresh) openRecordDetail(fresh);
+  }
+
   function openRecordMenu(event, record) {
     recordMenuTarget = record;
     recordMenu.hidden = false;
@@ -5078,6 +5112,7 @@
     const record = recordMenuTarget;
     closeRecordMenu();
     if (btn.dataset.act === 'toggle-mistake') toggleRecordMistake(record);
+    else if (btn.dataset.act === 'reanalyze') reanalyzeRecord(record);
     else if (btn.dataset.act === 'ask-again') continueAsking(record);
     else if (btn.dataset.act === 'delete') {
       const okDel = await askConfirm({ title: '删除记录', message: '只删除这条问题记录，不会删除错题本里的内容。', okText: '删除', danger: true });
@@ -5621,7 +5656,7 @@
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    buildRecordOwners, saveRecordImages, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
+    buildRecordOwners, saveRecordImages, reanalyzeRecord, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
     get graph() { return state.graph; },
     query, vault, physics, render
   };
