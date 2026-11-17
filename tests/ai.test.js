@@ -230,3 +230,26 @@ test('学科归一：标准名直接返回，不误判', () => {
   assert.equal(ai.normalizeSubject('信号与系统'), '信号与系统');
   assert.equal(ai.normalizeSubject('数学（含算法思想）'), '数据结构');
 });
+
+test('物理题：学科判对，知识点落到具体章节', () => {
+  const cases = [
+    ['质量为 2kg 的物体受到 10N 水平拉力，摩擦因数 0.2，求加速度。', '牛顿运动定律'],
+    ['两个电阻并联接入 12V 电源，求干路电流。', '电路分析'],
+    ['导体棒在匀强磁场中运动，导轨间距 L，求感应电动势。', '电磁感应'],
+    ['两球完全弹性碰撞，求碰撞后速度。', '动量与能量'],
+    ['物体从 20m 高处自由落体，求落地时间。', '自由落体']
+  ];
+  for (const [q, point] of cases) {
+    const c = ai.classifyLocally(q, '');
+    assert.equal(c.subject, '物理', q);
+    assert.ok(c.knowledgePoints.some(x => x.indexOf(point) >= 0), q + ' -> ' + JSON.stringify(c.knowledgePoints));
+  }
+});
+
+test('化学/语文/生物不会被物理的单字关键词抢走', () => {
+  assert.equal(ai.classifyLocally('电解饱和食盐水，阳极产生什么气体', '').subject, '化学');
+  const cn = ai.classifyLocally('下列句子没有语病的一项是', '');
+  assert.equal(cn.subject, '语文');
+  assert.ok(cn.knowledgePoints.some(x => /病句/.test(x)), JSON.stringify(cn.knowledgePoints));
+  assert.equal(ai.classifyLocally('基因型 Aa 自交，后代性状分离比', '').subject, '生物');
+});
