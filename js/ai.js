@@ -1072,6 +1072,31 @@
       return allRecords().filter(function (r) { return r && r.vaultId === id; });
     }
 
+    /**
+     * 修分配：老记录迁移时只能归到「当时打开的库」，可能归错。
+     * 这里用 targetPath 反查——哪本书里真有这篇错题本，就把它算给哪本书。
+     */
+    function repairRecordVaults(owners) {
+      if (!owners) return 0;
+      const all = allRecords();
+      let changed = 0;
+      const next = all.map(function (r) {
+        if (!r || typeof r !== 'object') return r;
+        const path = String(r.targetPath || '').trim();
+        if (!path) return r;
+        const owner = owners[path];
+        if (!owner || owner === r.vaultId) return r;
+        changed += 1;
+        return Object.assign({}, r, { vaultId: owner });
+      });
+      if (changed) {
+        try { storageSet(RECORDS_KEY, JSON.stringify(next), LEGACY_RECORDS_KEY); } catch (_) {}
+        pushToServer(next);
+        try { renderRecords(); } catch (_) {}
+      }
+      return changed;
+    }
+
     /** 老版本的记录没有 vaultId：第一次启动时归到当时打开的库 */
     function migrateLegacyRecords() {
       const all = allRecords();
@@ -1726,7 +1751,7 @@
       greet();
     }
 
-    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, repairRecordVaults, findRecord, signatureOf, updateRecord, deleteRecord, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

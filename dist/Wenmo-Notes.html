@@ -6538,6 +6538,31 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       return allRecords().filter(function (r) { return r && r.vaultId === id; });
     }
 
+    /**
+     * 修分配：老记录迁移时只能归到「当时打开的库」，可能归错。
+     * 这里用 targetPath 反查——哪本书里真有这篇错题本，就把它算给哪本书。
+     */
+    function repairRecordVaults(owners) {
+      if (!owners) return 0;
+      const all = allRecords();
+      let changed = 0;
+      const next = all.map(function (r) {
+        if (!r || typeof r !== 'object') return r;
+        const path = String(r.targetPath || '').trim();
+        if (!path) return r;
+        const owner = owners[path];
+        if (!owner || owner === r.vaultId) return r;
+        changed += 1;
+        return Object.assign({}, r, { vaultId: owner });
+      });
+      if (changed) {
+        try { storageSet(RECORDS_KEY, JSON.stringify(next), LEGACY_RECORDS_KEY); } catch (_) {}
+        pushToServer(next);
+        try { renderRecords(); } catch (_) {}
+      }
+      return changed;
+    }
+
     /** 老版本的记录没有 vaultId：第一次启动时归到当时打开的库 */
     function migrateLegacyRecords() {
       const all = allRecords();
@@ -7192,7 +7217,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       greet();
     }
 
-    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, repairRecordVaults, findRecord, signatureOf, updateRecord, deleteRecord, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};
@@ -12430,6 +12455,24 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     });
   }
 
+  /**
+   * 记录归属修复用：path → 库 id。
+   * 当前正在编辑的库优先，其次书架里的其它库，最后是内置示例库。
+   */
+  function buildRecordOwners() {
+    const owners = {};
+    const add = (files, id) => {
+      for (const file of files || []) {
+        if (file && file.path && owners[file.path] === undefined) owners[file.path] = id;
+      }
+    };
+    add(state.files, state.vaultId || 'demo');
+    const list = (typeof readVaultList === 'function') ? readVaultList() : [];
+    for (const item of list) add(item.files, item.id);
+    add((RG.demoVault && RG.demoVault.files) || [], 'demo');
+    return owners;
+  }
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getVaultId: () => state.vaultId,
@@ -12721,6 +12764,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   applyAskMode('tutor');
   ai.initRecords().then(() => {
     if (typeof migrateMistakeFolders === 'function') migrateMistakeFolders();
+    // 老记录迁移时可能归错库：按 targetPath 反查真正的归属
+    try {
+      const fixed = ai.repairRecordVaults(typeof buildRecordOwners === 'function' ? buildRecordOwners() : null);
+      if (fixed) console.log('[问墨笔记] 已修正 ' + fixed + ' 条问题记录的笔记库归属');
+    } catch (_) {}
   });
   pluginHost.boot();
   renderPluginUI();
@@ -12732,7 +12780,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
+    buildRecordOwners, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

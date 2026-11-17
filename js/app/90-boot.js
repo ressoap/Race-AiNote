@@ -53,6 +53,11 @@
   applyAskMode('tutor');
   ai.initRecords().then(() => {
     if (typeof migrateMistakeFolders === 'function') migrateMistakeFolders();
+    // 老记录迁移时可能归错库：按 targetPath 反查真正的归属
+    try {
+      const fixed = ai.repairRecordVaults(typeof buildRecordOwners === 'function' ? buildRecordOwners() : null);
+      if (fixed) console.log('[问墨笔记] 已修正 ' + fixed + ' 条问题记录的笔记库归属');
+    } catch (_) {}
   });
   pluginHost.boot();
   renderPluginUI();
@@ -64,7 +69,7 @@
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
+    buildRecordOwners, openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker, createVaultBook, vaultTrash: readTrash, restoreVaultBook, purgeTrashBook, openTrashModal,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

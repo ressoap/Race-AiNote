@@ -467,6 +467,24 @@
     });
   }
 
+  /**
+   * 记录归属修复用：path → 库 id。
+   * 当前正在编辑的库优先，其次书架里的其它库，最后是内置示例库。
+   */
+  function buildRecordOwners() {
+    const owners = {};
+    const add = (files, id) => {
+      for (const file of files || []) {
+        if (file && file.path && owners[file.path] === undefined) owners[file.path] = id;
+      }
+    };
+    add(state.files, state.vaultId || 'demo');
+    const list = (typeof readVaultList === 'function') ? readVaultList() : [];
+    for (const item of list) add(item.files, item.id);
+    add((RG.demoVault && RG.demoVault.files) || [], 'demo');
+    return owners;
+  }
+
   const ai = RG.ai.create({
     getGraph: () => state.graph,
     getVaultId: () => state.vaultId,
