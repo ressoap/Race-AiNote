@@ -2409,6 +2409,17 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 .trash-row .trash-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .trash-row button { flex: none; }
 
+/* AI 输入区：图片入口与视觉模型提示 */
+.ai-input-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ai-vision-hint {
+  font-size: 11px;
+  color: #b7791f;
+  background: rgba(239, 159, 39, 0.14);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+:root[data-theme="dark"] .ai-vision-hint { color: #f0c27b; }
+
 </style>
 </head>
 <body>
@@ -2669,6 +2680,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
             <div class="ai-input">
               <div id="ai-input-resizer" class="ai-input-resizer" role="separator" aria-orientation="horizontal" aria-label="拖动调整输入框高度" tabindex="0" title="上下拖动调整输入框高度，双击恢复默认"><span></span></div>
               <label class="ai-option"><input type="checkbox" id="ai-use-note"> 带上当前笔记</label>
+              <div class="ai-input-tools">
+                <button id="ai-attach-image" class="ghost-btn tiny" type="button" title="添加图片：也可以直接拖进面板，或在输入框里 Ctrl+V 粘贴">＋ 图片</button>
+                <span id="ai-vision-hint" class="ai-vision-hint" hidden>未配置视觉模型，图片不会被发送</span>
+              </div>
+              <input id="ai-image-input" type="file" accept="image/*" multiple hidden>
               <div id="ai-attachments" class="ai-attachments" hidden></div>
               <div class="ai-input-row">
                 <textarea id="ai-text" rows="4" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>
@@ -6227,7 +6243,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     }
 
     // 两个独立会话：答疑老师 / 笔记问答，互不共享历史
-    const state = { threads: { tutor: [], notes: [] }, mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
+    const state = { threads: { tutor: [], notes: [] }, mode: 'local', askMode: 'tutor', busy: false, serverVision: '', config: loadConfig() };
 
     function thread() { return state.threads[state.askMode]; }
 
@@ -6293,10 +6309,24 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       logEl.scrollTop = logEl.scrollHeight;
     }
 
+    /** 有没有能识图的模型：直连看配置，代理看服务端 /api/health 回报 */
+    function hasVisionModel() {
+      if (String((state.config && state.config.visionModel) || '').trim()) return true;
+      if (state.mode === 'proxy' && state.serverVision) return true;
+      return false;
+    }
+
+    function updateVisionHint() {
+      const hint = document.getElementById('ai-vision-hint');
+      if (!hint) return;
+      hint.hidden = state.mode === 'local' || hasVisionModel();
+    }
+
     function setMode(mode, label) {
       state.mode = mode;
       if (modeEl) modeEl.textContent = label || (mode === 'remote' ? '模型模式' : '本地分析模式');
       if (modeEl) modeEl.classList.toggle('is-remote', mode === 'remote');
+      updateVisionHint();
     }
 
     async function detectTransport() {
@@ -6311,6 +6341,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         const res = await fetch('/api/health', { cache: 'no-store' });
         if (!res.ok) throw new Error('no key on server');
         const info = await res.json();
+        state.serverVision = String(info.visionModel || '');
         setMode('proxy', '模型模式 · ' + (info.model || 'AI'));
       } catch (_) {
         setMode('local', hasKey(cfg) ? '本地分析模式（把连接方式切到「浏览器直连」即可用 Key）' : '本地分析模式（未填 API Key）');
@@ -6384,8 +6415,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       const history = threadAtSend.filter(m => !m.archived && (m.role === 'user' || m.role === 'assistant')).slice(-8).map(m => ({ role: m.role, content: m.text }));
       const teacherPrompt = askModeAtSend === 'tutor' ? buildTeacherPrompt(state.config) : '';
       addMessage('user', question, [], images);
-      if (images.length && state.mode !== 'local' && !state.config.visionModel && opts.onToast) {
-        opts.onToast('未配置视觉模型，图片可能无法识别；请在设置里填写视觉模型');
+      const visionReady = hasVisionModel();
+      const sendImages = (state.mode === 'local' || visionReady) ? images : [];
+      const imageSkipped = images.length > 0 && sendImages.length === 0;
+      if (imageSkipped && opts.onToast) {
+        opts.onToast('没有可识图的视觉模型，这次只发文字；可在「设置 → AI」里填写视觉模型');
       }
       const loading = addMessage('assistant', '思考中…');
       loading.kind = 'answer';
@@ -6401,8 +6435,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
           if (state.mode === 'direct' || state.mode === 'proxy') {
             const context = contextPayload(question);
             const result = state.mode === 'direct'
-              ? await callDirect(Object.assign({}, state.config, { askMode: askModeAtSend }), question, context, images, signal, teacherPrompt)
-              : await callProxy(question, context, askModeAtSend, history, images, state.config.visionModel, signal, teacherPrompt);
+              ? await callDirect(Object.assign({}, state.config, { askMode: askModeAtSend }), question, context, sendImages, signal, teacherPrompt)
+              : await callProxy(question, context, askModeAtSend, history, sendImages, state.config.visionModel, signal, teacherPrompt);
             if (run.cancelled) return false;
             loading.text = result.answer || '（模型没有返回内容）';
             loading.refs = result.refs || [];
@@ -6428,6 +6462,9 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
         if (run.cancelled) return false;
         if (images.length && state.mode === 'local') {
           loading.text += String.fromCharCode(10, 10) + '（当前是本地分析模式，图片已保留在消息里；接入支持视觉的模型后可以直接识图。）';
+        }
+        if (imageSkipped) {
+          loading.text += String.fromCharCode(10, 10) + '（没有可识图的视觉模型，本次只发送了文字）';
         }
 
         if (askModeAtSend === 'tutor' && loading.text && loading.text !== '思考中…' && !loading.stopped) {
@@ -12375,6 +12412,46 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   }
 
   /* ── AI 面板：拖入图片只做聊天附件，不触发全库载入 ─────── */
+  /* 图片入口：按钮选图 + 输入框粘贴，和拖拽走同一条通路 */
+  (function wireImageInputs() {
+    const attachBtn = $('#ai-attach-image');
+    const imageInput = $('#ai-image-input');
+    const textarea = $('#ai-text');
+    const isImageFile = f => {
+      if (!f) return false;
+      if (String(f.type || '').indexOf('image/') === 0) return true;
+      const name = String(f.name || '').toLowerCase();
+      return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'].some(ext => name.endsWith(ext));
+    };
+    const addFiles = async files => {
+      const list = [...(files || [])].filter(isImageFile);
+      if (!list.length) return toast('请选择图片文件');
+      try {
+        const added = await ai.addImageFiles(list);
+        toast(added ? '已添加 ' + added + ' 张图片' : '最多添加 3 张图片');
+      } catch (err) {
+        toast('图片读取失败：' + (err && err.message ? err.message : err));
+      }
+    };
+    if (attachBtn && imageInput) {
+      attachBtn.addEventListener('click', () => imageInput.click());
+      imageInput.addEventListener('change', async () => {
+        const files = [...(imageInput.files || [])];
+        imageInput.value = '';
+        if (files.length) await addFiles(files);
+      });
+    }
+    if (textarea) {
+      textarea.addEventListener('paste', async ev => {
+        const items = ev.clipboardData ? [...ev.clipboardData.items] : [];
+        const files = items.filter(it => it && it.kind === 'file').map(it => (it.getAsFile ? it.getAsFile() : null)).filter(Boolean);
+        if (!files.length) return;
+        ev.preventDefault();
+        await addFiles(files);
+      });
+    }
+  })();
+
   const aiPanel = $('#ai-panel');
   const aiInputBox = $('.ai-input');
   if (aiPanel && aiInputBox) {

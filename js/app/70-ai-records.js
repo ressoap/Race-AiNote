@@ -377,6 +377,46 @@
   }
 
   /* ── AI 面板：拖入图片只做聊天附件，不触发全库载入 ─────── */
+  /* 图片入口：按钮选图 + 输入框粘贴，和拖拽走同一条通路 */
+  (function wireImageInputs() {
+    const attachBtn = $('#ai-attach-image');
+    const imageInput = $('#ai-image-input');
+    const textarea = $('#ai-text');
+    const isImageFile = f => {
+      if (!f) return false;
+      if (String(f.type || '').indexOf('image/') === 0) return true;
+      const name = String(f.name || '').toLowerCase();
+      return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'].some(ext => name.endsWith(ext));
+    };
+    const addFiles = async files => {
+      const list = [...(files || [])].filter(isImageFile);
+      if (!list.length) return toast('请选择图片文件');
+      try {
+        const added = await ai.addImageFiles(list);
+        toast(added ? '已添加 ' + added + ' 张图片' : '最多添加 3 张图片');
+      } catch (err) {
+        toast('图片读取失败：' + (err && err.message ? err.message : err));
+      }
+    };
+    if (attachBtn && imageInput) {
+      attachBtn.addEventListener('click', () => imageInput.click());
+      imageInput.addEventListener('change', async () => {
+        const files = [...(imageInput.files || [])];
+        imageInput.value = '';
+        if (files.length) await addFiles(files);
+      });
+    }
+    if (textarea) {
+      textarea.addEventListener('paste', async ev => {
+        const items = ev.clipboardData ? [...ev.clipboardData.items] : [];
+        const files = items.filter(it => it && it.kind === 'file').map(it => (it.getAsFile ? it.getAsFile() : null)).filter(Boolean);
+        if (!files.length) return;
+        ev.preventDefault();
+        await addFiles(files);
+      });
+    }
+  })();
+
   const aiPanel = $('#ai-panel');
   const aiInputBox = $('.ai-input');
   if (aiPanel && aiInputBox) {

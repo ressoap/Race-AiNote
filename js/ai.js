@@ -761,7 +761,7 @@
     }
 
     // 两个独立会话：答疑老师 / 笔记问答，互不共享历史
-    const state = { threads: { tutor: [], notes: [] }, mode: 'local', askMode: 'tutor', busy: false, config: loadConfig() };
+    const state = { threads: { tutor: [], notes: [] }, mode: 'local', askMode: 'tutor', busy: false, serverVision: '', config: loadConfig() };
 
     function thread() { return state.threads[state.askMode]; }
 
@@ -827,10 +827,24 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
+    /** 有没有能识图的模型：直连看配置，代理看服务端 /api/health 回报 */
+    function hasVisionModel() {
+      if (String((state.config && state.config.visionModel) || '').trim()) return true;
+      if (state.mode === 'proxy' && state.serverVision) return true;
+      return false;
+    }
+
+    function updateVisionHint() {
+      const hint = document.getElementById('ai-vision-hint');
+      if (!hint) return;
+      hint.hidden = state.mode === 'local' || hasVisionModel();
+    }
+
     function setMode(mode, label) {
       state.mode = mode;
       if (modeEl) modeEl.textContent = label || (mode === 'remote' ? '模型模式' : '本地分析模式');
       if (modeEl) modeEl.classList.toggle('is-remote', mode === 'remote');
+      updateVisionHint();
     }
 
     async function detectTransport() {
@@ -845,6 +859,7 @@
         const res = await fetch('/api/health', { cache: 'no-store' });
         if (!res.ok) throw new Error('no key on server');
         const info = await res.json();
+        state.serverVision = String(info.visionModel || '');
         setMode('proxy', '模型模式 · ' + (info.model || 'AI'));
       } catch (_) {
         setMode('local', hasKey(cfg) ? '本地分析模式（把连接方式切到「浏览器直连」即可用 Key）' : '本地分析模式（未填 API Key）');
@@ -918,8 +933,11 @@
       const history = threadAtSend.filter(m => !m.archived && (m.role === 'user' || m.role === 'assistant')).slice(-8).map(m => ({ role: m.role, content: m.text }));
       const teacherPrompt = askModeAtSend === 'tutor' ? buildTeacherPrompt(state.config) : '';
       addMessage('user', question, [], images);
-      if (images.length && state.mode !== 'local' && !state.config.visionModel && opts.onToast) {
-        opts.onToast('未配置视觉模型，图片可能无法识别；请在设置里填写视觉模型');
+      const visionReady = hasVisionModel();
+      const sendImages = (state.mode === 'local' || visionReady) ? images : [];
+      const imageSkipped = images.length > 0 && sendImages.length === 0;
+      if (imageSkipped && opts.onToast) {
+        opts.onToast('没有可识图的视觉模型，这次只发文字；可在「设置 → AI」里填写视觉模型');
       }
       const loading = addMessage('assistant', '思考中…');
       loading.kind = 'answer';
@@ -935,8 +953,8 @@
           if (state.mode === 'direct' || state.mode === 'proxy') {
             const context = contextPayload(question);
             const result = state.mode === 'direct'
-              ? await callDirect(Object.assign({}, state.config, { askMode: askModeAtSend }), question, context, images, signal, teacherPrompt)
-              : await callProxy(question, context, askModeAtSend, history, images, state.config.visionModel, signal, teacherPrompt);
+              ? await callDirect(Object.assign({}, state.config, { askMode: askModeAtSend }), question, context, sendImages, signal, teacherPrompt)
+              : await callProxy(question, context, askModeAtSend, history, sendImages, state.config.visionModel, signal, teacherPrompt);
             if (run.cancelled) return false;
             loading.text = result.answer || '（模型没有返回内容）';
             loading.refs = result.refs || [];
@@ -962,6 +980,9 @@
         if (run.cancelled) return false;
         if (images.length && state.mode === 'local') {
           loading.text += String.fromCharCode(10, 10) + '（当前是本地分析模式，图片已保留在消息里；接入支持视觉的模型后可以直接识图。）';
+        }
+        if (imageSkipped) {
+          loading.text += String.fromCharCode(10, 10) + '（没有可识图的视觉模型，本次只发送了文字）';
         }
 
         if (askModeAtSend === 'tutor' && loading.text && loading.text !== '思考中…' && !loading.stopped) {

@@ -268,6 +268,11 @@
             <div class="ai-input">
               <div id="ai-input-resizer" class="ai-input-resizer" role="separator" aria-orientation="horizontal" aria-label="拖动调整输入框高度" tabindex="0" title="上下拖动调整输入框高度，双击恢复默认"><span></span></div>
               <label class="ai-option"><input type="checkbox" id="ai-use-note"> 带上当前笔记</label>
+              <div class="ai-input-tools">
+                <button id="ai-attach-image" class="ghost-btn tiny" type="button" title="添加图片：也可以直接拖进面板，或在输入框里 Ctrl+V 粘贴">＋ 图片</button>
+                <span id="ai-vision-hint" class="ai-vision-hint" hidden>未配置视觉模型，图片不会被发送</span>
+              </div>
+              <input id="ai-image-input" type="file" accept="image/*" multiple hidden>
               <div id="ai-attachments" class="ai-attachments" hidden></div>
               <div class="ai-input-row">
                 <textarea id="ai-text" rows="4" placeholder="直接把题目或疑问发给我…（Enter 发送，Shift+Enter 换行）"></textarea>

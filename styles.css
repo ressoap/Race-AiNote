@@ -2397,3 +2397,14 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 .trash-row .trash-name { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trash-row .trash-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .trash-row button { flex: none; }
+
+/* AI 输入区：图片入口与视觉模型提示 */
+.ai-input-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ai-vision-hint {
+  font-size: 11px;
+  color: #b7791f;
+  background: rgba(239, 159, 39, 0.14);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+:root[data-theme="dark"] .ai-vision-hint { color: #f0c27b; }
