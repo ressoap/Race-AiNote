@@ -85,6 +85,22 @@
     }
   }
 
+  const TRASH_KEY = 'vaultsTrash';
+  const TRASH_LIMIT = 20;
+
+  function readTrash() {
+    try {
+      const raw = store.getJSON(TRASH_KEY, []);
+      return Array.isArray(raw) ? raw.filter(v => v && typeof v.id === 'string' && v.id) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeTrash(list) {
+    try { store.setJSON(TRASH_KEY, list.slice(0, TRASH_LIMIT)); return true; } catch (_) { return false; }
+  }
+
   function vaultEntryOf(id) {
     return readVaultList().find(v => v.id === id) || null;
   }
@@ -254,19 +270,6 @@
       ? '开箱即用 · 无需配置'
       : (book.stale ? '快照已清理，请重新选择文件夹' : timeAgo(book.savedAt));
     card.appendChild(foot);
-
-    if (book.kind !== 'demo') {
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'book-remove';
-      del.title = '从列表移出（不会删除磁盘文件）';
-      del.textContent = '×';
-      del.addEventListener('click', ev => {
-        ev.stopPropagation();
-        removeVaultBook(book.id);
-      });
-      card.appendChild(del);
-    }
 
     const go = () => { Promise.resolve(enterVault(book.id)).catch(() => {}); };
     card.addEventListener('click', go);
@@ -463,6 +466,7 @@
     const count = $('#launcher-count');
     if (count) count.textContent = list.length ? '共 ' + (list.length + 1) + ' 个' : '只有示例库';
     if (typeof renderLauncherStats === 'function') renderLauncherStats();
+    renderTrashModal();
   }
 
   function openLauncher() {
@@ -563,11 +567,101 @@
       danger: true
     });
     if (!ok) return false;
+    const trash = readTrash();
+    trash.unshift(Object.assign({}, entry, { deletedAt: Date.now() }));
+    writeTrash(trash);
     writeVaultList(readVaultList().filter(v => v.id !== id));
     idbDeleteHandle(id);
     if (state.vaultId === id) state.vaultId = null; // 当前正在编辑的库被移出：解除身份，下次保存重新建书
     renderLauncher();
-    toast('已移出列表，磁盘文件未改动');
+    toast('已移入回收站，可随时恢复');
+    return true;
+  }
+
+  /* ── 回收站：移出的笔记库还能拿回来 ─────────────────────── */
+
+  function restoreVaultBook(id) {
+    const trash = readTrash();
+    const hit = trash.find(v => v.id === id);
+    if (!hit) return false;
+    writeTrash(trash.filter(v => v.id !== id));
+    const list = readVaultList();
+    if (!list.some(v => v.id === hit.id)) {
+      const entry = Object.assign({}, hit);
+      delete entry.deletedAt;
+      list.unshift(entry);
+      writeVaultList(list);
+    }
+    renderLauncher();
+    renderTrashModal();
+    toast('已恢复《' + hit.label + '》');
+    return true;
+  }
+
+  function purgeTrashBook(id) {
+    writeTrash(readTrash().filter(v => v.id !== id));
+    renderLauncher();
+    renderTrashModal();
+    toast('已彻底删除');
+    return true;
+  }
+
+  function renderTrashModal() {
+    const listEl = $('#vault-trash-list');
+    const emptyEl = $('#vault-trash-empty');
+    if (!listEl) return;
+    const trash = readTrash();
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = trash.length > 0;
+    for (const item of trash) {
+      const row = document.createElement('li');
+      row.className = 'trash-row';
+      row.dataset.id = item.id;
+
+      const name = document.createElement('span');
+      name.className = 'trash-name';
+      name.textContent = item.label || '未命名笔记库';
+      name.title = name.textContent;
+
+      const meta = document.createElement('span');
+      meta.className = 'trash-meta';
+      meta.textContent = (item.noteCount || 0) + ' 篇 · ' + timeAgo(item.deletedAt);
+
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'ghost-btn';
+      back.textContent = '恢复';
+      back.addEventListener('click', () => restoreVaultBook(item.id));
+
+      const gone = document.createElement('button');
+      gone.type = 'button';
+      gone.className = 'ghost-btn is-danger';
+      gone.textContent = '彻底删除';
+      gone.addEventListener('click', () => purgeTrashBook(item.id));
+
+      row.appendChild(name);
+      row.appendChild(meta);
+      row.appendChild(back);
+      row.appendChild(gone);
+      listEl.appendChild(row);
+    }
+    const btn = $('#launcher-trash');
+    const count = $('#launcher-trash-count');
+    if (count) count.textContent = String(trash.length);
+    if (btn) btn.hidden = trash.length === 0;
+  }
+
+  function openTrashModal() {
+    renderTrashModal();
+    const modal = $('#vault-trash');
+    if (modal) modal.hidden = false;
+    return true;
+  }
+
+  function closeTrashModal() {
+    const modal = $('#vault-trash');
+    if (!modal || modal.hidden) return false;
+    modal.hidden = true;
     return true;
   }
 
@@ -620,6 +714,16 @@
       const menu = $('#vault-menu');
       if (menu && !menu.hidden && !ev.target.closest('#vault-menu')) closeVaultMenu();
     });
+    const trashBtn = $('#launcher-trash');
+    if (trashBtn) trashBtn.addEventListener('click', () => { openTrashModal(); });
+    const trashClose = $('#vault-trash-close');
+    if (trashClose) trashClose.addEventListener('click', () => { closeTrashModal(); });
+    const trashModal = $('#vault-trash');
+    if (trashModal) {
+      trashModal.addEventListener('click', ev => {
+        if (ev.target === trashModal) closeTrashModal();
+      });
+    }
     const detailClose = $('#vault-detail-close');
     if (detailClose) detailClose.addEventListener('click', () => { $('#vault-detail').hidden = true; });
     const detailModal = $('#vault-detail');
@@ -634,6 +738,7 @@
       if (ev.key === 'Escape') {
         ev.preventDefault();
         if (closeVaultMenu()) return;
+        if (closeTrashModal()) return;
         const detail = $('#vault-detail');
         if (detail && !detail.hidden) { detail.hidden = true; return; }
         if (state.files && state.files.length) closeLauncher();
@@ -648,6 +753,7 @@
       if (shell.contains(ev.target)) return;
       ev.stopPropagation();
       if (closeVaultMenu()) return;
+      if (closeTrashModal()) return;
       const detail = $('#vault-detail');
       if (detail && !detail.hidden) { detail.hidden = true; return; }
       if (ev.key === 'Escape' && state.files && state.files.length) closeLauncher();

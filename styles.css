@@ -2382,3 +2382,18 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 }
 .stats-select:hover { border-color: var(--accent); color: var(--text); }
 .stats-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--text); }
+
+/* 笔记库回收站 */
+.trash-list { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.trash-row .trash-name { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-row .trash-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.trash-row button { flex: none; }

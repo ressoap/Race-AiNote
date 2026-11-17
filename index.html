@@ -520,6 +520,22 @@
   <button data-act="delete" class="is-danger">从列表删除</button>
 </div>
 
+<div id="vault-trash" class="modal" hidden>
+  <div class="modal-card dialog-card vault-detail-card">
+    <header>
+      <div>
+        <h2>回收站</h2>
+        <p class="modal-path">移出列表的笔记库会先放在这里，可随时恢复</p>
+      </div>
+      <button id="vault-trash-close" class="icon-btn" type="button" title="关闭">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <ul id="vault-trash-list" class="trash-list"></ul>
+    <p id="vault-trash-empty" class="stats-empty" hidden>回收站是空的</p>
+  </div>
+</div>
+
 <div id="vault-detail" class="modal" hidden>
   <div class="modal-card dialog-card vault-detail-card">
     <header>
@@ -621,6 +637,7 @@
       <div class="launcher-tools">
         <button id="launcher-open" class="launcher-btn primary" type="button">打开本地文件夹</button>
         <button id="launcher-demo" class="launcher-btn" type="button">示例库</button>
+        <button id="launcher-trash" class="launcher-btn" type="button" hidden>回收站 <b id="launcher-trash-count">0</b></button>
         <button id="launcher-close" class="icon-btn" type="button" title="返回当前笔记库（Esc）">
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
