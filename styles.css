@@ -1843,8 +1843,6 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   border-bottom: 1px dashed var(--border);
   padding-bottom: 2px;
 }
-.ai-record.is-drop-target { outline: 2px solid var(--accent); outline-offset: -2px; }
-.ai-record.is-dragging { opacity: 0.45; }
 
 /* 定位到错题笔记后的短暂高亮 */
 .record-locate-flash {

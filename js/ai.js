@@ -1021,7 +1021,7 @@
     let pushTimer = 0;
 
     function saveRecords(list) {
-      const trimmed = list.slice().sort((a, b) => (b.order || b.at || 0) - (a.order || a.at || 0)).slice(0, 300);
+      const trimmed = list.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
       try { storageSet(RECORDS_KEY, JSON.stringify(trimmed), LEGACY_RECORDS_KEY); } catch (_) {}
       pushToServer(trimmed);
     }
@@ -1057,7 +1057,7 @@
           const newer = !other || (rec.resolvedAt || rec.at || 0) >= (other.resolvedAt || other.at || 0);
           if (newer) byId.set(rec.id, rec);
         }
-        const merged = [...byId.values()].sort((x, y) => (y.order || y.at || 0) - (x.order || x.at || 0));
+        const merged = [...byId.values()].sort((x, y) => (y.at || 0) - (x.at || 0));
         try { storageSet(RECORDS_KEY, JSON.stringify(merged.slice(0, 300)), LEGACY_RECORDS_KEY); } catch (_) {}
         if (merged.length) pushToServer(merged);
         renderRecords();
@@ -1090,7 +1090,7 @@
       if (idx >= 0) {
         list[idx] = Object.assign({}, list[idx], patch, { sig: sig });
       } else {
-        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig, order: Date.now() }));
+        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig }));
       }
       saveRecords(list);
       renderRecords();
@@ -1148,7 +1148,7 @@
     }
 
     function filteredRecords() {
-      const all = loadRecords().slice().sort((a, b) => (b.order || b.at || 0) - (a.order || a.at || 0));
+      const all = loadRecords().slice().sort((a, b) => (b.at || 0) - (a.at || 0));
       const byDate = state2.recordDate ? all.filter(r => dateKey(r.at) === state2.recordDate) : all;
       const kw = String(state2.recordSearch || '').trim().toLowerCase();
       if (!kw) return byDate;
@@ -1197,7 +1197,7 @@
         for (const rec of items) {
           const item = document.createElement('button');
           item.className = 'ai-record' + (rec.status === 'resolved' ? ' is-resolved' : '');
-          item.draggable = true;
+          item.draggable = false;
           item.dataset.recordId = rec.id;
           item.title = rec.question;
 
@@ -1236,44 +1236,10 @@
             e.stopPropagation();
             if (opts.onRecordMenu) opts.onRecordMenu(e, rec);
           });
-          item.addEventListener('dragstart', e => {
-            e.dataTransfer.setData('text/plain', 'record:' + rec.id);
-            item.classList.add('is-dragging');
-          });
-          item.addEventListener('dragend', () => item.classList.remove('is-dragging'));
-          item.addEventListener('dragover', e => {
-            e.preventDefault();
-            item.classList.add('is-drop-target');
-          });
-          item.addEventListener('dragleave', () => item.classList.remove('is-drop-target'));
-          item.addEventListener('drop', e => {
-            e.preventDefault();
-            item.classList.remove('is-drop-target');
-            const payload = e.dataTransfer.getData('text/plain') || '';
-            if (!payload.startsWith('record:')) return;
-            const fromId = payload.slice(7);
-            if (!fromId || fromId === rec.id) return;
-            reorderRecords(fromId, rec.id);
-          });
-
           listEl.appendChild(item);
         }
       }
       listEl.scrollTop = 0;
-    }
-
-    /** 把 fromId 移动到 targetId 的位置（按当前显示顺序重排 order） */
-    function reorderRecords(fromId, targetId) {
-      const list = loadRecords().slice().sort((a, b) => (b.order || b.at || 0) - (a.order || a.at || 0));
-      const fromIdx = list.findIndex(r => r.id === fromId);
-      const toIdx = list.findIndex(r => r.id === targetId);
-      if (fromIdx < 0 || toIdx < 0) return;
-      const [moved] = list.splice(fromIdx, 1);
-      list.splice(toIdx, 0, moved);
-      const stamp = Date.now();
-      list.forEach((r, i) => { r.order = stamp - i; });
-      saveRecords(list);
-      renderRecords();
     }
 
     function updateRecord(id, patch) {
@@ -1674,7 +1640,7 @@
       greet();
     }
 
-    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

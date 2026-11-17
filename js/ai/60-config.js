@@ -185,7 +185,7 @@
       greet();
     }
 
-    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, reorderRecords, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
+    return { send, stop, clear, reset, setMode, setAskMode, optimizeFormat, recognizeImage, threads: () => state.threads, records: loadRecords, renderRecords, initRecords, findRecord, signatureOf, updateRecord, deleteRecord, setRecordSearch, setRecordDate, remapRecordPaths, analyzeQuestion, addImageFiles, applyConfig, testConnection, fetchModels, state, render, loadConfig, saveConfig, clearConfig, hasKey };
   }
 
   root.RG = root.RG || {};

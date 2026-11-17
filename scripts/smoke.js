@@ -513,7 +513,7 @@ const acceptConfirm = async () => {
     await sleep(60);
   }
   out.afterUninstall = api.pluginHost.list().length;
-  // 问题记录：日期分块 / 搜索 / 左键详情 / 右键菜单 / 拖拽排序 / 删除
+  // 问题记录：日期分块 / 搜索 / 左键详情 / 右键菜单 / 时间排序 / 删除
   w.localStorage.removeItem(STORE.records);
   api.ai.renderRecords();
   for (const q of ['导数题怎么下手', '磁场偏转角怎么求', '概率分布列怎么列', 'The report ______ by the end of next week. 选项：will have been finished / will be finished']) {
@@ -600,12 +600,10 @@ const acceptConfirm = async () => {
     }
   }
 
-  const ids = [...w.document.querySelectorAll('#ai-record-list .ai-record')].map(e => e.dataset.recordId);
-  const before0 = ids[0];
-  api.ai.reorderRecords(ids[ids.length - 1], ids[0]);
-  await sleep(100);
-  const after0 = w.document.querySelector('#ai-record-list .ai-record').dataset.recordId;
-  out.recordReordered = after0 !== before0;
+  const recordEls = [...w.document.querySelectorAll('#ai-record-list .ai-record')];
+  out.recordDragDisabled = recordEls.length > 0 && recordEls.every(el => !el.draggable);
+  out.recordReorderApiRemoved = typeof api.ai.reorderRecords !== 'function';
+  out.recordTimeSorted = domRecordIds.length < 2 || domRecordIds.every((id, i) => i === 0 || atById.get(domRecordIds[i - 1]) >= atById.get(id));
 
   const countBefore = api.ai.records().length;
   const delItem = w.document.querySelector('#ai-record-list .ai-record');
@@ -677,7 +675,7 @@ const acceptConfirm = async () => {
   w.fetch = realFetch;
   api.ai.state.mode = previousMode;
 
-  const required = ['createdNote', 'renamed', 'deleted', 'pluginMenuNearSettings', 'diskWriteBack', 'diskBindingReset', 'graphMenuVisible', 'graphMenuTitle', 'graphMenuGroups', 'graphMenuItemCount', 'graphFavorite', 'graphFavoriteStar', 'graphFavoriteToggle', 'graphMovePicker', 'graphPickClosed', 'teacherButtonLeftOfSettings', 'teacherModalOpened', 'teacherModule', 'teacherTraitSliders', 'teacherSaved', 'teacherConfigSaved', 'teacherPromptApplied', 'teacherResetButton', 'teacherResetConfirm', 'teacherReset', 'teacherModalClosed', 'sidebarResizer', 'sidebarDragResized', 'sidebarWidthSaved', 'sidebarReset', 'noteTabStrip', 'noteTabFirst', 'noteTabActive', 'noteTabSecond', 'noteTabClickSwitches', 'noteTabReordered', 'noteTabsSaved', 'noteTabCloseSwitches', 'noteTabCloseCount', 'recordDeleted', 'quickSaveStaysEditing', 'quickSaveWroteContent', 'quickSavePersisted', 'nestedFolderDepth', 'stopApi', 'stopButtonVisible', 'sendDisabledWhileBusy', 'stopAboveSend', 'stopInterrupted', 'stopMessage', 'stopButtonHidden', 'sendEnabledAfterStop', 'stopNoRecord', 'noQuark', 'keyClearedInLocalMode', 'newApiAlias', 'recordDateFilter', 'recordDateOptions', 'recordDateFiltered', 'recordDetailOpen', 'recordSubtabOpen', 'recordInlineView', 'recordInlineQuestion', 'recordDetailClosed', 'useNoteDefaultOff', 'collapseExpandButtons', 'expandWorked', 'mistakeSubjectFolders', 'aiPanelResizer', 'aiPanelResized', 'aiPanelWidthSaved', 'aiPanelReset', 'imageAttachApi', 'photoButton', 'photoApi', 'photoLocalGuard', 'imageEmptyAdd', 'attachmentBox', 'savedVisionModel', 'visionModelField', 'imageDropNoVaultChange', 'imageDropPreview', 'imageDropCleared', 'inputResizer', 'inputInitialHeight', 'inputResetHeight', 'inputDragResized', 'inputHeightSaved', 'recordLocateButton', 'recordLocated', 'recordLocateHighlight', 'initialOpenWithTarget', 'autoFiledBar', 'autoFiledAll', 'autoTaggedAll', 'englishAutoFiled', 'englishBookCreated', 'autoHeading', 'autoEnglishTag', 'allOriginalQuestionsArchived', 'originalQuestionHeading', 'autoResolved', 'recordsNewestFirst', 'recordUnfiled'];
+  const required = ['createdNote', 'renamed', 'deleted', 'pluginMenuNearSettings', 'diskWriteBack', 'diskBindingReset', 'graphMenuVisible', 'graphMenuTitle', 'graphMenuGroups', 'graphMenuItemCount', 'graphFavorite', 'graphFavoriteStar', 'graphFavoriteToggle', 'graphMovePicker', 'graphPickClosed', 'teacherButtonLeftOfSettings', 'teacherModalOpened', 'teacherModule', 'teacherTraitSliders', 'teacherSaved', 'teacherConfigSaved', 'teacherPromptApplied', 'teacherResetButton', 'teacherResetConfirm', 'teacherReset', 'teacherModalClosed', 'sidebarResizer', 'sidebarDragResized', 'sidebarWidthSaved', 'sidebarReset', 'noteTabStrip', 'noteTabFirst', 'noteTabActive', 'noteTabSecond', 'noteTabClickSwitches', 'noteTabReordered', 'noteTabsSaved', 'noteTabCloseSwitches', 'noteTabCloseCount', 'recordDeleted', 'quickSaveStaysEditing', 'quickSaveWroteContent', 'quickSavePersisted', 'nestedFolderDepth', 'stopApi', 'stopButtonVisible', 'sendDisabledWhileBusy', 'stopAboveSend', 'stopInterrupted', 'stopMessage', 'stopButtonHidden', 'sendEnabledAfterStop', 'stopNoRecord', 'noQuark', 'keyClearedInLocalMode', 'newApiAlias', 'recordDateFilter', 'recordDateOptions', 'recordDateFiltered', 'recordDetailOpen', 'recordSubtabOpen', 'recordInlineView', 'recordInlineQuestion', 'recordDetailClosed', 'useNoteDefaultOff', 'collapseExpandButtons', 'expandWorked', 'mistakeSubjectFolders', 'aiPanelResizer', 'aiPanelResized', 'aiPanelWidthSaved', 'aiPanelReset', 'imageAttachApi', 'photoButton', 'photoApi', 'photoLocalGuard', 'imageEmptyAdd', 'attachmentBox', 'savedVisionModel', 'visionModelField', 'imageDropNoVaultChange', 'imageDropPreview', 'imageDropCleared', 'inputResizer', 'inputInitialHeight', 'inputResetHeight', 'inputDragResized', 'inputHeightSaved', 'recordLocateButton', 'recordLocated', 'recordLocateHighlight', 'initialOpenWithTarget', 'autoFiledBar', 'autoFiledAll', 'autoTaggedAll', 'englishAutoFiled', 'englishBookCreated', 'autoHeading', 'autoEnglishTag', 'allOriginalQuestionsArchived', 'originalQuestionHeading', 'autoResolved', 'recordsNewestFirst', 'recordDragDisabled', 'recordReorderApiRemoved', 'recordTimeSorted', 'recordUnfiled'];
   const failed = required.filter(key => !out[key]);
   if (failed.length) errors.push('smoke assertions failed: ' + failed.join(', '));
   if (out.afterUninstall !== 0) errors.push('plugins not fully uninstalled: ' + out.afterUninstall);
