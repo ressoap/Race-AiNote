@@ -155,7 +155,7 @@
 
     const allRecords = launcherRecordList();
     const filterEl = $('#stats-scope-select');
-    if (filterEl && filterEl.parentElement) filterEl.parentElement.hidden = allRecords.length === 0;
+    if (filterEl && filterEl.parentElement) filterEl.parentElement.hidden = false;
     initStatsScope();
     renderStatsScopeSelect(allRecords, allRecords.length);
     const records = statsScopePath
