@@ -71,7 +71,12 @@
 
   async function openViaInput() { $('#folder-input').click(); }
 
-  async function openViaPicker() {
+  /** fromLauncher：从进入页发起时，只有真的读到笔记才关掉进入页，取消就留在原地 */
+  async function openViaPicker(options) {
+    const fromLauncher = Boolean(options && options.fromLauncher);
+    const finish = ok => {
+      if (fromLauncher && typeof launcherPickDone === 'function') launcherPickDone(ok);
+    };
     if (!window.showDirectoryPicker) return openViaInput();
     try {
       let dir = null;
@@ -80,7 +85,7 @@
         dir = await window.showDirectoryPicker({ mode: 'readwrite' });
         writable = true;
       } catch (err) {
-        if (err && err.name === 'AbortError') return;
+        if (err && err.name === 'AbortError') { finish(false); return; }
         dir = await window.showDirectoryPicker({ mode: 'read' });
       }
       if (writable && dir.queryPermission) {
@@ -91,15 +96,20 @@
       }
       const files = [];
       await walkDirectory(dir, '', files);
-      if (!files.length) return toast('这个文件夹里没有 Markdown 笔记');
+      if (!files.length) {
+        finish(false);
+        return toast('这个文件夹里没有 Markdown 笔记');
+      }
       loadFiles(files, dir.name);
       if (writable && typeof bindDiskRoot === 'function') {
         bindDiskRoot(dir, files);
         if (typeof attachVaultHandle === 'function') attachVaultHandle(dir);
       }
       toast('已读取 ' + dir.name + '：' + files.length + ' 个文件' + (writable ? '，修改会写回磁盘' : '（只读）'));
+      finish(true);
     } catch (err) {
-      if (err && err.name === 'AbortError') return;
+      if (err && err.name === 'AbortError') { finish(false); return; }
+      finish(false);
       toast('读取失败：' + (err && err.message ? err.message : err));
     }
   }

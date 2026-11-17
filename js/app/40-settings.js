@@ -188,10 +188,15 @@
     if (!files.length) return;
     const rootName = files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : '本地库';
     const parsed = await readFileList(files);
-    if (!parsed.length) return toast('这个文件夹里没有 Markdown 笔记');
+    if (!parsed.length) {
+      e.target.value = '';
+      if (typeof launcherPickDone === 'function') launcherPickDone(false);
+      return toast('这个文件夹里没有 Markdown 笔记');
+    }
     loadFiles(parsed, rootName);
     toast('已读取 ' + rootName + '：' + parsed.length + ' 个文件');
     e.target.value = '';
+    if (typeof launcherPickDone === 'function') launcherPickDone(true);
   });
 
   /* ── 拖放 ───────────────────────────────────────────────── */

@@ -231,6 +231,7 @@
   const HANDLE_DB = 'wenmo-vault-handles';
   let pendingVaultEntry = null;
   let launcherBound = false;
+  let launcherPickPending = false;
 
   function vaultHue(id) {
     let h = 2166136261;
@@ -527,10 +528,7 @@
     foot.textContent = '读取 Markdown 笔记库';
     card.appendChild(foot);
 
-    const go = () => {
-      closeLauncher();
-      openViaPicker();
-    };
+    const go = () => { startLauncherPick(); };
     card.addEventListener('click', go);
     card.addEventListener('keydown', ev => {
       if (ev.key === 'Enter' || ev.key === ' ') {
@@ -580,7 +578,21 @@
     const root = $('#launcher');
     if (!root || root.hidden) return false;
     root.hidden = true;
+    launcherPickPending = false;
     return true;
+  }
+
+  /** 从进入页发起「打开本地文件夹」：选完且真的读到了笔记，才退出进入页 */
+  function startLauncherPick() {
+    launcherPickPending = true;
+    return openViaPicker({ fromLauncher: true });
+  }
+
+  function launcherPickDone(ok) {
+    const wasPending = launcherPickPending;
+    launcherPickPending = false;
+    if (ok && wasPending) closeLauncher();
+    return wasPending;
   }
 
   /* ── 进入 / 移出一个库 ─────────────────────────────────── */
@@ -664,10 +676,7 @@
 
     const openBtn = $('#launcher-open');
     if (openBtn) {
-      openBtn.addEventListener('click', () => {
-        closeLauncher();
-        openViaPicker();
-      });
+      openBtn.addEventListener('click', () => { startLauncherPick(); });
     }
     const demoBtn = $('#launcher-demo');
     if (demoBtn) {
@@ -1331,7 +1340,12 @@
 
   async function openViaInput() { $('#folder-input').click(); }
 
-  async function openViaPicker() {
+  /** fromLauncher：从进入页发起时，只有真的读到笔记才关掉进入页，取消就留在原地 */
+  async function openViaPicker(options) {
+    const fromLauncher = Boolean(options && options.fromLauncher);
+    const finish = ok => {
+      if (fromLauncher && typeof launcherPickDone === 'function') launcherPickDone(ok);
+    };
     if (!window.showDirectoryPicker) return openViaInput();
     try {
       let dir = null;
@@ -1340,7 +1354,7 @@
         dir = await window.showDirectoryPicker({ mode: 'readwrite' });
         writable = true;
       } catch (err) {
-        if (err && err.name === 'AbortError') return;
+        if (err && err.name === 'AbortError') { finish(false); return; }
         dir = await window.showDirectoryPicker({ mode: 'read' });
       }
       if (writable && dir.queryPermission) {
@@ -1351,15 +1365,20 @@
       }
       const files = [];
       await walkDirectory(dir, '', files);
-      if (!files.length) return toast('这个文件夹里没有 Markdown 笔记');
+      if (!files.length) {
+        finish(false);
+        return toast('这个文件夹里没有 Markdown 笔记');
+      }
       loadFiles(files, dir.name);
       if (writable && typeof bindDiskRoot === 'function') {
         bindDiskRoot(dir, files);
         if (typeof attachVaultHandle === 'function') attachVaultHandle(dir);
       }
       toast('已读取 ' + dir.name + '：' + files.length + ' 个文件' + (writable ? '，修改会写回磁盘' : '（只读）'));
+      finish(true);
     } catch (err) {
-      if (err && err.name === 'AbortError') return;
+      if (err && err.name === 'AbortError') { finish(false); return; }
+      finish(false);
       toast('读取失败：' + (err && err.message ? err.message : err));
     }
   }
@@ -3595,10 +3614,15 @@
     if (!files.length) return;
     const rootName = files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : '本地库';
     const parsed = await readFileList(files);
-    if (!parsed.length) return toast('这个文件夹里没有 Markdown 笔记');
+    if (!parsed.length) {
+      e.target.value = '';
+      if (typeof launcherPickDone === 'function') launcherPickDone(false);
+      return toast('这个文件夹里没有 Markdown 笔记');
+    }
     loadFiles(parsed, rootName);
     toast('已读取 ' + rootName + '：' + parsed.length + ' 个文件');
     e.target.value = '';
+    if (typeof launcherPickDone === 'function') launcherPickDone(true);
   });
 
   /* ── 拖放 ───────────────────────────────────────────────── */
@@ -5166,7 +5190,7 @@
   window.__raceAiNote = {
     state, settings, rebuild, fitView, setMode, openNote, openNoteByTitle, sortNotes, sortFolders, handleDrop, touchUsage, showView, setAiPanel, openPrefs, applyAskMode, applyTheme, cycleTheme, quickSave, saveEditing, openRecordDetail, continueAsking, closeNoteTab, renderNoteTabs, openGraphMenu, closeGraphMenu, bindDiskRoot, syncDiskNow, resetDiskBinding, pluginHost, renderPluginUI, refreshNoteWidgets, loadFiles, loadDemo, ai,
     openLauncher, closeLauncher, enterVault, renderLauncher, removeVaultBook, vaultLibrary: readVaultList, commitActiveVault,
-    openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook,
+    openVaultMenu, closeVaultMenu, showVaultDetail, duplicateVaultBook, renameVaultBook, backupVaultBook, startLauncherPick, launcherPickDone, openViaPicker,
     get graph() { return state.graph; },
     query, vault, physics, render
   };

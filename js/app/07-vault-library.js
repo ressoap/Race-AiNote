@@ -12,6 +12,7 @@
   const HANDLE_DB = 'wenmo-vault-handles';
   let pendingVaultEntry = null;
   let launcherBound = false;
+  let launcherPickPending = false;
 
   function vaultHue(id) {
     let h = 2166136261;
@@ -308,10 +309,7 @@
     foot.textContent = '读取 Markdown 笔记库';
     card.appendChild(foot);
 
-    const go = () => {
-      closeLauncher();
-      openViaPicker();
-    };
+    const go = () => { startLauncherPick(); };
     card.addEventListener('click', go);
     card.addEventListener('keydown', ev => {
       if (ev.key === 'Enter' || ev.key === ' ') {
@@ -361,7 +359,21 @@
     const root = $('#launcher');
     if (!root || root.hidden) return false;
     root.hidden = true;
+    launcherPickPending = false;
     return true;
+  }
+
+  /** 从进入页发起「打开本地文件夹」：选完且真的读到了笔记，才退出进入页 */
+  function startLauncherPick() {
+    launcherPickPending = true;
+    return openViaPicker({ fromLauncher: true });
+  }
+
+  function launcherPickDone(ok) {
+    const wasPending = launcherPickPending;
+    launcherPickPending = false;
+    if (ok && wasPending) closeLauncher();
+    return wasPending;
   }
 
   /* ── 进入 / 移出一个库 ─────────────────────────────────── */
@@ -445,10 +457,7 @@
 
     const openBtn = $('#launcher-open');
     if (openBtn) {
-      openBtn.addEventListener('click', () => {
-        closeLauncher();
-        openViaPicker();
-      });
+      openBtn.addEventListener('click', () => { startLauncherPick(); });
     }
     const demoBtn = $('#launcher-demo');
     if (demoBtn) {

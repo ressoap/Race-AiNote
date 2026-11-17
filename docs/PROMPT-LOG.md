@@ -707,6 +707,31 @@
 
 ---
 
+## 链路 31 · 修复：从进入页打开文件夹会跳进别的库
+
+**Prompt**
+
+> 点击打开本地文件夹后会直接进入别的笔记里，解决这个问题。
+
+**原因**
+
+- 进入页的「打开本地文件夹」先 `closeLauncher()` 再弹选择框：一旦取消、选到空文件夹或读目录报错，
+  用户就落回工作区里上一个库（示例库/上次的库），看起来像「点开文件夹却进了别的笔记」。
+
+**落地**
+
+- 进入页不再提前关自己，改成 `startLauncherPick()`：先挂 `launcherPickPending`，再调 `openViaPicker({ fromLauncher: true })`；
+- `openViaPicker` 在「取消 / 没有 Markdown / 读目录失败」三条路径都 `launcherPickDone(false)`，只有真正 `loadFiles()` 成功才 `launcherPickDone(true)` 关掉进入页；
+- `<input webkitdirectory>` 兜底路径（Electron / 不支持 File System Access API 时）同样接 `launcherPickDone`；
+- `closeLauncher()` 会清掉待定标记，避免误关。
+
+**验收**
+
+- 冒烟新增 3 条断言：取消后仍停在进入页、选到文件夹后进入该库、载入的是选中的笔记；
+- `npm test` 103 项通过，`npm run smoke` 退出码 0。
+
+---
+
 ## 待补充的链路
 
 - [x] 拍题入库已完成“单张图片 → 一道题笔记”的半自动流程；多题切分、公式转写准确率和人工校对成本仍需真实题集评测。
