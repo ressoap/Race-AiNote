@@ -603,12 +603,35 @@
       </div>
     </header>
 
-    <div class="launcher-scroll">
-      <div class="launcher-shelf-head">
-        <h2 class="launcher-section-title">我的笔记库</h2>
-        <span id="launcher-count" class="launcher-count"></span>
+    <div class="launcher-body">
+      <div class="launcher-scroll">
+        <div class="launcher-shelf-head">
+          <h2 class="launcher-section-title">我的笔记库</h2>
+          <span id="launcher-count" class="launcher-count"></span>
+        </div>
+        <div id="launcher-shelf" class="shelf" role="list"></div>
       </div>
-      <div id="launcher-shelf" class="shelf" role="list"></div>
+
+      <aside id="launcher-stats" class="launcher-stats" aria-label="错题分布看板">
+        <div class="stats-head">
+          <h2 class="stats-title">错题分布</h2>
+          <span id="stats-scope" class="stats-scope"></span>
+        </div>
+        <div class="stats-chart" id="stats-chart">
+          <svg id="stats-pie" viewBox="0 0 120 120" role="img" aria-label="错题学科扇形占比图"></svg>
+          <div class="stats-center">
+            <strong id="stats-total">0</strong>
+            <span>道错题</span>
+          </div>
+        </div>
+        <ul id="stats-subjects" class="stats-legend"></ul>
+        <div class="stats-subhead">
+          <span>知识点分布比例</span>
+          <span id="stats-solved" class="stats-solved"></span>
+        </div>
+        <ul id="stats-points" class="stats-points"></ul>
+        <p id="stats-empty" class="stats-empty" hidden>还没有错题记录。<br>去「答疑老师」问一道题，答完会自动归档并统计。</p>
+      </aside>
     </div>
 
     <footer class="launcher-foot">

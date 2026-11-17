@@ -336,6 +336,7 @@
     shelf.appendChild(addBookCard());
     const count = $('#launcher-count');
     if (count) count.textContent = list.length ? '共 ' + (list.length + 1) + ' 个' : '只有示例库';
+    if (typeof renderLauncherStats === 'function') renderLauncherStats();
   }
 
   function openLauncher() {
