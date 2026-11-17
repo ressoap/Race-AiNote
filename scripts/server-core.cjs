@@ -102,6 +102,17 @@ function sendText(res, code, text) {
   res.end(text);
 }
 
+function sendHtml(res, code, html) {
+  res.writeHead(code, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': Buffer.byteLength(html),
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer'
+  });
+  res.end(html);
+}
+
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     let raw = '';
@@ -513,6 +524,94 @@ function createRecordHandlers(dataDir) {
   return { handleRecords, recordsFile };
 }
 
+/* ---------- 百度网盘 OAuth 授权回调 ---------- */
+
+function escapeHtml(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function baiduOAuthConfig() {
+  return {
+    appKey: String(process.env.BAIDU_APP_KEY || '').trim(),
+    secretKey: String(process.env.BAIDU_SECRET_KEY || '').trim(),
+    redirectUri: String(process.env.BAIDU_REDIRECT_URI || 'http://127.0.0.1:4399/oauth/baidu/callback').trim()
+  };
+}
+
+function oauthResultPage(title, status, content) {
+  return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>' + escapeHtml(title) + '</title><style>'
+    + 'body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#22262f;font:14px/1.65 system-ui,"Microsoft YaHei",sans-serif}'
+    + '.card{width:min(560px,calc(100% - 32px));padding:24px;border-radius:16px;background:#fff;border:1px solid #e3e7ee;box-shadow:0 16px 42px rgba(16,20,34,.10)}'
+    + 'h1{font-size:20px;margin:0 0 6px}.status{margin:0 0 14px;color:#4b5b73}textarea{width:100%;min-height:92px;padding:9px 10px;border:1px solid #cfd8e5;border-radius:8px;font:12px/1.5 Consolas,monospace;resize:vertical}'
+    + 'button{margin-top:10px;padding:8px 14px;border:0;border-radius:8px;background:#4a6ef5;color:#fff;font:inherit;cursor:pointer}'
+    + '.tip{font-size:12px;color:#6b7383;margin:10px 0 0}.ok{color:#2f8f5b}.err{color:#c94a45}'
+    + '</style></head><body><main class="card"><h1>' + escapeHtml(title) + '</h1><p class="status ' + (status === 200 ? 'ok' : 'err') + '">'
+    + (status === 200 ? '授权完成' : '授权失败') + '</p>' + content + '</main></body></html>';
+}
+
+function handleBaiduOAuthStart(req, res) {
+  const cfg = baiduOAuthConfig();
+  if (!cfg.appKey || !cfg.secretKey) {
+    return sendHtml(res, 503, oauthResultPage('百度网盘授权', 503,
+      '<p>还没有配置百度应用凭据。请在项目根目录 <code>.env</code> 中填写 <code>BAIDU_APP_KEY</code> 和 <code>BAIDU_SECRET_KEY</code>，然后重新打开本页。</p>'));
+  }
+  const url = new URL('https://openapi.baidu.com/oauth/2.0/authorize');
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('client_id', cfg.appKey);
+  url.searchParams.set('redirect_uri', cfg.redirectUri);
+  url.searchParams.set('scope', 'basic,netdisk');
+  url.searchParams.set('state', 'wenmo-notes');
+  res.writeHead(302, {
+    Location: url.toString(),
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer'
+  });
+  res.end();
+}
+
+async function handleBaiduOAuthCallback(req, res, url) {
+  const cfg = baiduOAuthConfig();
+  const code = url.searchParams.get('code') || '';
+  const oauthError = url.searchParams.get('error_description') || url.searchParams.get('error') || '';
+  if (oauthError) {
+    return sendHtml(res, 400, oauthResultPage('百度网盘授权', 400, '<p>' + escapeHtml(oauthError) + '</p>'));
+  }
+  if (!code) {
+    return sendHtml(res, 400, oauthResultPage('百度网盘授权', 400, '<p>回调地址里没有 code。请从 <code>/oauth/baidu/start</code> 重新发起授权。</p>'));
+  }
+  if (!cfg.appKey || !cfg.secretKey) {
+    return sendHtml(res, 503, oauthResultPage('百度网盘授权', 503, '<p>缺少 <code>BAIDU_APP_KEY</code> 或 <code>BAIDU_SECRET_KEY</code>，无法用 code 换取 access_token。</p>'));
+  }
+  try {
+    const tokenUrl = new URL('https://openapi.baidu.com/oauth/2.0/token');
+    tokenUrl.searchParams.set('grant_type', 'authorization_code');
+    tokenUrl.searchParams.set('code', code);
+    tokenUrl.searchParams.set('client_id', cfg.appKey);
+    tokenUrl.searchParams.set('client_secret', cfg.secretKey);
+    tokenUrl.searchParams.set('redirect_uri', cfg.redirectUri);
+    const response = await fetch(tokenUrl, { headers: { Accept: 'application/json' } });
+    const data = await response.json().catch(function () { return {}; });
+    if (!response.ok || !data.access_token) {
+      const message = data.error_description || data.error || ('HTTP ' + response.status);
+      return sendHtml(res, 502, oauthResultPage('百度网盘授权', 502, '<p>' + escapeHtml(message) + '</p>'));
+    }
+    const expires = Number(data.expires_in || 0);
+    const content = '<p>把下面这串 access_token 复制到问墨笔记设置里的「百度网盘 → access_token」输入框。</p>'
+      + '<textarea id="access-token" readonly>' + escapeHtml(data.access_token) + '</textarea>'
+      + '<button type="button" id="copy-token">复制 access_token</button>'
+      + '<script>document.getElementById("copy-token").addEventListener("click",function(){var el=document.getElementById("access-token");el.select();document.execCommand("copy");this.textContent="已复制";});</script>'
+      + '<p class="tip">有效期约 ' + (expires ? Math.max(1, Math.round(expires / 3600)) + ' 小时' : '未知') + '。过期后重新从授权页获取，或使用 refresh_token 刷新。</p>';
+    return sendHtml(res, 200, oauthResultPage('百度网盘授权', 200, content));
+  } catch (err) {
+    return sendHtml(res, 502, oauthResultPage('百度网盘授权', 502, '<p>换取 access_token 失败：' + escapeHtml(err && err.message ? err.message : err) + '</p>'));
+  }
+}
+
 /* ---------- 服务器工厂 ---------- */
 
 function createAppServer(options) {
@@ -546,6 +645,13 @@ function createAppServer(options) {
       pathname = decodeURIComponent(url.pathname);
     } catch (_) {
       return sendText(res, 400, '400 Bad Request');
+    }
+
+    if (pathname === '/oauth/baidu/start' && (req.method === 'GET' || req.method === 'HEAD')) {
+      return handleBaiduOAuthStart(req, res);
+    }
+    if (pathname === '/oauth/baidu/callback' && (req.method === 'GET' || req.method === 'HEAD')) {
+      return handleBaiduOAuthCallback(req, res, url);
     }
 
     if (pathname.startsWith('/api/')) {

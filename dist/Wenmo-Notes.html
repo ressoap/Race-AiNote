@@ -2334,6 +2334,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       <div id="cloud-fields"></div>
       <p class="prefs-tip" id="cloud-hint"></p>
       <div class="prefs-actions">
+        <button id="cloud-baidu-auth" class="ghost-btn" hidden>获取百度 access_token</button>
         <button id="cloud-test" class="ghost-btn">测试连接</button>
         <button id="cloud-backup" class="primary-btn">备份到云端</button>
         <button id="cloud-restore" class="ghost-btn">从云端恢复</button>
@@ -9560,7 +9561,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   const CLOUD_HINTS = {
     github: '用官方 Contents API：填一个有 repo 权限的 token 即可，备份文件会作为普通提交写进仓库。',
     gitee: '用官方 OpenAPI v5：私人令牌需要 projects 权限，更新时自动带上文件 sha。',
-    baidu: '用官方 xpan 开放接口：需要先在百度网盘开放平台创建应用并完成 OAuth 授权拿到 access_token；上传经本地服务中转，避开浏览器跨域。'
+    baidu: '用官方 xpan 开放接口：先在 .env 填 BAIDU_APP_KEY / BAIDU_SECRET_KEY，再点「获取百度 access_token」完成授权；回调页会把 token 显示出来，复制回这里。'
   };
 
   function renderCloudFields() {
@@ -9584,6 +9585,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       box.appendChild(label);
     }
     $('#cloud-hint').textContent = CLOUD_HINTS[provider] || '';
+    const baiduAuth = $('#cloud-baidu-auth');
+    if (baiduAuth) baiduAuth.hidden = provider !== 'baidu';
     if (cloudConfig.lastSync) {
       const when = new Date(cloudConfig.lastSync.at);
       $('#cloud-status').textContent = '上次备份：' + when.toLocaleString('zh-CN') + '（' + cloudConfig.lastSync.provider + '）';
@@ -9609,6 +9612,14 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     cloud.saveConfig(cloudConfig);
     renderCloudFields();
   });
+
+  const baiduAuthBtn = $('#cloud-baidu-auth');
+  if (baiduAuthBtn) {
+    baiduAuthBtn.addEventListener('click', () => {
+      if (location.protocol === 'file:') return toast('单文件模式没有 OAuth 回调服务，请用本地服务或桌面版获取 token');
+      window.open('/oauth/baidu/start', '_blank', 'noopener');
+    });
+  }
 
   $('#cloud-test').addEventListener('click', async () => {
     const status = $('#cloud-status');

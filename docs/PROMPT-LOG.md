@@ -595,6 +595,30 @@
 
 ---
 
+## 链路 26 · 百度网盘 OAuth 回调页
+
+**Prompt**
+
+> 现在怎么获取 access_token。
+
+**落地**
+
+- 服务端新增 `/oauth/baidu/start`：从环境变量读取 `BAIDU_APP_KEY` / `BAIDU_SECRET_KEY`，
+  跳转百度官方授权页，scope 为 `basic,netdisk`；
+- 新增 `/oauth/baidu/callback`：接收 code，在服务端用 AppKey + SecretKey 换取 access_token，
+  返回只读 token 页面和一键复制按钮，不把 SecretKey 发到浏览器；
+- 设置窗口百度网盘模式新增「获取百度 access_token」按钮；
+- `.env.example` 增加 `BAIDU_APP_KEY` / `BAIDU_SECRET_KEY` / `BAIDU_REDIRECT_URI` 占位；
+- 回调地址固定建议：`http://127.0.0.1:4399/oauth/baidu/callback`。
+
+**验收**
+
+- 未配置应用凭据时 start 页面返回明确提示；
+- 无 code 的回调返回 400；
+- 100 项测试与冒烟通过。
+
+---
+
 ## 待补充的链路
 
 - [x] 拍题入库已完成“单张图片 → 一道题笔记”的半自动流程；多题切分、公式转写准确率和人工校对成本仍需真实题集评测。

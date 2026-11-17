@@ -416,7 +416,7 @@ Wenmo-Notes/
 2. 选云盘，填参数：
    - GitHub：token（需 `repo` 权限）+ 用户名 + 仓库 + 分支 + 文件路径；
    - Gitee：私人令牌（需 `projects` 权限）+ 用户名 + 仓库 + 分支 + 文件路径；
-   - 百度网盘：先在开放平台创建应用完成授权拿到 `access_token`，再填网盘路径；
+   - 百度网盘：开放平台创建应用，OAuth 回调填 `http://127.0.0.1:4399/oauth/baidu/callback`；在 `.env` 填 `BAIDU_APP_KEY` / `BAIDU_SECRET_KEY`；打开 `http://127.0.0.1:4399/oauth/baidu/start`（或点设置里的「获取百度 access_token」），授权完成后回调页会显示 token，复制回设置；
 3. 「测试连接」验证通过后，「备份到云端」把整个库写成一个 JSON 快照；「从云端恢复」把它读回来（会先让你确认覆盖）。
 
 ### 备份包长什么样
