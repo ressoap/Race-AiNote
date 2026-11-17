@@ -2351,3 +2351,16 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   word-break: break-all;
   font-variant-numeric: tabular-nums;
 }
+
+/* 新建笔记库卡片：用强调色和「打开本地文件夹」区分开 */
+.book-new .book-cover {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.book-new:hover .book-cover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 12px 26px rgba(74, 110, 245, 0.2);
+}

@@ -320,6 +320,128 @@
     return card;
   }
 
+  function newBookCard() {
+    const card = document.createElement('article');
+    card.className = 'book book-add book-new';
+    card.tabIndex = 0;
+    card.dataset.action = 'new-vault';
+    card.setAttribute('role', 'listitem');
+    card.title = '新建一个空笔记库';
+
+    const cover = document.createElement('div');
+    cover.className = 'book-cover';
+    const icon = document.createElement('span');
+    icon.className = 'book-add-icon';
+    icon.textContent = '+';
+    const label = document.createElement('span');
+    label.className = 'book-add-label';
+    label.textContent = '新建笔记库';
+    cover.appendChild(icon);
+    cover.appendChild(label);
+    card.appendChild(cover);
+
+    const foot = document.createElement('div');
+    foot.className = 'book-foot';
+    foot.textContent = '从空白开始记录';
+    card.appendChild(foot);
+
+    const go = () => { Promise.resolve(createVaultBook()).catch(() => {}); };
+    card.addEventListener('click', go);
+    card.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        go();
+      }
+    });
+    return card;
+  }
+
+  /** 新建笔记库的起步文件：一篇欢迎页 + 一篇错题本说明，保证图谱不是空的 */
+  function newVaultStarterFiles(label) {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const date = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    return [
+      {
+        path: '欢迎使用.md',
+        content: [
+          '---',
+          'title: 欢迎使用',
+          'tags: [入门]',
+          '---',
+          '',
+          '# 欢迎使用《' + label + '》',
+          '',
+          '这是 ' + date + ' 新建的空笔记库，所有内容只保存在本机。',
+          '',
+          '## 从这里开始',
+          '',
+          '- 左上角「新建笔记 / 新建文件夹」开始写；笔记可以多级嵌套',
+          '- 用 [[双链]] 互相引用，切到「关系图谱」就能看到结构',
+          '- 右侧「答疑老师」可以直接问题目，答完自动归档到 10-错题本，并打上知识点标签',
+          '- 编辑内容会自动存进本机缓存；想落到磁盘，随时右键这本书「备份到文件」',
+          '',
+          '## 小提示',
+          '',
+          '- 想换个名字：在进入页右键这本书 →「改名」',
+          '- 想接着用本地文件夹：进入页点「打开本地文件夹」，选到已有 Markdown 库即可',
+          ''
+        ].join(String.fromCharCode(10))
+      },
+      {
+        path: '10-错题本/使用说明.md',
+        content: [
+          '---',
+          'title: 错题本使用说明',
+          'tags: [错题, 说明]',
+          '---',
+          '',
+          '# 错题本使用说明',
+          '',
+          '向「答疑老师」提问后，答案会自动归档到本目录下的「学科-错题索引.md」，',
+          '每条记录包含：学科、知识点标签（可多个）、原题目、解析。',
+          '',
+          '知识点会写成 #标签 形式，便于关系图谱分类；进入页右侧的错题看板也按这些标签统计。',
+          '',
+          '可以手动补一行「我的错因」，下次复习更快。',
+          ''
+        ].join(String.fromCharCode(10))
+      }
+    ];
+  }
+
+  /** 新建一个空笔记库并直接进入 */
+  async function createVaultBook() {
+    const input = await askText({
+      title: '新建笔记库',
+      desc: '会新建一个只有欢迎页的空笔记库，随时可以改名、备份或连接本地文件夹。',
+      value: '我的笔记库',
+      placeholder: '给笔记库起个名字'
+    });
+    if (input == null) return false;
+    const label = String(input).trim().slice(0, 40) || '我的笔记库';
+    const files = newVaultStarterFiles(label);
+    const id = newVaultId();
+    commitActiveVault();
+    const list = readVaultList();
+    list.unshift({
+      id: id,
+      label: label,
+      savedAt: Date.now(),
+      noteCount: files.length,
+      hasHandle: false,
+      stale: false,
+      files: files
+    });
+    writeVaultList(list);
+    pendingVaultEntry = { id: id, label: label };
+    launcherPickPending = false;
+    closeLauncher();
+    loadFiles(files.map(f => Object.assign({}, f)), label);
+    toast('已新建《' + label + '》，可以开始写了');
+    return id;
+  }
+
   function renderLauncher() {
     const shelf = $('#launcher-shelf');
     if (!shelf) return;
@@ -336,6 +458,7 @@
     for (const item of list) {
       shelf.appendChild(bookCard(Object.assign({ kind: 'vault' }, item)));
     }
+    shelf.appendChild(newBookCard());
     shelf.appendChild(addBookCard());
     const count = $('#launcher-count');
     if (count) count.textContent = list.length ? '共 ' + (list.length + 1) + ' 个' : '只有示例库';
