@@ -4687,6 +4687,56 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     try { return set(name, JSON.stringify(value)); } catch (_) { return false; }
   }
 
+  /* ── 按笔记库分桶：同一个键在每个库里各存一份，互不影响 ── */
+
+  function scopedKey(name, id) {
+    return resolve(name) + '@' + String(id == null ? '' : id);
+  }
+
+  function getScoped(name, id, fallback) {
+    const s = storage();
+    if (!s) return fallback == null ? null : fallback;
+    try {
+      const value = s.getItem(scopedKey(name, id));
+      return value == null ? (fallback == null ? null : fallback) : value;
+    } catch (_) {
+      return fallback == null ? null : fallback;
+    }
+  }
+
+  function getScopedJSON(name, id, fallback) {
+    const raw = getScoped(name, id, null);
+    if (raw == null) return fallback;
+    try { return JSON.parse(raw); } catch (_) { return fallback; }
+  }
+
+  function setScoped(name, id, value) {
+    const s = storage();
+    if (!s) return false;
+    try { s.setItem(scopedKey(name, id), String(value)); return true; } catch (_) { return false; }
+  }
+
+  function setScopedJSON(name, id, value) {
+    try { return setScoped(name, id, JSON.stringify(value)); } catch (_) { return false; }
+  }
+
+  /** 老版本把 UI 状态存在全局键上：某个库第一次读不到时，把旧值迁到这个库 */
+  function adoptLegacy(name, id) {
+    const s = storage();
+    if (!s) return false;
+    try {
+      const target = scopedKey(name, id);
+      if (s.getItem(target) != null) return false;
+      const legacy = s.getItem(resolve(name));
+      if (legacy == null) return false;
+      s.setItem(target, legacy);
+      s.removeItem(resolve(name)); // 只迁一次，别让旧数据漏进后面新建的库
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function remove(name) {
     const s = storage();
     if (!s) return false;
@@ -4748,7 +4798,11 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     for (const key of keys) s.removeItem(key);
   }
 
-  RG.store = { VERSION, KEYS, LEGACY, get, getJSON, set, setJSON, remove, migrate, resetAll };
+  RG.store = {
+    VERSION, KEYS, LEGACY,
+    get, getJSON, set, setJSON, remove, migrate, resetAll,
+    scopedKey, getScoped, getScopedJSON, setScoped, setScopedJSON, adoptLegacy
+  };
   try { RG.store.migrate(); } catch (_) {}
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -6405,16 +6459,61 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     const RECORDS_KEY = 'records';
     const LEGACY_RECORDS_KEY = 'race-ainote:mistakes';
 
+    /** 记录归属的笔记库：每个库的错题互相独立 */
+    function currentVaultId() {
+      try {
+        const id = opts && typeof opts.getVaultId === 'function' ? opts.getVaultId() : null;
+        return id ? String(id) : 'demo';
+      } catch (_) {
+        return 'demo';
+      }
+    }
+
+    function allRecords() {
+      try {
+        const parsed = JSON.parse(storageGet(RECORDS_KEY, LEGACY_RECORDS_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
     function loadRecords() {
-      try { return JSON.parse(storageGet(RECORDS_KEY, LEGACY_RECORDS_KEY) || '[]'); } catch (_) { return []; }
+      const id = currentVaultId();
+      return allRecords().filter(function (r) { return r && r.vaultId === id; });
+    }
+
+    /** 老版本的记录没有 vaultId：第一次启动时归到当时打开的库 */
+    function migrateLegacyRecords() {
+      const all = allRecords();
+      const id = currentVaultId();
+      let changed = 0;
+      const next = all.map(function (r) {
+        if (!r || typeof r !== 'object' || r.vaultId) return r;
+        changed += 1;
+        return Object.assign({}, r, { vaultId: id });
+      });
+      if (changed) {
+        try { storageSet(RECORDS_KEY, JSON.stringify(next), LEGACY_RECORDS_KEY); } catch (_) {}
+      }
+      return changed;
     }
 
     let pushTimer = 0;
 
+    /** 只写回当前库那一段，其它库的记录原样保留 */
     function saveRecords(list) {
-      const trimmed = list.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
-      try { storageSet(RECORDS_KEY, JSON.stringify(trimmed), LEGACY_RECORDS_KEY); } catch (_) {}
-      pushToServer(trimmed);
+      const id = currentVaultId();
+      const mine = list.slice()
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+        .slice(0, 300)
+        .map(function (r) { return Object.assign({}, r, { vaultId: (r && r.vaultId) || id }); });
+      const others = allRecords().filter(function (r) { return r && r.vaultId && r.vaultId !== id; });
+      const merged = others.concat(mine)
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+        .slice(0, 600);
+      try { storageSet(RECORDS_KEY, JSON.stringify(merged), LEGACY_RECORDS_KEY); } catch (_) {}
+      pushToServer(merged);
     }
 
     /** 写一份到本地服务（serve.mjs），换端口 / 换浏览器也能读回 */
@@ -6434,25 +6533,34 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
     /** 启动时把服务端的记录合并进来（按 id 去重，保留更新的那条） */
     async function initRecords() {
+      migrateLegacyRecords();
       if (location.protocol === 'file:' || typeof fetch !== 'function') return loadRecords().length;
+      const id = currentVaultId();
+      const stamp = function (rec) {
+        if (!rec || typeof rec !== 'object') return rec;
+        return rec.vaultId ? rec : Object.assign({}, rec, { vaultId: id });
+      };
       try {
         const res = await fetch('/api/store/records', { cache: 'no-store' });
         if (!res.ok) return loadRecords().length;
         const data = await res.json();
         const remote = Array.isArray(data.records) ? data.records : [];
-        const local = loadRecords();
         const byId = new Map();
-        for (const rec of remote) byId.set(rec.id, rec);
-        for (const rec of local) {
-          const other = byId.get(rec.id);
-          const newer = !other || (rec.resolvedAt || rec.at || 0) >= (other.resolvedAt || other.at || 0);
-          if (newer) byId.set(rec.id, rec);
+        for (const rec of allRecords()) {
+          if (rec && rec.id) byId.set(rec.id, stamp(rec));
         }
-        const merged = [...byId.values()].sort((x, y) => (y.at || 0) - (x.at || 0));
-        try { storageSet(RECORDS_KEY, JSON.stringify(merged.slice(0, 300)), LEGACY_RECORDS_KEY); } catch (_) {}
+        for (const rec of remote) {
+          if (!rec || !rec.id) continue;
+          const next = stamp(rec);
+          const other = byId.get(next.id);
+          const newer = !other || (next.resolvedAt || next.at || 0) >= (other.resolvedAt || other.at || 0);
+          if (newer) byId.set(next.id, next);
+        }
+        const merged = [...byId.values()].sort((x, y) => (y.at || 0) - (x.at || 0)).slice(0, 600);
+        try { storageSet(RECORDS_KEY, JSON.stringify(merged), LEGACY_RECORDS_KEY); } catch (_) {}
         if (merged.length) pushToServer(merged);
         renderRecords();
-        return merged.length;
+        return merged.filter(function (r) { return r.vaultId === id; }).length;
       } catch (_) {
         return loadRecords().length;
       }
@@ -6481,7 +6589,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
       if (idx >= 0) {
         list[idx] = Object.assign({}, list[idx], patch, { sig: sig });
       } else {
-        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig }));
+        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open', vaultId: currentVaultId() }, patch, { sig: sig }));
       }
       saveRecords(list);
       renderRecords();
@@ -8246,10 +8354,13 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   const STATS_PALETTE = ['#4a6ef5', '#e2725b', '#3f9c6d', '#ef9f27', '#9a6ef5', '#2fa5b8', '#d9534f', '#7a9eff'];
 
+  /** 只看当前笔记库自己的记录，别的库的错题不混进来 */
   function launcherRecordList() {
     try {
       const list = store.getJSON('records', []);
-      return Array.isArray(list) ? list.filter(r => r && typeof r === 'object') : [];
+      if (!Array.isArray(list)) return [];
+      const id = state.vaultId ? String(state.vaultId) : 'demo';
+      return list.filter(r => r && typeof r === 'object' && r.vaultId === id);
     } catch (_) {
       return [];
     }
@@ -8471,6 +8582,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     if (typeof resetDiskBinding === 'function') resetDiskBinding();
     state.files = files;
     state.vaultLabel = label || '本地库';
+    if (typeof adoptVault === 'function') adoptVault(state.vaultLabel, files, prevLabel);
+    if (typeof reloadVaultScope === 'function') reloadVaultScope();
     state.graph = vault.buildVault(files);
     state.positions.clear();
     state.selectedId = null;
@@ -8485,13 +8598,13 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
     renderTree();
     rebuild({ fresh: true, fit: true });
     if (typeof ai !== "undefined" && ai && ai.reset) ai.reset();
+    if (typeof ai !== "undefined" && ai && ai.renderRecords) ai.renderRecords();
     currentNoteId = null;
     const wantedTab = state.activeTab;
     if (typeof renderNoteTabs === 'function') renderNoteTabs();
     if (wantedTab && state.graph.notes.some(n => n.id === wantedTab)) openNote(wantedTab);
     else if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
-    if (typeof adoptVault === 'function') adoptVault(label || '本地库', files, prevLabel);
     if (typeof saveLocalVault === 'function') saveLocalVault();
   }
 
@@ -9150,8 +9263,10 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   let graphPickerNode = null;
 
   function loadFavorites() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    store.adoptLegacy('favorites', id);
     try {
-      const saved = store.getJSON('favorites', []);
+      const saved = store.getScopedJSON('favorites', id, []);
       state.favorites = new Set(Array.isArray(saved) ? saved.filter(x => typeof x === 'string' && x) : []);
     } catch (_) {
       state.favorites = new Set();
@@ -9160,7 +9275,8 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   loadFavorites();
 
   function saveFavorites() {
-    try { store.setJSON('favorites', [...state.favorites].slice(0, 500)); } catch (_) {}
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    try { store.setScopedJSON('favorites', id, [...state.favorites].slice(0, 500)); } catch (_) {}
   }
 
   function closeGraphMenu() {
@@ -9791,8 +9907,9 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   }
 
   function persistNoteTabs() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
     try {
-      store.setJSON('noteTabs', {
+      store.setScopedJSON('noteTabs', id, {
         tabs: state.openTabs.slice(0, NOTE_TABS_MAX),
         active: state.activeTab || null
       });
@@ -9800,8 +9917,10 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   }
 
   function restoreNoteTabs() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    store.adoptLegacy('noteTabs', id);
     try {
-      const saved = store.getJSON('noteTabs', null);
+      const saved = store.getScopedJSON('noteTabs', id, null);
       if (!saved) return;
       const tabs = Array.isArray(saved.tabs) ? saved.tabs : [];
       state.openTabs = tabs
@@ -10072,18 +10191,36 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
   const ORDER_KEY = 'order';
   const SORT_KEY = 'sort';
 
+  /** 当前笔记库的存储作用域：每个库的 UI 状态各存一份，互不串味 */
+  function vaultScopeId() {
+    return (state && state.vaultId) ? String(state.vaultId) : 'demo';
+  }
+
   function loadMeta() {
-    try { state.usage = store.getJSON(USAGE_KEY, {}) || {}; } catch (_) { state.usage = {}; }
-    try { state.manualOrder = store.getJSON(ORDER_KEY, {}) || {}; } catch (_) { state.manualOrder = {}; }
+    const id = vaultScopeId();
+    store.adoptLegacy(USAGE_KEY, id);
+    store.adoptLegacy(ORDER_KEY, id);
+    try { state.usage = store.getScopedJSON(USAGE_KEY, id, {}) || {}; } catch (_) { state.usage = {}; }
+    try { state.manualOrder = store.getScopedJSON(ORDER_KEY, id, {}) || {}; } catch (_) { state.manualOrder = {}; }
     try { state.sortMode = store.get(SORT_KEY, 'usage') || 'usage'; } catch (_) { state.sortMode = 'usage'; }
   }
 
   function saveUsage() {
-    try { store.setJSON(USAGE_KEY, state.usage); } catch (_) {}
+    try { store.setScopedJSON(USAGE_KEY, vaultScopeId(), state.usage); } catch (_) {}
   }
 
   function saveOrder() {
-    try { store.setJSON(ORDER_KEY, state.manualOrder); } catch (_) {}
+    try { store.setScopedJSON(ORDER_KEY, vaultScopeId(), state.manualOrder); } catch (_) {}
+  }
+
+  /** 切换笔记库后，重新载入这个库自己的使用频率 / 手排顺序 / 收藏 / 标签页 */
+  function reloadVaultScope() {
+    state.collapsedFolders.clear();
+    loadMeta();
+    if (typeof loadFavorites === 'function') loadFavorites();
+    state.openTabs = [];
+    state.activeTab = null;
+    if (typeof restoreNoteTabs === 'function') restoreNoteTabs();
   }
 
   /** 记录一次使用：打开/编辑都会累加，用于「使用频率」和「更新日期」排序 */
@@ -12069,6 +12206,7 @@ body.is-resizing-ai-input * { cursor: ns-resize !important; }
 
   const ai = RG.ai.create({
     getGraph: () => state.graph,
+    getVaultId: () => state.vaultId,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
     onToast: message => toast(message),

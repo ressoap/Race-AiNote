@@ -469,6 +469,7 @@
 
   const ai = RG.ai.create({
     getGraph: () => state.graph,
+    getVaultId: () => state.vaultId,
     getCurrentNote: () => currentNote(),
     onOpenNote: title => { if (!openNoteByTitle(title)) toast('尚未创建：' + title); },
     onToast: message => toast(message),

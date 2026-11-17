@@ -10,8 +10,9 @@
   }
 
   function persistNoteTabs() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
     try {
-      store.setJSON('noteTabs', {
+      store.setScopedJSON('noteTabs', id, {
         tabs: state.openTabs.slice(0, NOTE_TABS_MAX),
         active: state.activeTab || null
       });
@@ -19,8 +20,10 @@
   }
 
   function restoreNoteTabs() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    store.adoptLegacy('noteTabs', id);
     try {
-      const saved = store.getJSON('noteTabs', null);
+      const saved = store.getScopedJSON('noteTabs', id, null);
       if (!saved) return;
       const tabs = Array.isArray(saved.tabs) ? saved.tabs : [];
       state.openTabs = tabs

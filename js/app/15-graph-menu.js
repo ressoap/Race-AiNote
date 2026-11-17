@@ -12,8 +12,10 @@
   let graphPickerNode = null;
 
   function loadFavorites() {
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    store.adoptLegacy('favorites', id);
     try {
-      const saved = store.getJSON('favorites', []);
+      const saved = store.getScopedJSON('favorites', id, []);
       state.favorites = new Set(Array.isArray(saved) ? saved.filter(x => typeof x === 'string' && x) : []);
     } catch (_) {
       state.favorites = new Set();
@@ -22,7 +24,8 @@
   loadFavorites();
 
   function saveFavorites() {
-    try { store.setJSON('favorites', [...state.favorites].slice(0, 500)); } catch (_) {}
+    const id = typeof vaultScopeId === 'function' ? vaultScopeId() : 'demo';
+    try { store.setScopedJSON('favorites', id, [...state.favorites].slice(0, 500)); } catch (_) {}
   }
 
   function closeGraphMenu() {

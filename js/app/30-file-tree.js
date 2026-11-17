@@ -7,18 +7,36 @@
   const ORDER_KEY = 'order';
   const SORT_KEY = 'sort';
 
+  /** 当前笔记库的存储作用域：每个库的 UI 状态各存一份，互不串味 */
+  function vaultScopeId() {
+    return (state && state.vaultId) ? String(state.vaultId) : 'demo';
+  }
+
   function loadMeta() {
-    try { state.usage = store.getJSON(USAGE_KEY, {}) || {}; } catch (_) { state.usage = {}; }
-    try { state.manualOrder = store.getJSON(ORDER_KEY, {}) || {}; } catch (_) { state.manualOrder = {}; }
+    const id = vaultScopeId();
+    store.adoptLegacy(USAGE_KEY, id);
+    store.adoptLegacy(ORDER_KEY, id);
+    try { state.usage = store.getScopedJSON(USAGE_KEY, id, {}) || {}; } catch (_) { state.usage = {}; }
+    try { state.manualOrder = store.getScopedJSON(ORDER_KEY, id, {}) || {}; } catch (_) { state.manualOrder = {}; }
     try { state.sortMode = store.get(SORT_KEY, 'usage') || 'usage'; } catch (_) { state.sortMode = 'usage'; }
   }
 
   function saveUsage() {
-    try { store.setJSON(USAGE_KEY, state.usage); } catch (_) {}
+    try { store.setScopedJSON(USAGE_KEY, vaultScopeId(), state.usage); } catch (_) {}
   }
 
   function saveOrder() {
-    try { store.setJSON(ORDER_KEY, state.manualOrder); } catch (_) {}
+    try { store.setScopedJSON(ORDER_KEY, vaultScopeId(), state.manualOrder); } catch (_) {}
+  }
+
+  /** 切换笔记库后，重新载入这个库自己的使用频率 / 手排顺序 / 收藏 / 标签页 */
+  function reloadVaultScope() {
+    state.collapsedFolders.clear();
+    loadMeta();
+    if (typeof loadFavorites === 'function') loadFavorites();
+    state.openTabs = [];
+    state.activeTab = null;
+    if (typeof restoreNoteTabs === 'function') restoreNoteTabs();
   }
 
   /** 记录一次使用：打开/编辑都会累加，用于「使用频率」和「更新日期」排序 */

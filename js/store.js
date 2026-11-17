@@ -87,6 +87,56 @@
     try { return set(name, JSON.stringify(value)); } catch (_) { return false; }
   }
 
+  /* ── 按笔记库分桶：同一个键在每个库里各存一份，互不影响 ── */
+
+  function scopedKey(name, id) {
+    return resolve(name) + '@' + String(id == null ? '' : id);
+  }
+
+  function getScoped(name, id, fallback) {
+    const s = storage();
+    if (!s) return fallback == null ? null : fallback;
+    try {
+      const value = s.getItem(scopedKey(name, id));
+      return value == null ? (fallback == null ? null : fallback) : value;
+    } catch (_) {
+      return fallback == null ? null : fallback;
+    }
+  }
+
+  function getScopedJSON(name, id, fallback) {
+    const raw = getScoped(name, id, null);
+    if (raw == null) return fallback;
+    try { return JSON.parse(raw); } catch (_) { return fallback; }
+  }
+
+  function setScoped(name, id, value) {
+    const s = storage();
+    if (!s) return false;
+    try { s.setItem(scopedKey(name, id), String(value)); return true; } catch (_) { return false; }
+  }
+
+  function setScopedJSON(name, id, value) {
+    try { return setScoped(name, id, JSON.stringify(value)); } catch (_) { return false; }
+  }
+
+  /** 老版本把 UI 状态存在全局键上：某个库第一次读不到时，把旧值迁到这个库 */
+  function adoptLegacy(name, id) {
+    const s = storage();
+    if (!s) return false;
+    try {
+      const target = scopedKey(name, id);
+      if (s.getItem(target) != null) return false;
+      const legacy = s.getItem(resolve(name));
+      if (legacy == null) return false;
+      s.setItem(target, legacy);
+      s.removeItem(resolve(name)); // 只迁一次，别让旧数据漏进后面新建的库
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function remove(name) {
     const s = storage();
     if (!s) return false;
@@ -148,6 +198,10 @@
     for (const key of keys) s.removeItem(key);
   }
 
-  RG.store = { VERSION, KEYS, LEGACY, get, getJSON, set, setJSON, remove, migrate, resetAll };
+  RG.store = {
+    VERSION, KEYS, LEGACY,
+    get, getJSON, set, setJSON, remove, migrate, resetAll,
+    scopedKey, getScoped, getScopedJSON, setScoped, setScopedJSON, adoptLegacy
+  };
   try { RG.store.migrate(); } catch (_) {}
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -24,6 +24,8 @@
     if (typeof resetDiskBinding === 'function') resetDiskBinding();
     state.files = files;
     state.vaultLabel = label || '本地库';
+    if (typeof adoptVault === 'function') adoptVault(state.vaultLabel, files, prevLabel);
+    if (typeof reloadVaultScope === 'function') reloadVaultScope();
     state.graph = vault.buildVault(files);
     state.positions.clear();
     state.selectedId = null;
@@ -38,13 +40,13 @@
     renderTree();
     rebuild({ fresh: true, fit: true });
     if (typeof ai !== "undefined" && ai && ai.reset) ai.reset();
+    if (typeof ai !== "undefined" && ai && ai.renderRecords) ai.renderRecords();
     currentNoteId = null;
     const wantedTab = state.activeTab;
     if (typeof renderNoteTabs === 'function') renderNoteTabs();
     if (wantedTab && state.graph.notes.some(n => n.id === wantedTab)) openNote(wantedTab);
     else if (state.graph.notes[0]) openNote(state.graph.notes[0].id);
     setSearch('');
-    if (typeof adoptVault === 'function') adoptVault(label || '本地库', files, prevLabel);
     if (typeof saveLocalVault === 'function') saveLocalVault();
   }
 

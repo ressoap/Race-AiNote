@@ -4,10 +4,13 @@
 
   const STATS_PALETTE = ['#4a6ef5', '#e2725b', '#3f9c6d', '#ef9f27', '#9a6ef5', '#2fa5b8', '#d9534f', '#7a9eff'];
 
+  /** 只看当前笔记库自己的记录，别的库的错题不混进来 */
   function launcherRecordList() {
     try {
       const list = store.getJSON('records', []);
-      return Array.isArray(list) ? list.filter(r => r && typeof r === 'object') : [];
+      if (!Array.isArray(list)) return [];
+      const id = state.vaultId ? String(state.vaultId) : 'demo';
+      return list.filter(r => r && typeof r === 'object' && r.vaultId === id);
     } catch (_) {
       return [];
     }

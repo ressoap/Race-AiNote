@@ -1048,16 +1048,61 @@
     const RECORDS_KEY = 'records';
     const LEGACY_RECORDS_KEY = 'race-ainote:mistakes';
 
+    /** 记录归属的笔记库：每个库的错题互相独立 */
+    function currentVaultId() {
+      try {
+        const id = opts && typeof opts.getVaultId === 'function' ? opts.getVaultId() : null;
+        return id ? String(id) : 'demo';
+      } catch (_) {
+        return 'demo';
+      }
+    }
+
+    function allRecords() {
+      try {
+        const parsed = JSON.parse(storageGet(RECORDS_KEY, LEGACY_RECORDS_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
     function loadRecords() {
-      try { return JSON.parse(storageGet(RECORDS_KEY, LEGACY_RECORDS_KEY) || '[]'); } catch (_) { return []; }
+      const id = currentVaultId();
+      return allRecords().filter(function (r) { return r && r.vaultId === id; });
+    }
+
+    /** 老版本的记录没有 vaultId：第一次启动时归到当时打开的库 */
+    function migrateLegacyRecords() {
+      const all = allRecords();
+      const id = currentVaultId();
+      let changed = 0;
+      const next = all.map(function (r) {
+        if (!r || typeof r !== 'object' || r.vaultId) return r;
+        changed += 1;
+        return Object.assign({}, r, { vaultId: id });
+      });
+      if (changed) {
+        try { storageSet(RECORDS_KEY, JSON.stringify(next), LEGACY_RECORDS_KEY); } catch (_) {}
+      }
+      return changed;
     }
 
     let pushTimer = 0;
 
+    /** 只写回当前库那一段，其它库的记录原样保留 */
     function saveRecords(list) {
-      const trimmed = list.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
-      try { storageSet(RECORDS_KEY, JSON.stringify(trimmed), LEGACY_RECORDS_KEY); } catch (_) {}
-      pushToServer(trimmed);
+      const id = currentVaultId();
+      const mine = list.slice()
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+        .slice(0, 300)
+        .map(function (r) { return Object.assign({}, r, { vaultId: (r && r.vaultId) || id }); });
+      const others = allRecords().filter(function (r) { return r && r.vaultId && r.vaultId !== id; });
+      const merged = others.concat(mine)
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+        .slice(0, 600);
+      try { storageSet(RECORDS_KEY, JSON.stringify(merged), LEGACY_RECORDS_KEY); } catch (_) {}
+      pushToServer(merged);
     }
 
     /** 写一份到本地服务（serve.mjs），换端口 / 换浏览器也能读回 */
@@ -1077,25 +1122,34 @@
 
     /** 启动时把服务端的记录合并进来（按 id 去重，保留更新的那条） */
     async function initRecords() {
+      migrateLegacyRecords();
       if (location.protocol === 'file:' || typeof fetch !== 'function') return loadRecords().length;
+      const id = currentVaultId();
+      const stamp = function (rec) {
+        if (!rec || typeof rec !== 'object') return rec;
+        return rec.vaultId ? rec : Object.assign({}, rec, { vaultId: id });
+      };
       try {
         const res = await fetch('/api/store/records', { cache: 'no-store' });
         if (!res.ok) return loadRecords().length;
         const data = await res.json();
         const remote = Array.isArray(data.records) ? data.records : [];
-        const local = loadRecords();
         const byId = new Map();
-        for (const rec of remote) byId.set(rec.id, rec);
-        for (const rec of local) {
-          const other = byId.get(rec.id);
-          const newer = !other || (rec.resolvedAt || rec.at || 0) >= (other.resolvedAt || other.at || 0);
-          if (newer) byId.set(rec.id, rec);
+        for (const rec of allRecords()) {
+          if (rec && rec.id) byId.set(rec.id, stamp(rec));
         }
-        const merged = [...byId.values()].sort((x, y) => (y.at || 0) - (x.at || 0));
-        try { storageSet(RECORDS_KEY, JSON.stringify(merged.slice(0, 300)), LEGACY_RECORDS_KEY); } catch (_) {}
+        for (const rec of remote) {
+          if (!rec || !rec.id) continue;
+          const next = stamp(rec);
+          const other = byId.get(next.id);
+          const newer = !other || (next.resolvedAt || next.at || 0) >= (other.resolvedAt || other.at || 0);
+          if (newer) byId.set(next.id, next);
+        }
+        const merged = [...byId.values()].sort((x, y) => (y.at || 0) - (x.at || 0)).slice(0, 600);
+        try { storageSet(RECORDS_KEY, JSON.stringify(merged), LEGACY_RECORDS_KEY); } catch (_) {}
         if (merged.length) pushToServer(merged);
         renderRecords();
-        return merged.length;
+        return merged.filter(function (r) { return r.vaultId === id; }).length;
       } catch (_) {
         return loadRecords().length;
       }
@@ -1124,7 +1178,7 @@
       if (idx >= 0) {
         list[idx] = Object.assign({}, list[idx], patch, { sig: sig });
       } else {
-        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open' }, patch, { sig: sig }));
+        list.push(Object.assign({ id: 'mis-' + Date.now(), at: Date.now(), status: 'open', vaultId: currentVaultId() }, patch, { sig: sig }));
       }
       saveRecords(list);
       renderRecords();
